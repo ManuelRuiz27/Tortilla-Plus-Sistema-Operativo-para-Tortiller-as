@@ -1,0 +1,35 @@
+-- Tortilla Plus — Seed Inicial V0.1
+-- Estado: base documental. Seed completo se generará en V0.2.
+
+-- Seed global requerido:
+-- - plans: free, paid
+-- - features: pos_basic, cash_control, inventory_basic, production_control, customer_credit,
+--   billing_cfdi, multi_branch, delivery_routes, reconciliation, advanced_reports,
+--   max_users, max_branches, max_pos_devices
+-- - roles: platform_owner, platform_admin, organization_owner, manager, supervisor, cashier
+-- - permissions por módulo
+-- - role_permissions
+
+-- Seed por organización/onboarding:
+-- - organization
+-- - business_unit
+-- - branch
+-- - subscription
+-- - subscription_items: base_plan + pos_device
+-- - owner user
+-- - user_roles
+-- - user_branch_assignments
+-- - pos_device principal
+-- - cash_movement_reasons
+-- - product_categories
+-- - productos base: tortilla, masa, paquete 800g
+-- - product_package_configs
+-- - branch_product_prices
+-- - inventory_stocks
+-- - payment_providers
+-- - clientes demo opcionales
+-- - ruta demo opcional
+
+-- Nota de seguridad:
+-- No insertar passwords planos.
+-- El onboarding debe generar password_hash y pin_hash desde backend.
