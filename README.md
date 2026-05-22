@@ -35,7 +35,8 @@ Este repo contiene exclusivamente documentación técnica y base de implementaci
 │  ├─ 01-services.md
 │  ├─ 02-openapi-contract.md
 │  ├─ 03-critical-flows.md
-│  └─ 04-backend-qa.md
+│  ├─ 04-backend-qa-core.md
+│  └─ 05-backend-qa-modules.md
 └─ database/
    ├─ 01-data-model.md
    ├─ 02-erd-rules.md
@@ -49,3 +50,7 @@ Este repo contiene exclusivamente documentación técnica y base de implementaci
 Versión documental inicial: `V0.1`.
 
 Objetivo siguiente: convertir esta documentación en backlog técnico y estructura base de proyecto backend.
+
+## Advertencia técnica
+
+Los archivos SQL de `/docs/database` son base de handoff. Antes de ejecutarlos en producción deben pasar por revisión, migraciones formales y pruebas de integración.
