@@ -37,19 +37,33 @@ Este repo contiene exclusivamente documentación técnica y base de implementaci
 │  ├─ 03-critical-flows.md
 │  ├─ 04-backend-qa-core.md
 │  └─ 05-backend-qa-modules.md
-└─ database/
-   ├─ 01-data-model.md
-   ├─ 02-erd-rules.md
-   ├─ 03-prisma-schema.prisma
-   ├─ 04-ddl-postgresql.sql
-   └─ 05-seed.sql
+├─ database/
+│  ├─ 01-data-model.md
+│  ├─ 02-erd-rules.md
+│  ├─ 03-prisma-schema.prisma
+│  ├─ 04-ddl-postgresql.sql
+│  └─ 05-seed.sql
+└─ development/
+   ├─ 00-roadmap-sprints.md
+   ├─ 01-sprint-0-2-checklist.md
+   ├─ 02-sprint-3-5-checklist.md
+   ├─ 03-sprint-6-8-checklist.md
+   └─ 04-engineering-rules.md
 ```
+
+## Documentos clave para iniciar desarrollo
+
+1. `docs/development/00-roadmap-sprints.md`
+2. `docs/development/01-sprint-0-2-checklist.md`
+3. `docs/development/04-engineering-rules.md`
+4. `docs/backend/01-services.md`
+5. `docs/database/03-prisma-schema.prisma`
 
 ## Estado
 
 Versión documental inicial: `V0.1`.
 
-Objetivo siguiente: convertir esta documentación en backlog técnico y estructura base de proyecto backend.
+Objetivo siguiente: ejecutar **Sprint 0 — Backend Foundation**.
 
 ## Advertencia técnica
 
