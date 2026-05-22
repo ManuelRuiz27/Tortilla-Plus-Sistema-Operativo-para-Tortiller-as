@@ -1,0 +1,270 @@
+-- Tortilla Plus — Seed Inicial V0.1
+-- Ejecutar después de 04-ddl-postgresql.sql
+
+BEGIN;
+
+INSERT INTO plans (code, name, description, status)
+VALUES
+  ('free', 'Gratis', 'Plan gratuito para operación básica de una tortillería.', 'active'),
+  ('paid', 'Pago', 'Plan comercial con facturación, rutas, multi-sucursal y reportes avanzados.', 'active')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, status = EXCLUDED.status, updated_at = now();
+
+INSERT INTO features (code, name, description)
+VALUES
+  ('pos_basic', 'POS básico', 'Permite registrar ventas básicas en mostrador.'),
+  ('cash_control', 'Control de caja', 'Permite apertura, retiros, ingresos y corte de caja.'),
+  ('inventory_basic', 'Inventario básico', 'Permite gestionar productos y existencias básicas.'),
+  ('production_control', 'Producción diaria', 'Permite registrar producción diaria de tortilla y masa.'),
+  ('customer_credit', 'Crédito a clientes', 'Permite manejar fiado o saldo pendiente de clientes recurrentes.'),
+  ('billing_cfdi', 'Facturación CFDI', 'Permite timbrado fiscal CFDI.'),
+  ('multi_branch', 'Multi-sucursal', 'Permite administrar más de una sucursal.'),
+  ('delivery_routes', 'Rutas de reparto', 'Permite gestionar rutas, repartidores y entregas.'),
+  ('reconciliation', 'Conciliación de pagos', 'Permite conciliar pagos del POS contra terminal bancaria.'),
+  ('advanced_reports', 'Reportes avanzados', 'Permite reportes por sucursal, cliente, producto y caja.'),
+  ('max_users', 'Máximo de usuarios', 'Límite de usuarios activos por organización.'),
+  ('max_branches', 'Máximo de sucursales', 'Límite de sucursales activas por organización.'),
+  ('max_pos_devices', 'Máximo de POS', 'Límite de dispositivos POS activos.')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = now();
+
+WITH feature_matrix(plan_code, feature_code, enabled, limit_value) AS (
+  VALUES
+    ('free', 'pos_basic', true, NULL),
+    ('free', 'cash_control', true, NULL),
+    ('free', 'inventory_basic', true, NULL),
+    ('free', 'production_control', true, NULL),
+    ('free', 'customer_credit', false, NULL),
+    ('free', 'billing_cfdi', false, NULL),
+    ('free', 'multi_branch', false, NULL),
+    ('free', 'delivery_routes', false, NULL),
+    ('free', 'reconciliation', false, NULL),
+    ('free', 'advanced_reports', false, NULL),
+    ('free', 'max_users', true, 3),
+    ('free', 'max_branches', true, 1),
+    ('free', 'max_pos_devices', true, 1),
+    ('paid', 'pos_basic', true, NULL),
+    ('paid', 'cash_control', true, NULL),
+    ('paid', 'inventory_basic', true, NULL),
+    ('paid', 'production_control', true, NULL),
+    ('paid', 'customer_credit', true, NULL),
+    ('paid', 'billing_cfdi', true, NULL),
+    ('paid', 'multi_branch', true, NULL),
+    ('paid', 'delivery_routes', true, NULL),
+    ('paid', 'reconciliation', true, NULL),
+    ('paid', 'advanced_reports', true, NULL),
+    ('paid', 'max_users', true, NULL),
+    ('paid', 'max_branches', true, NULL),
+    ('paid', 'max_pos_devices', true, NULL)
+)
+INSERT INTO plan_features (plan_id, feature_id, enabled, limit_value)
+SELECT p.id, f.id, fm.enabled, fm.limit_value
+FROM feature_matrix fm
+JOIN plans p ON p.code = fm.plan_code
+JOIN features f ON f.code = fm.feature_code
+ON CONFLICT (plan_id, feature_id) DO UPDATE SET enabled = EXCLUDED.enabled, limit_value = EXCLUDED.limit_value, updated_at = now();
+
+INSERT INTO roles (code, name, scope)
+VALUES
+  ('platform_owner', 'Dueño de Plataforma', 'platform'),
+  ('platform_admin', 'Administrador de Plataforma', 'platform'),
+  ('organization_owner', 'Dueño de Organización', 'organization'),
+  ('manager', 'Gerente', 'organization'),
+  ('supervisor', 'Supervisor', 'branch'),
+  ('cashier', 'Cajero', 'branch')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, scope = EXCLUDED.scope, updated_at = now();
+
+INSERT INTO permissions (code, name, description)
+VALUES
+  ('platform.organizations.manage', 'Gestionar organizaciones', 'Permite administrar organizaciones SaaS.'),
+  ('platform.subscriptions.manage', 'Gestionar suscripciones', 'Permite administrar planes, pagos y suspensiones.'),
+  ('platform.support.access', 'Acceso de soporte', 'Permite acceder a herramientas internas de soporte.'),
+  ('organization.view', 'Ver organización', 'Permite ver datos generales de la organización.'),
+  ('organization.update', 'Editar organización', 'Permite editar datos generales de la organización.'),
+  ('branches.view', 'Ver sucursales', 'Permite consultar sucursales.'),
+  ('branches.manage', 'Gestionar sucursales', 'Permite crear, editar o desactivar sucursales.'),
+  ('users.view', 'Ver usuarios', 'Permite consultar usuarios.'),
+  ('users.manage', 'Gestionar usuarios', 'Permite crear, editar, bloquear o desactivar usuarios.'),
+  ('sales.create', 'Crear ventas', 'Permite registrar ventas.'),
+  ('sales.view', 'Ver ventas', 'Permite consultar ventas.'),
+  ('sales.cancel_before_payment', 'Cancelar ticket antes de pago', 'Permite cancelar venta antes de cobrar.'),
+  ('sales.cancel_after_payment', 'Cancelar venta cobrada', 'Permite cancelar una venta ya cobrada.'),
+  ('sales.refund', 'Registrar devolución', 'Permite registrar devoluciones parciales o totales.'),
+  ('payments.create', 'Registrar pagos', 'Permite registrar pagos de ventas.'),
+  ('payments.reconcile', 'Conciliar pagos', 'Permite conciliar pagos contra terminal bancaria.'),
+  ('cash.open', 'Abrir caja', 'Permite abrir sesión de caja.'),
+  ('cash.close', 'Cerrar caja', 'Permite cerrar sesión de caja.'),
+  ('cash.movements.view', 'Ver movimientos de caja', 'Permite consultar movimientos de caja.'),
+  ('cash.withdraw.request', 'Solicitar retiro', 'Permite registrar solicitud de retiro.'),
+  ('cash.withdraw.authorize', 'Autorizar retiro', 'Permite autorizar o rechazar retiros.'),
+  ('cash.adjust', 'Ajustar caja', 'Permite registrar ajustes de caja.'),
+  ('inventory.view', 'Ver inventario', 'Permite consultar existencias.'),
+  ('inventory.manage', 'Gestionar inventario', 'Permite ajustar existencias.'),
+  ('production.manage', 'Gestionar producción', 'Permite registrar producción diaria.'),
+  ('waste.manage', 'Gestionar merma', 'Permite registrar merma.'),
+  ('products.view', 'Ver productos', 'Permite consultar productos.'),
+  ('products.manage', 'Gestionar productos', 'Permite crear, editar o desactivar productos.'),
+  ('prices.manage', 'Gestionar precios', 'Permite modificar precios por sucursal o cliente.'),
+  ('customers.view', 'Ver clientes', 'Permite consultar clientes recurrentes.'),
+  ('customers.manage', 'Gestionar clientes', 'Permite crear, editar o desactivar clientes.'),
+  ('customers.credit.manage', 'Gestionar crédito de clientes', 'Permite administrar saldos y límites de crédito.'),
+  ('routes.view', 'Ver rutas', 'Permite consultar rutas de reparto.'),
+  ('routes.manage', 'Gestionar rutas', 'Permite crear rutas, pedidos, entregas y devoluciones.'),
+  ('billing.view', 'Ver facturación', 'Permite consultar facturas.'),
+  ('billing.manage', 'Gestionar facturación', 'Permite timbrar, reenviar o cancelar CFDI.'),
+  ('reports.basic.view', 'Ver reportes básicos', 'Permite ver reportes básicos de venta y caja.'),
+  ('reports.advanced.view', 'Ver reportes avanzados', 'Permite ver reportes avanzados.'),
+  ('audit.view', 'Ver auditoría', 'Permite consultar bitácora de auditoría.')
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = now();
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.code = 'platform_owner'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN (
+  'organization.view','organization.update','branches.view','branches.manage','users.view','users.manage',
+  'sales.create','sales.view','sales.cancel_before_payment','sales.cancel_after_payment','sales.refund',
+  'payments.create','payments.reconcile','cash.open','cash.close','cash.movements.view',
+  'cash.withdraw.request','cash.withdraw.authorize','cash.adjust','inventory.view','inventory.manage',
+  'production.manage','waste.manage','products.view','products.manage','prices.manage','customers.view',
+  'customers.manage','customers.credit.manage','routes.view','routes.manage','billing.view','billing.manage',
+  'reports.basic.view','reports.advanced.view','audit.view'
+)
+WHERE r.code IN ('organization_owner', 'manager')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN (
+  'branches.view','sales.create','sales.view','sales.cancel_before_payment','payments.create','cash.open',
+  'cash.close','cash.movements.view','cash.withdraw.request','cash.withdraw.authorize','inventory.view',
+  'inventory.manage','production.manage','waste.manage','products.view','customers.view','routes.view','reports.basic.view'
+)
+WHERE r.code = 'supervisor'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN (
+  'sales.create','sales.view','sales.cancel_before_payment','payments.create','cash.open','cash.close',
+  'cash.movements.view','cash.withdraw.request','inventory.view','products.view','customers.view'
+)
+WHERE r.code = 'cashier'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+COMMIT;
+
+-- DEMO SEED
+-- Sustituir hashes antes de ejecutar en local.
+BEGIN;
+
+WITH new_org AS (
+  INSERT INTO organizations (name, legal_name, tax_id, contact_email, contact_phone, status)
+  VALUES ('Demo Tortilla Plus', 'Demo Tortilla Plus S.A. de C.V.', NULL, 'demo@tortillaplus.mx', NULL, 'active')
+  RETURNING id
+), new_business_unit AS (
+  INSERT INTO business_units (organization_id, name, trade_name, business_type, status)
+  SELECT id, 'Tortillería Demo', 'Tortillería Demo', 'tortilleria', 'active' FROM new_org
+  RETURNING id, organization_id
+), new_branch AS (
+  INSERT INTO branches (organization_id, business_unit_id, name, address, phone, timezone, status)
+  SELECT organization_id, id, 'Sucursal Principal', NULL, NULL, 'America/Mexico_City', 'active' FROM new_business_unit
+  RETURNING id, organization_id
+), new_subscription AS (
+  INSERT INTO subscriptions (organization_id, plan_id, status, billing_period, provider, started_at, current_period_start, current_period_end)
+  SELECT no.id, p.id, 'active', 'monthly', 'manual', now(), now(), now() + interval '30 days'
+  FROM new_org no JOIN plans p ON p.code = 'paid'
+  RETURNING id, organization_id
+), new_owner AS (
+  INSERT INTO users (organization_id, name, email, phone, password_hash, pin_hash, status)
+  SELECT id, 'Dueño Demo', 'owner.demo@tortillaplus.mx', NULL, '$2b$12$REPLACE_WITH_PASSWORD_HASH', '$2b$12$REPLACE_WITH_PIN_HASH', 'active' FROM new_org
+  RETURNING id, organization_id
+)
+INSERT INTO subscription_items (subscription_id, item_type, quantity, unit_price, currency, status)
+SELECT id, 'base_plan', 1, 299.00, 'MXN', 'active' FROM new_subscription
+UNION ALL
+SELECT id, 'pos_device', 1, 99.00, 'MXN', 'active' FROM new_subscription;
+
+INSERT INTO user_roles (user_id, role_id, organization_id)
+SELECT u.id, r.id, u.organization_id
+FROM users u JOIN roles r ON r.code = 'organization_owner'
+WHERE u.email = 'owner.demo@tortillaplus.mx';
+
+INSERT INTO user_branch_assignments (user_id, branch_id, is_default)
+SELECT u.id, b.id, true
+FROM users u JOIN branches b ON b.organization_id = u.organization_id
+WHERE u.email = 'owner.demo@tortillaplus.mx' AND b.name = 'Sucursal Principal';
+
+INSERT INTO pos_devices (organization_id, branch_id, device_name, device_code, device_type, status, licensed)
+SELECT b.organization_id, b.id, 'POS Principal', 'DEMO-POS-001', 'pwa', 'active', true
+FROM branches b JOIN organizations o ON o.id = b.organization_id
+WHERE o.name = 'Demo Tortilla Plus' AND b.name = 'Sucursal Principal';
+
+INSERT INTO cash_movement_reasons (organization_id, name, movement_direction, requires_authorization, status)
+SELECT o.id, r.name, r.direction::cash_movement_direction, r.requires_authorization, 'active'
+FROM organizations o
+CROSS JOIN (VALUES
+  ('Basura','out',true),('Materia prima','out',true),('Bolsas','out',true),('Servicio externo','out',true),
+  ('Cambio para caja','in',false),('Ingreso manual','in',false),('Gasto general','out',true),('Otro','out',true)
+) AS r(name, direction, requires_authorization)
+WHERE o.name = 'Demo Tortilla Plus';
+
+INSERT INTO product_categories (organization_id, name, status)
+SELECT o.id, c.name, 'active'
+FROM organizations o CROSS JOIN (VALUES ('Tortilla y masa'),('Paquetes'),('Salsas'),('Guisos'),('Bebidas'),('Bolsas'),('Otros')) AS c(name)
+WHERE o.name = 'Demo Tortilla Plus';
+
+INSERT INTO products (organization_id, category_id, name, sku, barcode, product_type, unit, is_sellable, requires_production, is_stock_tracked, status)
+SELECT o.id, pc.id, p.name, p.sku, NULL, p.product_type::product_type, p.unit::product_unit, true, p.requires_production, true, 'active'
+FROM organizations o
+JOIN product_categories pc ON pc.organization_id = o.id AND pc.name = 'Tortilla y masa'
+CROSS JOIN (VALUES
+  ('Tortilla por kilo','TORT-KG','tortilla','kg',true),
+  ('Masa por kilo','MASA-KG','masa','kg',true)
+) AS p(name, sku, product_type, unit, requires_production)
+WHERE o.name = 'Demo Tortilla Plus';
+
+WITH org AS (SELECT id FROM organizations WHERE name='Demo Tortilla Plus'),
+cat AS (SELECT pc.id FROM product_categories pc JOIN org o ON o.id=pc.organization_id WHERE pc.name='Paquetes'),
+base AS (SELECT p.id FROM products p JOIN org o ON o.id=p.organization_id WHERE p.sku='TORT-KG'),
+pkg AS (
+  INSERT INTO products (organization_id, category_id, name, sku, barcode, product_type, unit, is_sellable, requires_production, is_stock_tracked, status)
+  SELECT o.id, c.id, 'Paquete tortilla 800g', 'TORT-PACK-800', NULL, 'package', 'package', true, false, true, 'active'
+  FROM org o CROSS JOIN cat c RETURNING id
+)
+INSERT INTO product_package_configs (product_id, base_product_id, package_weight_grams)
+SELECT pkg.id, base.id, 800.000 FROM pkg CROSS JOIN base;
+
+WITH product_seed(name, sku, category, unit) AS (
+  VALUES ('Salsa roja chica','SALSA-ROJA-CH','Salsas','piece'),('Salsa verde chica','SALSA-VERDE-CH','Salsas','piece'),
+         ('Guiso del día','GUISO-DIA','Guisos','piece'),('Refresco','REFRESCO','Bebidas','piece'),('Bolsa chica','BOLSA-CH','Bolsas','piece')
+)
+INSERT INTO products (organization_id, category_id, name, sku, barcode, product_type, unit, is_sellable, requires_production, is_stock_tracked, status)
+SELECT o.id, pc.id, ps.name, ps.sku, NULL, 'retail', ps.unit::product_unit, true, false, true, 'active'
+FROM product_seed ps JOIN organizations o ON o.name='Demo Tortilla Plus'
+JOIN product_categories pc ON pc.organization_id=o.id AND pc.name=ps.category;
+
+WITH price_seed(sku, sale_mode, price) AS (
+  VALUES ('TORT-KG','by_kg',28.00),('TORT-KG','by_amount',28.00),('MASA-KG','by_kg',24.00),('MASA-KG','by_amount',24.00),
+         ('TORT-PACK-800','by_package',22.00),('SALSA-ROJA-CH','by_unit',15.00),('SALSA-VERDE-CH','by_unit',15.00),
+         ('GUISO-DIA','by_unit',35.00),('REFRESCO','by_unit',20.00),('BOLSA-CH','by_unit',2.00)
+)
+INSERT INTO branch_product_prices (organization_id, branch_id, product_id, sale_mode, price, currency, active_from, active_to, status)
+SELECT o.id, b.id, p.id, ps.sale_mode::sale_mode, ps.price, 'MXN', now(), NULL, 'active'
+FROM price_seed ps JOIN organizations o ON o.name='Demo Tortilla Plus'
+JOIN branches b ON b.organization_id=o.id AND b.name='Sucursal Principal'
+JOIN products p ON p.organization_id=o.id AND p.sku=ps.sku;
+
+INSERT INTO inventory_stocks (organization_id, branch_id, product_id, quantity, reserved_quantity, minimum_quantity)
+SELECT o.id, b.id, p.id,
+  CASE WHEN p.sku IN ('TORT-KG','MASA-KG','TORT-PACK-800') THEN 0 WHEN p.sku IN ('SALSA-ROJA-CH','SALSA-VERDE-CH') THEN 20 WHEN p.sku='GUISO-DIA' THEN 10 WHEN p.sku='REFRESCO' THEN 30 WHEN p.sku='BOLSA-CH' THEN 100 ELSE 0 END,
+  0,
+  CASE WHEN p.sku='TORT-KG' THEN 10 WHEN p.sku='MASA-KG' THEN 5 WHEN p.sku='TORT-PACK-800' THEN 5 WHEN p.sku IN ('SALSA-ROJA-CH','SALSA-VERDE-CH') THEN 5 WHEN p.sku='GUISO-DIA' THEN 3 WHEN p.sku='REFRESCO' THEN 10 WHEN p.sku='BOLSA-CH' THEN 20 ELSE 0 END
+FROM organizations o JOIN branches b ON b.organization_id=o.id AND b.name='Sucursal Principal'
+JOIN products p ON p.organization_id=o.id
+WHERE o.name='Demo Tortilla Plus';
+
+COMMIT;
