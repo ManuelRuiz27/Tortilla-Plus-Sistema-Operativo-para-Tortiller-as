@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationStatus { active past_due grace_period suspended_limited cancelled }
+enum GenericStatus { active inactive deleted }
+enum SubscriptionStatus { trial active past_due grace_period suspended_limited cancelled expired }
+enum BillingPeriod { monthly annual }
+enum SubscriptionProvider { mercadopago manual }
+enum SubscriptionItemType { base_plan pos_device branch_extra user_extra }
+enum SaasPaymentStatus { pending approved rejected cancelled refunded failed }
+enum UserStatus { active inactive locked deleted }
+enum RoleScope { platform organization branch }
+enum DeviceType { pwa windows tablet desktop }
+enum DeviceStatus { pending_activation active inactive blocked }
+enum ProductType { tortilla masa package retail service }
+enum ProductUnit { kg piece package liter service }
+enum SaleMode { by_kg by_amount by_package by_unit }
+enum InventoryMovementType { production_in sale_out route_load_out route_return_in waste_out manual_adjustment_in manual_adjustment_out return_in return_waste }
+enum ProductionBatchStatus { open closed cancelled }
+enum WasteReason { tortilla_rota masa_echada_a_perder producto_vencido devolucion_no_revendible otro }
+enum CashSessionStatus { open closing closed cancelled }
+enum CashMovementDirection { in out }
+enum CashMovementType { cash_in cash_out adjustment_in adjustment_out route_cash_in }
+enum CashMovementStatus { recorded pending_authorization authorized rejected cancelled }
+enum DifferenceType { none shortage surplus }
+enum SaleStatus { draft completed cancelled partially_refunded refunded invoiced }
+enum SaleType { counter customer_order route }
+enum PaymentMethod { cash card transfer credit }
+enum PaymentStatus { pending completed cancelled refunded }
+enum SaleReturnStatus { pending approved rejected cancelled }
+enum InventoryCondition { sellable waste review_required }
+enum CustomerType { tienda puesto comedor repartidor cliente_frecuente empresa otro }
+enum CustomerBalanceMovementType { charge payment adjustment refund }
+enum DeliveryOrderStatus { pending prepared loaded in_route delivered partially_paid paid returned cancelled }
+enum DeliverySettlementStatus { open closed cancelled }
+enum DeliveryReturnStatus { pending_review returned_to_inventory marked_as_waste cancelled }
+enum ReconciliationStatus { draft matched difference reviewed cancelled }
+enum ReconciliationItemStatus { matched missing_in_provider missing_in_pos amount_mismatch }
+enum InvoiceType { individual global_public }
+enum InvoiceStatus { draft requested stamped failed cancel_requested cancelled }
+enum InvoiceDocumentType { xml pdf }
+enum AnalyticsSnapshotType { daily_sales daily_cash daily_inventory daily_routes monthly_summary }
+
+model Organization {
+  id           String             @id @default(uuid())
+  name         String
+  legalName    String?            @map("legal_name")
+  taxId        String?            @map("tax_id")
+  contactEmail String             @map("contact_email")
+  contactPhone String?            @map("contact_phone")
+  status       OrganizationStatus @default(active)
+
+  businessUnits BusinessUnit[]
+  branches      Branch[]
+  users         User[]
+  subscriptions Subscription[]
+  saasPayments  SaasPayment[]
+  productCategories ProductCategory[]
+  products          Product[]
+  customers         Customer[]
+  posDevices        PosDevice[]
+  deliveryDrivers   DeliveryDriver[]
+  paymentProviders  PaymentProvider[]
+  billingProfiles   BillingProfile[]
+  auditLogs         AuditLog[]
+  analyticsSnapshots AnalyticsSnapshot[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("organizations")
+}
+
+model BusinessUnit {
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  name         String
+  tradeName    String?       @map("trade_name")
+  businessType String?       @map("business_type")
+  status       GenericStatus @default(active)
+  branches  Branch[]
+  customers Customer[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
+  @@map("business_units")
+}
+
+model Branch {
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
+  businessUnitId String        @map("business_unit_id")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  businessUnit BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  name     String
+  address  String?
+  phone    String?
+  timezone String @default("America/Mexico_City")
+  status   GenericStatus @default(active)
+  userAssignments UserBranchAssignment[]
+  posDevices      PosDevice[]
+  branchProductPrices BranchProductPrice[]
+  inventoryStocks     InventoryStock[]
+  inventoryMovements  InventoryMovement[]
+  productionBatches   ProductionBatch[]
+  wasteRecords        WasteRecord[]
+  cashSessions  CashSession[]
+  cashMovements CashMovement[]
+  cashClosings  CashClosing[]
+  sales        Sale[]
+  salePayments SalePayment[]
+  saleReturns  SaleReturn[]
+  customerProductPrices CustomerProductPrice[]
+  deliveryRoutes      DeliveryRoute[]
+  deliveryOrders      DeliveryOrder[]
+  deliveryPayments    DeliveryPayment[]
+  deliverySettlements DeliverySettlement[]
+  deliveryReturns     DeliveryReturn[]
+  paymentTerminalReferences PaymentTerminalReference[]
+  reconciliationBatches     ReconciliationBatch[]
+  invoices Invoice[]
+  auditLogs AuditLog[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
+  @@index([businessUnitId])
+  @@map("branches")
+}
+
+model Plan {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  description String?
+  status GenericStatus @default(active)
+  planFeatures PlanFeature[]
+  subscriptions Subscription[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("plans")
+}
+
+model Feature {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  description String?
+  planFeatures PlanFeature[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("features")
+}
+
+model PlanFeature {
+  id String @id @default(uuid())
+  planId String @map("plan_id")
+  featureId String @map("feature_id")
+  enabled Boolean @default(false)
+  limitValue Int? @map("limit_value")
+  plan Plan @relation(fields: [planId], references: [id])
+  feature Feature @relation(fields: [featureId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([planId, featureId])
+  @@map("plan_features")
+}
+
+model Subscription {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  planId String @map("plan_id")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  plan Plan @relation(fields: [planId], references: [id])
+  status SubscriptionStatus @default(trial)
+  billingPeriod BillingPeriod @default(monthly) @map("billing_period")
+  provider SubscriptionProvider @default(mercadopago)
+  providerSubscriptionId String? @map("provider_subscription_id")
+  startedAt DateTime? @map("started_at")
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd DateTime? @map("current_period_end")
+  graceUntil DateTime? @map("grace_until")
+  cancelledAt DateTime? @map("cancelled_at")
+  items SubscriptionItem[]
+  saasPayments SaasPayment[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model SubscriptionItem {
+  id String @id @default(uuid())
+  subscriptionId String @map("subscription_id")
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  itemType SubscriptionItemType @map("item_type")
+  quantity Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(12, 2)
+  currency String @default("MXN")
+  status GenericStatus @default(active)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([subscriptionId])
+  @@map("subscription_items")
+}
+
+model SaasPayment {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  subscriptionId String @map("subscription_id")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  provider SubscriptionProvider @default(mercadopago)
+  providerPaymentId String? @unique @map("provider_payment_id")
+  amount Decimal @db.Decimal(12, 2)
+  currency String @default("MXN")
+  status SaasPaymentStatus @default(pending)
+  paidAt DateTime? @map("paid_at")
+  failedAt DateTime? @map("failed_at")
+  failureReason String? @map("failure_reason")
+  rawPayload Json? @map("raw_payload")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@map("saas_payments")
+}
+
+model MercadoPagoWebhookEvent {
+  id String @id @default(uuid())
+  eventId String @unique @map("event_id")
+  eventType String @map("event_type")
+  providerResourceId String? @map("provider_resource_id")
+  processed Boolean @default(false)
+  processedAt DateTime? @map("processed_at")
+  rawPayload Json @map("raw_payload")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([processed])
+  @@map("mercadopago_webhook_events")
+}
+
+model User {
+  id String @id @default(uuid())
+  organizationId String? @map("organization_id")
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  name String
+  email String
+  phone String?
+  passwordHash String @map("password_hash")
+  pinHash String? @map("pin_hash")
+  status UserStatus @default(active)
+  lastLoginAt DateTime? @map("last_login_at")
+  userRoles UserRole[]
+  branchAssignments UserBranchAssignment[]
+  sessions UserSession[]
+  openedCashSessions CashSession[] @relation("cash_session_opened_by")
+  closedCashSessions CashSession[] @relation("cash_session_closed_by")
+  createdSales Sale[] @relation("sale_created_by")
+  cancelledSales Sale[] @relation("sale_cancelled_by")
+  createdCashMovements CashMovement[] @relation("cash_movement_requested_by")
+  authorizedCashMovements CashMovement[] @relation("cash_movement_authorized_by")
+  rejectedCashMovements CashMovement[] @relation("cash_movement_rejected_by")
+  cancelledCashMovements CashMovement[] @relation("cash_movement_cancelled_by")
+  closedCashClosings CashClosing[]
+  createdInventoryMovements InventoryMovement[] @relation("inventory_movement_created_by")
+  authorizedInventoryMovements InventoryMovement[] @relation("inventory_movement_authorized_by")
+  createdProductionBatches ProductionBatch[] @relation("production_created_by")
+  closedProductionBatches ProductionBatch[] @relation("production_closed_by")
+  createdWasteRecords WasteRecord[] @relation("waste_created_by")
+  authorizedWasteRecords WasteRecord[] @relation("waste_authorized_by")
+  createdSalePayments SalePayment[]
+  createdSaleReturns SaleReturn[] @relation("sale_return_created_by")
+  authorizedSaleReturns SaleReturn[] @relation("sale_return_authorized_by")
+  createdCustomerBalanceMovements CustomerBalanceMovement[]
+  createdDeliveryOrders DeliveryOrder[] @relation("delivery_order_created_by")
+  preparedDeliveryOrders DeliveryOrder[] @relation("delivery_order_prepared_by")
+  receivedDeliverySettlements DeliverySettlement[]
+  createdReconciliations ReconciliationBatch[] @relation("reconciliation_created_by")
+  reviewedReconciliations ReconciliationBatch[] @relation("reconciliation_reviewed_by")
+  reviewedDeliveryReturns DeliveryReturn[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Role { id String @id @default(uuid()) code String @unique name String scope RoleScope userRoles UserRole[] rolePermissions RolePermission[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@map("roles") }
+model Permission { id String @id @default(uuid()) code String @unique name String description String? rolePermissions RolePermission[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@map("permissions") }
+model RolePermission { id String @id @default(uuid()) roleId String @map("role_id") permissionId String @map("permission_id") role Role @relation(fields: [roleId], references: [id]) permission Permission @relation(fields: [permissionId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@unique([roleId, permissionId]) @@map("role_permissions") }
+model UserRole { id String @id @default(uuid()) userId String @map("user_id") roleId String @map("role_id") organizationId String? @map("organization_id") user User @relation(fields: [userId], references: [id]) role Role @relation(fields: [roleId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@unique([userId, roleId, organizationId]) @@index([organizationId]) @@map("user_roles") }
+model UserBranchAssignment { id String @id @default(uuid()) userId String @map("user_id") branchId String @map("branch_id") isDefault Boolean @default(false) @map("is_default") user User @relation(fields: [userId], references: [id]) branch Branch @relation(fields: [branchId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@unique([userId, branchId]) @@map("user_branch_assignments") }
+model UserSession { id String @id @default(uuid()) userId String @map("user_id") refreshTokenHash String @map("refresh_token_hash") deviceInfo String? @map("device_info") expiresAt DateTime @map("expires_at") revokedAt DateTime? @map("revoked_at") user User @relation(fields: [userId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@index([userId]) @@map("user_sessions") }
+
+model PosDevice {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  branchId String @map("branch_id")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+  deviceName String @map("device_name")
+  deviceCode String @unique @map("device_code")
+  deviceType DeviceType @map("device_type")
+  status DeviceStatus @default(pending_activation)
+  licensed Boolean @default(false)
+  lastSeenAt DateTime? @map("last_seen_at")
+  cashSessions CashSession[]
+  sales Sale[]
+  auditLogs AuditLog[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([organizationId])
+  @@index([branchId])
+  @@map("pos_devices")
+}
+
+model ProductCategory { id String @id @default(uuid()) organizationId String @map("organization_id") organization Organization @relation(fields: [organizationId], references: [id]) name String status GenericStatus @default(active) products Product[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@unique([organizationId, name]) @@map("product_categories") }
+
+model Product {
+  id String @id @default(uuid())
+  organizationId String @map("organization_id")
+  categoryId String? @map("category_id")
+  organization Organization @relation(fields: [organizationId], references: [id])
+  category ProductCategory? @relation(fields: [categoryId], references: [id])
+  name String
+  sku String?
+  barcode String?
+  productType ProductType @map("product_type")
+  unit ProductUnit
+  isSellable Boolean @default(true) @map("is_sellable")
+  requiresProduction Boolean @default(false) @map("requires_production")
+  isStockTracked Boolean @default(true) @map("is_stock_tracked")
+  status GenericStatus @default(active)
+  packageConfigAsPackage ProductPackageConfig? @relation("package_product")
+  packageConfigsAsBase ProductPackageConfig[] @relation("base_product")
+  branchPrices BranchProductPrice[]
+  inventoryStocks InventoryStock[]
+  inventoryMovements InventoryMovement[]
+  productionBatchItems ProductionBatchItem[]
+  wasteRecords WasteRecord[]
+  saleItems SaleItem[]
+  saleReturnItems SaleReturnItem[]
+  customerProductPrices CustomerProductPrice[]
+  deliveryOrderItems DeliveryOrderItem[]
+  deliveryReturnItems DeliveryReturnItem[]
+  invoiceItems InvoiceItem[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([organizationId, sku])
+  @@index([organizationId])
+  @@index([barcode])
+  @@index([productType])
+  @@map("products")
+}
+
+model ProductPackageConfig { id String @id @default(uuid()) productId String @unique @map("product_id") baseProductId String @map("base_product_id") product Product @relation("package_product", fields: [productId], references: [id]) baseProduct Product @relation("base_product", fields: [baseProductId], references: [id]) packageWeightGrams Decimal @map("package_weight_grams") @db.Decimal(12, 3) createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@map("product_package_configs") }
+model BranchProductPrice { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") productId String @map("product_id") branch Branch @relation(fields: [branchId], references: [id]) product Product @relation(fields: [productId], references: [id]) saleMode SaleMode @map("sale_mode") price Decimal @db.Decimal(12, 2) currency String @default("MXN") activeFrom DateTime @map("active_from") activeTo DateTime? @map("active_to") status GenericStatus @default(active) createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@index([organizationId]) @@index([branchId]) @@index([productId]) @@map("branch_product_prices") }
+model InventoryStock { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") productId String @map("product_id") branch Branch @relation(fields: [branchId], references: [id]) product Product @relation(fields: [productId], references: [id]) quantity Decimal @default(0) @db.Decimal(12, 3) reservedQuantity Decimal @default(0) @map("reserved_quantity") @db.Decimal(12, 3) minimumQuantity Decimal @default(0) @map("minimum_quantity") @db.Decimal(12, 3) updatedAt DateTime @updatedAt @map("updated_at") @@unique([branchId, productId]) @@index([organizationId]) @@map("inventory_stocks") }
+model InventoryMovement { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") productId String @map("product_id") branch Branch @relation(fields: [branchId], references: [id]) product Product @relation(fields: [productId], references: [id]) movementType InventoryMovementType @map("movement_type") quantity Decimal @db.Decimal(12, 3) unit ProductUnit reason String? referenceType String? @map("reference_type") referenceId String? @map("reference_id") createdByUserId String @map("created_by_user_id") authorizedByUserId String? @map("authorized_by_user_id") createdByUser User @relation("inventory_movement_created_by", fields: [createdByUserId], references: [id]) authorizedByUser User? @relation("inventory_movement_authorized_by", fields: [authorizedByUserId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@index([organizationId]) @@index([branchId]) @@index([productId]) @@index([createdAt]) @@map("inventory_movements") }
+model ProductionBatch { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") branch Branch @relation(fields: [branchId], references: [id]) productionDate DateTime @map("production_date") @db.Date status ProductionBatchStatus @default(open) createdByUserId String @map("created_by_user_id") closedByUserId String? @map("closed_by_user_id") createdByUser User @relation("production_created_by", fields: [createdByUserId], references: [id]) closedByUser User? @relation("production_closed_by", fields: [closedByUserId], references: [id]) closedAt DateTime? @map("closed_at") items ProductionBatchItem[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@index([organizationId]) @@index([branchId]) @@index([productionDate]) @@map("production_batches") }
+model ProductionBatchItem { id String @id @default(uuid()) productionBatchId String @map("production_batch_id") productId String @map("product_id") productionBatch ProductionBatch @relation(fields: [productionBatchId], references: [id]) product Product @relation(fields: [productId], references: [id]) producedQuantity Decimal @map("produced_quantity") @db.Decimal(12, 3) unit ProductUnit createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@unique([productionBatchId, productId]) @@map("production_batch_items") }
+model WasteRecord { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") productId String @map("product_id") branch Branch @relation(fields: [branchId], references: [id]) product Product @relation(fields: [productId], references: [id]) quantity Decimal @db.Decimal(12, 3) unit ProductUnit wasteReason WasteReason @map("waste_reason") inventoryMovementId String? @map("inventory_movement_id") createdByUserId String @map("created_by_user_id") authorizedByUserId String? @map("authorized_by_user_id") createdByUser User @relation("waste_created_by", fields: [createdByUserId], references: [id]) authorizedByUser User? @relation("waste_authorized_by", fields: [authorizedByUserId], references: [id]) createdAt DateTime @default(now()) @map("created_at") @@index([organizationId]) @@index([branchId]) @@index([productId]) @@map("waste_records") }
+
+model CashSession { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") deviceId String? @map("device_id") branch Branch @relation(fields: [branchId], references: [id]) device PosDevice? @relation(fields: [deviceId], references: [id]) openedByUserId String @map("opened_by_user_id") closedByUserId String? @map("closed_by_user_id") openedByUser User @relation("cash_session_opened_by", fields: [openedByUserId], references: [id]) closedByUser User? @relation("cash_session_closed_by", fields: [closedByUserId], references: [id]) openingAmountExpected Decimal @map("opening_amount_expected") @db.Decimal(12, 2) openingAmountCounted Decimal @map("opening_amount_counted") @db.Decimal(12, 2) openingDiscrepancy Decimal @map("opening_discrepancy") @db.Decimal(12, 2) openingNote String? @map("opening_note") status CashSessionStatus @default(open) openedAt DateTime @map("opened_at") closedAt DateTime? @map("closed_at") sales Sale[] cashMovements CashMovement[] cashClosing CashClosing? deliveryOrders DeliveryOrder[] deliverySettlements DeliverySettlement[] reconciliationBatches ReconciliationBatch[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@index([organizationId]) @@index([branchId]) @@index([status]) @@map("cash_sessions") }
+model CashMovementReason { id String @id @default(uuid()) organizationId String @map("organization_id") name String movementDirection CashMovementDirection @map("movement_direction") requiresAuthorization Boolean @default(true) @map("requires_authorization") status GenericStatus @default(active) cashMovements CashMovement[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@unique([organizationId, name]) @@map("cash_movement_reasons") }
+model CashMovement { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") cashSessionId String @map("cash_session_id") reasonId String? @map("reason_id") branch Branch @relation(fields: [branchId], references: [id]) cashSession CashSession @relation(fields: [cashSessionId], references: [id]) reason CashMovementReason? @relation(fields: [reasonId], references: [id]) movementType CashMovementType @map("movement_type") amount Decimal @db.Decimal(12, 2) description String? status CashMovementStatus @default(recorded) requestedByUserId String @map("requested_by_user_id") authorizedByUserId String? @map("authorized_by_user_id") rejectedByUserId String? @map("rejected_by_user_id") cancelledByUserId String? @map("cancelled_by_user_id") requestedByUser User @relation("cash_movement_requested_by", fields: [requestedByUserId], references: [id]) authorizedByUser User? @relation("cash_movement_authorized_by", fields: [authorizedByUserId], references: [id]) rejectedByUser User? @relation("cash_movement_rejected_by", fields: [rejectedByUserId], references: [id]) cancelledByUser User? @relation("cash_movement_cancelled_by", fields: [cancelledByUserId], references: [id]) authorizedAt DateTime? @map("authorized_at") rejectedAt DateTime? @map("rejected_at") cancelledAt DateTime? @map("cancelled_at") cancellationReason String? @map("cancellation_reason") createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@index([organizationId]) @@index([branchId]) @@index([cashSessionId]) @@index([status]) @@map("cash_movements") }
+model CashClosing { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") cashSessionId String @unique @map("cash_session_id") branch Branch @relation(fields: [branchId], references: [id]) cashSession CashSession @relation(fields: [cashSessionId], references: [id]) closedByUserId String @map("closed_by_user_id") closedByUser User @relation(fields: [closedByUserId], references: [id]) openingAmount Decimal @map("opening_amount") @db.Decimal(12, 2) cashSalesTotal Decimal @map("cash_sales_total") @db.Decimal(12, 2) cardSalesTotal Decimal @map("card_sales_total") @db.Decimal(12, 2) transferSalesTotal Decimal @map("transfer_sales_total") @db.Decimal(12, 2) creditSalesTotal Decimal @default(0) @map("credit_sales_total") @db.Decimal(12, 2) cashInTotal Decimal @map("cash_in_total") @db.Decimal(12, 2) cashOutTotal Decimal @map("cash_out_total") @db.Decimal(12, 2) expectedCashAmount Decimal @map("expected_cash_amount") @db.Decimal(12, 2) countedCashAmount Decimal @map("counted_cash_amount") @db.Decimal(12, 2) differenceAmount Decimal @map("difference_amount") @db.Decimal(12, 2) differenceType DifferenceType @map("difference_type") comment String? status GenericStatus @default(active) closedAt DateTime @map("closed_at") createdAt DateTime @default(now()) @map("created_at") @@index([organizationId]) @@index([branchId]) @@index([closedAt]) @@map("cash_closings") }
+
+model Sale { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") cashSessionId String @map("cash_session_id") deviceId String? @map("device_id") customerId String? @map("customer_id") branch Branch @relation(fields: [branchId], references: [id]) cashSession CashSession @relation(fields: [cashSessionId], references: [id]) device PosDevice? @relation(fields: [deviceId], references: [id]) customer Customer? @relation(fields: [customerId], references: [id]) saleNumber String @map("sale_number") status SaleStatus @default(draft) saleType SaleType @default(counter) @map("sale_type") subtotal Decimal @db.Decimal(12, 2) discountTotal Decimal @map("discount_total") @db.Decimal(12, 2) taxTotal Decimal @map("tax_total") @db.Decimal(12, 2) total Decimal @db.Decimal(12, 2) createdByUserId String @map("created_by_user_id") cancelledByUserId String? @map("cancelled_by_user_id") createdByUser User @relation("sale_created_by", fields: [createdByUserId], references: [id]) cancelledByUser User? @relation("sale_cancelled_by", fields: [cancelledByUserId], references: [id]) cancelledAt DateTime? @map("cancelled_at") cancellationReason String? @map("cancellation_reason") clientGeneratedId String? @map("client_generated_id") syncStatus String? @map("sync_status") syncedAt DateTime? @map("synced_at") items SaleItem[] payments SalePayment[] returns SaleReturn[] invoiceSales InvoiceSale[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@unique([branchId, saleNumber]) @@index([organizationId]) @@index([branchId]) @@index([cashSessionId]) @@index([customerId]) @@index([status]) @@index([createdAt]) @@map("sales") }
+model SaleItem { id String @id @default(uuid()) saleId String @map("sale_id") productId String @map("product_id") sale Sale @relation(fields: [saleId], references: [id]) product Product @relation(fields: [productId], references: [id]) productNameSnapshot String @map("product_name_snapshot") productTypeSnapshot ProductType @map("product_type_snapshot") quantity Decimal @db.Decimal(12, 3) unit ProductUnit unitPrice Decimal @map("unit_price") @db.Decimal(12, 2) discountAmount Decimal @map("discount_amount") @db.Decimal(12, 2) total Decimal @db.Decimal(12, 2) saleMode SaleMode @map("sale_mode") returnItems SaleReturnItem[] createdAt DateTime @default(now()) @map("created_at") @@index([saleId]) @@index([productId]) @@map("sale_items") }
+model SalePayment { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") saleId String @map("sale_id") branch Branch @relation(fields: [branchId], references: [id]) sale Sale @relation(fields: [saleId], references: [id]) paymentMethod PaymentMethod @map("payment_method") amount Decimal @db.Decimal(12, 2) status PaymentStatus @default(completed) reference String? provider String? createdByUserId String @map("created_by_user_id") createdByUser User @relation(fields: [createdByUserId], references: [id]) terminalReference PaymentTerminalReference? reconciliationItems ReconciliationItem[] createdAt DateTime @default(now()) @map("created_at") @@index([organizationId]) @@index([branchId]) @@index([saleId]) @@index([paymentMethod]) @@map("sale_payments") }
+model SaleReturn { id String @id @default(uuid()) organizationId String @map("organization_id") branchId String @map("branch_id") saleId String @map("sale_id") branch Branch @relation(fields: [branchId], references: [id]) sale Sale @relation(fields: [saleId], references: [id]) status SaleReturnStatus @default(pending) reason String authorizedByUserId String @map("authorized_by_user_id") createdByUserId String @map("created_by_user_id") authorizedByUser User @relation("sale_return_authorized_by", fields: [authorizedByUserId], references: [id]) createdByUser User @relation("sale_return_created_by", fields: [createdByUserId], references: [id]) items SaleReturnItem[] createdAt DateTime @default(now()) @map("created_at") updatedAt DateTime @updatedAt @map("updated_at") @@index([organizationId]) @@index([branchId]) @@index([saleId]) @@map("sale_returns") }
+model SaleReturnItem { id String @id @default(uuid()) saleReturnId String @map("sale_return_id") saleItemId String @map("sale_item_id") productId String @map("product_id") saleReturn SaleReturn @relation(fields: [saleReturnId], references: [id]) saleItem SaleItem @relation(fields: [saleItemId], references: [id]) product Product @relation(fields: [productId], references: [id]) quantity Decimal @db.Decimal(12, 3) amountRefunded Decimal @map("amount_refunded") @db.Decimal(12, 2) returnToInventory Boolean @default(false) @map("return_to_inventory") inventoryCondition InventoryCondition @map("inventory_condition") inventoryMovementId String? @map("inventory_movement_id") createdAt DateTime @default(now()) @map("created_at") @@index([saleReturnId]) @@index([saleItemId]) @@map("sale_return_items") }
+
+// NOTE: Para mantener este V0.1 legible, los modelos restantes se dejan como TODO si se parte por dominio.
+// Se incluyen en DDL: customers, delivery, reconciliation, billing, audit.
