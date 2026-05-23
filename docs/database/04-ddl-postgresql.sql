@@ -1,6 +1,9 @@
 -- Tortilla Plus — DDL PostgreSQL V0.1
 -- Base operativa inicial para revisión backend.
 -- Ejecutar solo en entorno local/dev hasta validar migraciones formales.
+-- Fuente canonica de referencia DDL: este archivo con extension .sql.
+-- El archivo docs/database/04-ddl-postgresql sin extension es draft no canonico.
+-- Sprint 0 debe usar Prisma como fuente principal de migraciones y comparar contra este DDL.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

@@ -12,6 +12,7 @@ No construir features encima de un modelo no validado. Primero se valida schema,
 
 | Sprint | Nombre | Resultado esperado |
 |---|---|---|
+| Pre-Sprint 0 | Alineacion documental | Fuentes canonicas claras, duplicados marcados y Sprint 0 desbloqueado. |
 | Sprint 0 | Backend Foundation | Proyecto inicializado, DB local, Prisma validado, migración inicial y healthcheck. |
 | Sprint 1 | Auth, RBAC y SaaS Guard | Login, sesiones, permisos, plan/features y límites básicos. |
 | Sprint 2 | Caja Operativa | Apertura, movimientos, retiros, autorización y cierre de caja. |
@@ -21,6 +22,27 @@ No construir features encima de un modelo no validado. Primero se valida schema,
 | Sprint 6 | Rutas de Reparto | Pedidos, carga, entrega, cobro, devolución y liquidación. |
 | Sprint 7 | Facturación, Conciliación y Reportes | CFDI, global diaria, terminal manual y reportes operativos. |
 | Sprint 8 | Hardening y Release Candidate | Seguridad, QA integral, performance, documentación y release candidate. |
+
+## Pre-Sprint 0 — Alineacion documental
+
+### Objetivo
+
+Alinear fuentes canonicas y eliminar ambiguedades antes de crear codigo backend.
+
+### Alcance
+
+- Revisar `docs/development/05-documentation-alignment.md`.
+- Confirmar que Prisma sera la fuente principal de migraciones.
+- Confirmar que DDL PostgreSQL es referencia de comparacion.
+- Confirmar que seed V0.1 es guia documental y que Sprint 0 crea seed minimo ejecutable.
+- Marcar archivos de database sin extension como drafts no canonicos.
+- Actualizar referencias rotas o ambiguas en README y handoff.
+
+### Definition of Done
+
+- Equipo sabe que documento manda por area.
+- Sprint 0 inicia sin depender de archivos duplicados.
+- Cualquier diferencia entre Prisma, DDL y seed queda registrada como riesgo de Sprint 0.
 
 ## Sprint 0 — Backend Foundation
 
@@ -33,21 +55,23 @@ Crear la base técnica para que el equipo pueda desarrollar sin improvisar estru
 - Inicializar backend Node.js/TypeScript.
 - Configurar PostgreSQL local con Docker Compose.
 - Instalar Prisma.
-- Mover `docs/database/03-prisma-schema.prisma` a `prisma/schema.prisma`.
+- Normalizar `docs/database/03-prisma-schema.prisma` hasta que sea ejecutable.
+- Mover el schema normalizado a `apps/api/prisma/schema.prisma`.
 - Ejecutar `prisma validate`.
 - Corregir errores del schema.
 - Crear migración inicial.
-- Comparar migración Prisma contra `docs/database/04-ddl-postgresql.sql`.
-- Crear seed mínimo funcional.
+- Comparar migracion Prisma contra `docs/database/04-ddl-postgresql.sql` como referencia de handoff.
+- Crear seed minimo funcional e idempotente.
 - Agregar endpoint `GET /health`.
 
 ### Entregables
 
-- `package.json`.
-- `tsconfig.json`.
+- `package.json` de raiz para workspaces.
+- `apps/api/package.json`.
+- `apps/api/tsconfig.json`.
 - `docker-compose.yml`.
-- `.env.example`.
-- `prisma/schema.prisma`.
+- `apps/api/.env.example`.
+- `apps/api/prisma/schema.prisma`.
 - Primera migración.
 - Seed mínimo.
 - Healthcheck.
@@ -57,8 +81,10 @@ Crear la base técnica para que el equipo pueda desarrollar sin improvisar estru
 
 - `npm install` corre sin errores.
 - PostgreSQL levanta con Docker.
+- Schema Prisma fue normalizado desde el draft documental.
 - `prisma validate` pasa.
 - `prisma migrate dev` corre desde cero.
+- Seed minimo es ejecutable e idempotente.
 - `npm run dev` levanta API.
 - `GET /health` responde OK.
 

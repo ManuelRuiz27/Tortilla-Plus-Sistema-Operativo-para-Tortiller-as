@@ -1,6 +1,8 @@
 # Prisma Schema V0.1
 
-Estado: pendiente de generación completa en V0.2.
+Estado: draft tecnico V0.1. No debe asumirse ejecutable hasta que Sprint 0 lo normalice y `prisma validate` pase.
+
+El archivo `docs/database/03-prisma-schema.prisma` es la base de trabajo para Sprint 0, pero contiene relaciones y dominios pendientes. La fuente conceptual sigue siendo el modelo de datos y las reglas ERD.
 
 ## Stack objetivo
 
@@ -14,6 +16,15 @@ El schema debe generarse desde:
 
 - `docs/database/01-data-model.md`
 - `docs/database/02-erd-rules.md`
+- `docs/development/05-documentation-alignment.md`
+
+## Uso en Sprint 0
+
+1. Copiar el draft a una rama de trabajo o a `apps/api/prisma/schema.prisma`.
+2. Completar o recortar modelos hasta que Prisma valide.
+3. Mantener los dominios de Sprint 0 a Sprint 2 como prioridad: SaaS, usuarios, POS, productos base, inventario, caja y ventas.
+4. Comparar la migracion generada contra `docs/database/04-ddl-postgresql.sql`.
+5. Registrar cualquier diferencia como deuda tecnica antes de avanzar a Sprint 1.
 
 ## Restricciones que Prisma no debe resolver solo
 

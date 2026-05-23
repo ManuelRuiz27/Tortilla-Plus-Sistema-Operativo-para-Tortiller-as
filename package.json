@@ -1,0 +1,29 @@
+{
+  "name": "tortilla-plus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo de Tortilla Plus.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:api",
+    "dev:api": "npm run dev -w @tortilla-plus/api",
+    "dev:web": "npm run dev -w @tortilla-plus/web",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start:api",
+    "start:api": "npm run start -w @tortilla-plus/api",
+    "preview:web": "npm run preview -w @tortilla-plus/web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "db:validate": "npm run db:validate -w @tortilla-plus/api",
+    "db:migrate": "npm run db:migrate -w @tortilla-plus/api",
+    "db:seed": "npm run db:seed -w @tortilla-plus/api",
+    "db:generate": "npm run db:generate -w @tortilla-plus/api"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tortilla-plus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tortilla_plus
+      POSTGRES_USER: tortilla_plus
+      POSTGRES_PASSWORD: tortilla_plus_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - tortilla_plus_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tortilla_plus -d tortilla_plus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  tortilla_plus_postgres_data:

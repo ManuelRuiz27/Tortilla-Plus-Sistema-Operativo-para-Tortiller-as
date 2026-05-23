@@ -4,34 +4,34 @@
 
 ### Tareas
 
-- [ ] Implementar `DeliveryOrderService`.
-- [ ] Implementar `DeliverySettlementService`.
-- [ ] Crear repartidor.
-- [ ] Crear ruta.
-- [ ] Asignar clientes a ruta.
-- [ ] Crear pedido de reparto.
-- [ ] Preparar pedido.
-- [ ] Cargar pedido.
-- [ ] Descontar inventario al cargar.
-- [ ] Marcar pedido en ruta.
-- [ ] Registrar entrega.
-- [ ] Registrar cobro de ruta.
-- [ ] Confirmar que cobro no entra a caja.
-- [ ] Registrar devolución `pending_review`.
-- [ ] Revisar devolución vendible.
-- [ ] Revisar devolución como merma.
-- [ ] Crear liquidación.
-- [ ] Depositar efectivo a caja.
+- [x] Implementar `DeliveryOrderService`.
+- [x] Implementar `DeliverySettlementService`.
+- [x] Crear repartidor.
+- [x] Crear ruta.
+- [x] Asignar clientes a ruta.
+- [x] Crear pedido de reparto.
+- [x] Preparar pedido.
+- [x] Cargar pedido.
+- [x] Descontar inventario al cargar.
+- [x] Marcar pedido en ruta.
+- [x] Registrar entrega.
+- [x] Registrar cobro de ruta.
+- [x] Confirmar que cobro no entra a caja.
+- [x] Registrar devolución `pending_review`.
+- [x] Revisar devolución vendible.
+- [x] Revisar devolución como merma.
+- [x] Crear liquidación.
+- [x] Depositar efectivo a caja.
 
 ### Done Sprint 6
 
-- [ ] Cargar ruta descuenta inventario.
-- [ ] Cobro de ruta no entra a caja automáticamente.
-- [ ] Devolución queda en revisión.
-- [ ] Liquidación calcula diferencia.
-- [ ] Depósito a caja crea `route_cash_in`.
-- [ ] Tests QA-DEL pasan.
-- [ ] Tests QA-DRET pasan.
+- [x] Cargar ruta descuenta inventario.
+- [x] Cobro de ruta no entra a caja automáticamente.
+- [x] Devolución queda en revisión.
+- [x] Liquidación calcula diferencia.
+- [x] Depósito a caja crea `route_cash_in`.
+- [x] Tests QA-DEL pasan.
+- [x] Tests QA-DRET pasan.
 
 ## Sprint 7 — Facturación, Conciliación y Reportes
 

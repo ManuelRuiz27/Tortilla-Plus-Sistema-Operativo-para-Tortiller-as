@@ -1,6 +1,7 @@
 -- Tortilla Plus — DDL PostgreSQL V0.1
 -- Base ejecutable inicial para PostgreSQL.
 -- Nota: validar en entorno local antes de producción.
+-- Estado: draft no canonico. Usar docs/database/04-ddl-postgresql.sql como referencia principal.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 

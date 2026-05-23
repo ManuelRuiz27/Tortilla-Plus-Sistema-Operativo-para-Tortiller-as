@@ -2,6 +2,12 @@
 -- Archivo índice.
 -- Ejecutar después de 04-ddl-postgresql.sql.
 
+-- Estado:
+-- Este archivo no es el seed ejecutable de Sprint 0.
+-- Define el orden y contenido esperado del seed.
+-- Sprint 0 debe crear un seed minimo, idempotente y ejecutable dentro del proyecto backend.
+-- El archivo docs/database/05-seed es un draft extendido sin extension y no es canonico.
+
 -- Orden recomendado:
 -- 1. Planes y features.
 -- 2. Roles y permisos.

@@ -1,0 +1,33 @@
+{
+  "name": "@tortilla-plus/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend API de Tortilla Plus V1 Operativa Comercial.",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "format": "node -e \"console.log('format pending: no formatter installed in Sprint 0 minimal setup')\"",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.14",
+    "prisma": "^6.12.0",
+    "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "seed": "node dist/prisma/seed.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

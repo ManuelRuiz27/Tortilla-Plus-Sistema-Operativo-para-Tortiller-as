@@ -1,0 +1,1653 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                                   String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                 String                     @db.VarChar(160)
+  legalName                            String?                    @map("legal_name") @db.VarChar(200)
+  taxId                                String?                    @map("tax_id") @db.VarChar(30)
+  contactEmail                         String                     @map("contact_email") @db.VarChar(180)
+  contactPhone                         String?                    @map("contact_phone") @db.VarChar(30)
+  status                               OrganizationStatus         @default(active)
+  createdAt                            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                            DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  analyticsSnapshotOrganization        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_organization")
+  auditLogOrganization                 AuditLog[]                 @relation("AuditLog_organization")
+  billingProfileOrganization           BillingProfile[]           @relation("BillingProfile_organization")
+  branchProductPriceOrganization       BranchProductPrice[]       @relation("BranchProductPrice_organization")
+  branchOrganization                   Branch[]                   @relation("Branch_organization")
+  businessUnitOrganization             BusinessUnit[]             @relation("BusinessUnit_organization")
+  cashClosingOrganization              CashClosing[]              @relation("CashClosing_organization")
+  cashMovementReasonOrganization       CashMovementReason[]       @relation("CashMovementReason_organization")
+  cashMovementOrganization             CashMovement[]             @relation("CashMovement_organization")
+  cashSessionOrganization              CashSession[]              @relation("CashSession_organization")
+  customerBalanceMovementOrganization  CustomerBalanceMovement[]  @relation("CustomerBalanceMovement_organization")
+  customerProductPriceOrganization     CustomerProductPrice[]     @relation("CustomerProductPrice_organization")
+  customerOrganization                 Customer[]                 @relation("Customer_organization")
+  deliveryDriverOrganization           DeliveryDriver[]           @relation("DeliveryDriver_organization")
+  deliveryOrderOrganization            DeliveryOrder[]            @relation("DeliveryOrder_organization")
+  deliveryPaymentOrganization          DeliveryPayment[]          @relation("DeliveryPayment_organization")
+  deliveryReturnOrganization           DeliveryReturn[]           @relation("DeliveryReturn_organization")
+  deliveryRouteOrganization            DeliveryRoute[]            @relation("DeliveryRoute_organization")
+  deliverySettlementOrganization       DeliverySettlement[]       @relation("DeliverySettlement_organization")
+  inventoryMovementOrganization        InventoryMovement[]        @relation("InventoryMovement_organization")
+  inventoryStockOrganization           InventoryStock[]           @relation("InventoryStock_organization")
+  invoiceOrganization                  Invoice[]                  @relation("Invoice_organization")
+  paymentProviderOrganization          PaymentProvider[]          @relation("PaymentProvider_organization")
+  paymentTerminalReferenceOrganization PaymentTerminalReference[] @relation("PaymentTerminalReference_organization")
+  posDeviceOrganization                PosDevice[]                @relation("PosDevice_organization")
+  productCategoryOrganization          ProductCategory[]          @relation("ProductCategory_organization")
+  productionBatchOrganization          ProductionBatch[]          @relation("ProductionBatch_organization")
+  productOrganization                  Product[]                  @relation("Product_organization")
+  reconciliationBatchOrganization      ReconciliationBatch[]      @relation("ReconciliationBatch_organization")
+  saasPaymentOrganization              SaasPayment[]              @relation("SaasPayment_organization")
+  salePaymentOrganization              SalePayment[]              @relation("SalePayment_organization")
+  saleReturnOrganization               SaleReturn[]               @relation("SaleReturn_organization")
+  saleOrganization                     Sale[]                     @relation("Sale_organization")
+  subscriptionOrganization             Subscription[]             @relation("Subscription_organization")
+  userRoleOrganization                 UserRole[]                 @relation("UserRole_organization")
+  userOrganization                     User[]                     @relation("User_organization")
+  wasteRecordOrganization              WasteRecord[]              @relation("WasteRecord_organization")
+
+  @@map("organizations")
+}
+
+model BusinessUnit {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String        @map("organization_id") @db.Uuid
+  name                 String        @db.VarChar(160)
+  tradeName            String?       @map("trade_name") @db.VarChar(200)
+  businessType         String?       @map("business_type") @db.VarChar(80)
+  status               GenericStatus @default(active)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branchBusinessUnit   Branch[]      @relation("Branch_businessUnit")
+  organization         Organization  @relation("BusinessUnit_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  customerBusinessUnit Customer[]    @relation("Customer_businessUnit")
+
+  @@map("business_units")
+}
+
+model Branch {
+  id                             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                 String                     @map("organization_id") @db.Uuid
+  businessUnitId                 String                     @map("business_unit_id") @db.Uuid
+  name                           String                     @db.VarChar(160)
+  address                        String?
+  phone                          String?                    @db.VarChar(30)
+  timezone                       String                     @default("America/Mexico_City") @db.VarChar(80)
+  status                         GenericStatus              @default(active)
+  createdAt                      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  analyticsSnapshotBranch        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_branch")
+  auditLogBranch                 AuditLog[]                 @relation("AuditLog_branch")
+  branchProductPriceBranch       BranchProductPrice[]       @relation("BranchProductPrice_branch")
+  businessUnit                   BusinessUnit               @relation("Branch_businessUnit", fields: [businessUnitId], references: [id], onUpdate: NoAction)
+  organization                   Organization               @relation("Branch_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  cashClosingBranch              CashClosing[]              @relation("CashClosing_branch")
+  cashMovementBranch             CashMovement[]             @relation("CashMovement_branch")
+  cashSessionBranch              CashSession[]              @relation("CashSession_branch")
+  customerProductPriceBranch     CustomerProductPrice[]     @relation("CustomerProductPrice_branch")
+  deliveryOrderBranch            DeliveryOrder[]            @relation("DeliveryOrder_branch")
+  deliveryPaymentBranch          DeliveryPayment[]          @relation("DeliveryPayment_branch")
+  deliveryReturnBranch           DeliveryReturn[]           @relation("DeliveryReturn_branch")
+  deliveryRouteBranch            DeliveryRoute[]            @relation("DeliveryRoute_branch")
+  deliverySettlementBranch       DeliverySettlement[]       @relation("DeliverySettlement_branch")
+  inventoryMovementBranch        InventoryMovement[]        @relation("InventoryMovement_branch")
+  inventoryStockBranch           InventoryStock[]           @relation("InventoryStock_branch")
+  invoiceBranch                  Invoice[]                  @relation("Invoice_branch")
+  paymentTerminalReferenceBranch PaymentTerminalReference[] @relation("PaymentTerminalReference_branch")
+  posDeviceBranch                PosDevice[]                @relation("PosDevice_branch")
+  productionBatchBranch          ProductionBatch[]          @relation("ProductionBatch_branch")
+  reconciliationBatchBranch      ReconciliationBatch[]      @relation("ReconciliationBatch_branch")
+  salePaymentBranch              SalePayment[]              @relation("SalePayment_branch")
+  saleReturnBranch               SaleReturn[]               @relation("SaleReturn_branch")
+  saleBranch                     Sale[]                     @relation("Sale_branch")
+  userBranchAssignmentBranch     UserBranchAssignment[]     @relation("UserBranchAssignment_branch")
+  wasteRecordBranch              WasteRecord[]              @relation("WasteRecord_branch")
+
+  @@index([organizationId], map: "idx_branches_organization")
+  @@map("branches")
+}
+
+model Plan {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String         @unique @db.VarChar(60)
+  name             String         @db.VarChar(120)
+  description      String?
+  status           GenericStatus  @default(active)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  planFeaturePlan  PlanFeature[]  @relation("PlanFeature_plan")
+  subscriptionPlan Subscription[] @relation("Subscription_plan")
+
+  @@map("plans")
+}
+
+model Feature {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String        @unique @db.VarChar(80)
+  name               String        @db.VarChar(120)
+  description        String?
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  planFeatureFeature PlanFeature[] @relation("PlanFeature_feature")
+
+  @@map("features")
+}
+
+model PlanFeature {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  planId     String   @map("plan_id") @db.Uuid
+  featureId  String   @map("feature_id") @db.Uuid
+  enabled    Boolean  @default(false)
+  limitValue Int?     @map("limit_value")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  feature    Feature  @relation("PlanFeature_feature", fields: [featureId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  plan       Plan     @relation("PlanFeature_plan", fields: [planId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([planId, featureId], map: "uq_plan_feature")
+  @@map("plan_features")
+}
+
+model Subscription {
+  id                           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId               String               @map("organization_id") @db.Uuid
+  planId                       String               @map("plan_id") @db.Uuid
+  status                       SubscriptionStatus   @default(trial)
+  billingPeriod                BillingPeriod        @default(monthly) @map("billing_period")
+  provider                     SubscriptionProvider @default(mercadopago)
+  providerSubscriptionId       String?              @map("provider_subscription_id") @db.VarChar(180)
+  startedAt                    DateTime?            @map("started_at") @db.Timestamptz(6)
+  currentPeriodStart           DateTime?            @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd             DateTime?            @map("current_period_end") @db.Timestamptz(6)
+  graceUntil                   DateTime?            @map("grace_until") @db.Timestamptz(6)
+  cancelledAt                  DateTime?            @map("cancelled_at") @db.Timestamptz(6)
+  createdAt                    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  saasPaymentSubscription      SaasPayment[]        @relation("SaasPayment_subscription")
+  subscriptionItemSubscription SubscriptionItem[]   @relation("SubscriptionItem_subscription")
+  organization                 Organization         @relation("Subscription_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  plan                         Plan                 @relation("Subscription_plan", fields: [planId], references: [id], onUpdate: NoAction)
+
+  @@index([organizationId], map: "idx_subscriptions_organization")
+  @@index([status], map: "idx_subscriptions_status")
+  @@map("subscriptions")
+}
+
+model SubscriptionItem {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String               @map("subscription_id") @db.Uuid
+  itemType       SubscriptionItemType @map("item_type")
+  quantity       Int
+  unitPrice      Decimal              @map("unit_price") @db.Decimal(12, 2)
+  currency       String               @default("MXN") @db.Char(3)
+  status         GenericStatus        @default(active)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  subscription   Subscription         @relation("SubscriptionItem_subscription", fields: [subscriptionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("subscription_items")
+}
+
+model SaasPayment {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String               @map("organization_id") @db.Uuid
+  subscriptionId    String               @map("subscription_id") @db.Uuid
+  provider          SubscriptionProvider @default(mercadopago)
+  providerPaymentId String?              @unique @map("provider_payment_id") @db.VarChar(180)
+  amount            Decimal              @db.Decimal(12, 2)
+  currency          String               @default("MXN") @db.Char(3)
+  status            SaasPaymentStatus    @default(pending)
+  paidAt            DateTime?            @map("paid_at") @db.Timestamptz(6)
+  failedAt          DateTime?            @map("failed_at") @db.Timestamptz(6)
+  failureReason     String?              @map("failure_reason")
+  rawPayload        Json?                @map("raw_payload")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization      Organization         @relation("SaasPayment_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  subscription      Subscription         @relation("SaasPayment_subscription", fields: [subscriptionId], references: [id], onUpdate: NoAction)
+
+  @@map("saas_payments")
+}
+
+model MercadopagoWebhookEvent {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId            String    @unique @map("event_id") @db.VarChar(180)
+  eventType          String    @map("event_type") @db.VarChar(120)
+  providerResourceId String?   @map("provider_resource_id") @db.VarChar(180)
+  processed          Boolean   @default(false)
+  processedAt        DateTime? @map("processed_at") @db.Timestamptz(6)
+  rawPayload         Json      @map("raw_payload")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("mercadopago_webhook_events")
+}
+
+model User {
+  id                                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                       String?                   @map("organization_id") @db.Uuid
+  name                                 String                    @db.VarChar(160)
+  email                                String                    @db.VarChar(180)
+  phone                                String?                   @db.VarChar(30)
+  passwordHash                         String                    @map("password_hash")
+  pinHash                              String?                   @map("pin_hash")
+  status                               UserStatus                @default(active)
+  lastLoginAt                          DateTime?                 @map("last_login_at") @db.Timestamptz(6)
+  createdAt                            DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                            DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  auditLogUser                         AuditLog[]                @relation("AuditLog_user")
+  cashClosingClosedByUser              CashClosing[]             @relation("CashClosing_closedByUser")
+  cashMovementAuthorizedByUser         CashMovement[]            @relation("CashMovement_authorizedByUser")
+  cashMovementCancelledByUser          CashMovement[]            @relation("CashMovement_cancelledByUser")
+  cashMovementRejectedByUser           CashMovement[]            @relation("CashMovement_rejectedByUser")
+  cashMovementRequestedByUser          CashMovement[]            @relation("CashMovement_requestedByUser")
+  cashSessionClosedByUser              CashSession[]             @relation("CashSession_closedByUser")
+  cashSessionOpenedByUser              CashSession[]             @relation("CashSession_openedByUser")
+  customerBalanceMovementCreatedByUser CustomerBalanceMovement[] @relation("CustomerBalanceMovement_createdByUser")
+  deliveryOrderCreatedByUser           DeliveryOrder[]           @relation("DeliveryOrder_createdByUser")
+  deliveryOrderPreparedByUser          DeliveryOrder[]           @relation("DeliveryOrder_preparedByUser")
+  deliveryReturnReviewedByUser         DeliveryReturn[]          @relation("DeliveryReturn_reviewedByUser")
+  deliverySettlementReceivedByUser     DeliverySettlement[]      @relation("DeliverySettlement_receivedByUser")
+  inventoryMovementAuthorizedByUser    InventoryMovement[]       @relation("InventoryMovement_authorizedByUser")
+  inventoryMovementCreatedByUser       InventoryMovement[]       @relation("InventoryMovement_createdByUser")
+  productionBatchClosedByUser          ProductionBatch[]         @relation("ProductionBatch_closedByUser")
+  productionBatchCreatedByUser         ProductionBatch[]         @relation("ProductionBatch_createdByUser")
+  reconciliationBatchCreatedByUser     ReconciliationBatch[]     @relation("ReconciliationBatch_createdByUser")
+  reconciliationBatchReviewedByUser    ReconciliationBatch[]     @relation("ReconciliationBatch_reviewedByUser")
+  salePaymentCreatedByUser             SalePayment[]             @relation("SalePayment_createdByUser")
+  saleReturnAuthorizedByUser           SaleReturn[]              @relation("SaleReturn_authorizedByUser")
+  saleReturnCreatedByUser              SaleReturn[]              @relation("SaleReturn_createdByUser")
+  saleCancelledByUser                  Sale[]                    @relation("Sale_cancelledByUser")
+  saleCreatedByUser                    Sale[]                    @relation("Sale_createdByUser")
+  userBranchAssignmentUser             UserBranchAssignment[]    @relation("UserBranchAssignment_user")
+  userRoleUser                         UserRole[]                @relation("UserRole_user")
+  userSessionUser                      UserSession[]             @relation("UserSession_user")
+  organization                         Organization?             @relation("User_organization", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  wasteRecordAuthorizedByUser          WasteRecord[]             @relation("WasteRecord_authorizedByUser")
+  wasteRecordCreatedByUser             WasteRecord[]             @relation("WasteRecord_createdByUser")
+
+  @@unique([organizationId, email], map: "uq_users_org_email")
+  @@index([organizationId], map: "idx_users_organization")
+  @@map("users")
+}
+
+model Role {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String           @unique @db.VarChar(80)
+  name               String           @db.VarChar(120)
+  scope              RoleScope
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  rolePermissionRole RolePermission[] @relation("RolePermission_role")
+  userRoleRole       UserRole[]       @relation("UserRole_role")
+
+  @@map("roles")
+}
+
+model Permission {
+  id                       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                     String           @unique @db.VarChar(100)
+  name                     String           @db.VarChar(140)
+  description              String?
+  createdAt                DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  rolePermissionPermission RolePermission[] @relation("RolePermission_permission")
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  permission   Permission @relation("RolePermission_permission", fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  role         Role       @relation("RolePermission_role", fields: [roleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([roleId, permissionId], map: "uq_role_permission")
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  roleId         String        @map("role_id") @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization? @relation("UserRole_organization", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  role           Role          @relation("UserRole_role", fields: [roleId], references: [id], onUpdate: NoAction)
+  user           User          @relation("UserRole_user", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, roleId, organizationId], map: "uq_user_role_org")
+  @@map("user_roles")
+}
+
+model UserBranchAssignment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  branchId  String   @map("branch_id") @db.Uuid
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch    Branch   @relation("UserBranchAssignment_branch", fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User     @relation("UserBranchAssignment_user", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, branchId], map: "uq_user_branch")
+  @@map("user_branch_assignments")
+}
+
+model UserSession {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  deviceInfo       String?   @map("device_info")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User      @relation("UserSession_user", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("user_sessions")
+}
+
+model PosDevice {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  branchId          String        @map("branch_id") @db.Uuid
+  deviceName        String        @map("device_name") @db.VarChar(160)
+  deviceCode        String        @unique @map("device_code") @db.VarChar(120)
+  deviceType        DeviceType    @map("device_type")
+  status            DeviceStatus  @default(pending_activation)
+  licensed          Boolean       @default(false)
+  lastSeenAt        DateTime?     @map("last_seen_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  auditLogDevice    AuditLog[]    @relation("AuditLog_device")
+  cashSessionDevice CashSession[] @relation("CashSession_device")
+  branch            Branch        @relation("PosDevice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization      Organization  @relation("PosDevice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleDevice        Sale[]        @relation("Sale_device")
+
+  @@index([branchId], map: "idx_pos_devices_branch")
+  @@map("pos_devices")
+}
+
+model ProductCategory {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  name            String        @db.VarChar(140)
+  status          GenericStatus @default(active)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization    Organization  @relation("ProductCategory_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  productCategory Product[]     @relation("Product_category")
+
+  @@unique([organizationId, name], map: "uq_product_category_org_name")
+  @@map("product_categories")
+}
+
+model Product {
+  id                              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                  String                 @map("organization_id") @db.Uuid
+  categoryId                      String?                @map("category_id") @db.Uuid
+  name                            String                 @db.VarChar(160)
+  sku                             String?                @db.VarChar(80)
+  barcode                         String?                @db.VarChar(120)
+  productType                     ProductType            @map("product_type")
+  unit                            ProductUnit
+  isSellable                      Boolean                @default(true) @map("is_sellable")
+  requiresProduction              Boolean                @default(false) @map("requires_production")
+  isStockTracked                  Boolean                @default(true) @map("is_stock_tracked")
+  status                          GenericStatus          @default(active)
+  createdAt                       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                       DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branchProductPriceProduct       BranchProductPrice[]   @relation("BranchProductPrice_product")
+  customerProductPriceProduct     CustomerProductPrice[] @relation("CustomerProductPrice_product")
+  deliveryOrderItemProduct        DeliveryOrderItem[]    @relation("DeliveryOrderItem_product")
+  deliveryReturnItemProduct       DeliveryReturnItem[]   @relation("DeliveryReturnItem_product")
+  inventoryMovementProduct        InventoryMovement[]    @relation("InventoryMovement_product")
+  inventoryStockProduct           InventoryStock[]       @relation("InventoryStock_product")
+  invoiceItemProduct              InvoiceItem[]          @relation("InvoiceItem_product")
+  productPackageConfigBaseProduct ProductPackageConfig[] @relation("ProductPackageConfig_baseProduct")
+  productPackageConfigProduct     ProductPackageConfig?  @relation("ProductPackageConfig_product")
+  productionBatchItemProduct      ProductionBatchItem[]  @relation("ProductionBatchItem_product")
+  category                        ProductCategory?       @relation("Product_category", fields: [categoryId], references: [id], onUpdate: NoAction)
+  organization                    Organization           @relation("Product_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleItemProduct                 SaleItem[]             @relation("SaleItem_product")
+  saleReturnItemProduct           SaleReturnItem[]       @relation("SaleReturnItem_product")
+  wasteRecordProduct              WasteRecord[]          @relation("WasteRecord_product")
+
+  @@unique([organizationId, barcode], map: "uq_products_org_barcode")
+  @@unique([organizationId, sku], map: "uq_products_org_sku")
+  @@index([organizationId], map: "idx_products_organization")
+  @@map("products")
+}
+
+model ProductPackageConfig {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId          String   @unique @map("product_id") @db.Uuid
+  baseProductId      String   @map("base_product_id") @db.Uuid
+  packageWeightGrams Decimal  @map("package_weight_grams") @db.Decimal(12, 3)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  baseProduct        Product  @relation("ProductPackageConfig_baseProduct", fields: [baseProductId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product            Product  @relation("ProductPackageConfig_product", fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("product_package_configs")
+}
+
+model BranchProductPrice {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  branchId       String        @map("branch_id") @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  saleMode       SaleMode      @map("sale_mode")
+  price          Decimal       @db.Decimal(12, 2)
+  currency       String        @default("MXN") @db.Char(3)
+  activeFrom     DateTime      @map("active_from") @db.Timestamptz(6)
+  activeTo       DateTime?     @map("active_to") @db.Timestamptz(6)
+  status         GenericStatus @default(active)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch         Branch        @relation("BranchProductPrice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization   Organization  @relation("BranchProductPrice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product        Product       @relation("BranchProductPrice_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("branch_product_prices")
+}
+
+model InventoryStock {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  branchId         String       @map("branch_id") @db.Uuid
+  productId        String       @map("product_id") @db.Uuid
+  quantity         Decimal      @default(0) @db.Decimal(12, 3)
+  reservedQuantity Decimal      @default(0) @map("reserved_quantity") @db.Decimal(12, 3)
+  minimumQuantity  Decimal      @default(0) @map("minimum_quantity") @db.Decimal(12, 3)
+  updatedAt        DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch           Branch       @relation("InventoryStock_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization     Organization @relation("InventoryStock_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product          Product      @relation("InventoryStock_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([branchId, productId], map: "uq_inventory_stock_branch_product")
+  @@index([organizationId], map: "idx_inventory_stocks_org")
+  @@map("inventory_stocks")
+}
+
+model InventoryMovement {
+  id                                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                      String                @map("organization_id") @db.Uuid
+  branchId                            String                @map("branch_id") @db.Uuid
+  productId                           String                @map("product_id") @db.Uuid
+  movementType                        InventoryMovementType @map("movement_type")
+  quantity                            Decimal               @db.Decimal(12, 3)
+  unit                                ProductUnit
+  reason                              String?
+  referenceType                       String?               @map("reference_type") @db.VarChar(80)
+  referenceId                         String?               @map("reference_id") @db.Uuid
+  createdByUserId                     String                @map("created_by_user_id") @db.Uuid
+  authorizedByUserId                  String?               @map("authorized_by_user_id") @db.Uuid
+  createdAt                           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryReturnItemInventoryMovement DeliveryReturnItem[]  @relation("DeliveryReturnItem_inventoryMovement")
+  authorizedByUser                    User?                 @relation("InventoryMovement_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                              Branch                @relation("InventoryMovement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                       User                  @relation("InventoryMovement_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                        Organization          @relation("InventoryMovement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product                             Product               @relation("InventoryMovement_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleReturnItemInventoryMovement     SaleReturnItem[]      @relation("SaleReturnItem_inventoryMovement")
+  wasteRecordInventoryMovement        WasteRecord[]         @relation("WasteRecord_inventoryMovement")
+
+  @@index([createdAt], map: "idx_inventory_movements_created_at")
+  @@map("inventory_movements")
+}
+
+model ProductionBatch {
+  id                                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                     String                @map("organization_id") @db.Uuid
+  branchId                           String                @map("branch_id") @db.Uuid
+  productionDate                     DateTime              @map("production_date") @db.Date
+  status                             ProductionBatchStatus @default(open)
+  createdByUserId                    String                @map("created_by_user_id") @db.Uuid
+  closedByUserId                     String?               @map("closed_by_user_id") @db.Uuid
+  closedAt                           DateTime?             @map("closed_at") @db.Timestamptz(6)
+  createdAt                          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                          DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  productionBatchItemProductionBatch ProductionBatchItem[] @relation("ProductionBatchItem_productionBatch")
+  branch                             Branch                @relation("ProductionBatch_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  closedByUser                       User?                 @relation("ProductionBatch_closedByUser", fields: [closedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                      User                  @relation("ProductionBatch_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                       Organization          @relation("ProductionBatch_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("production_batches")
+}
+
+model ProductionBatchItem {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productionBatchId String          @map("production_batch_id") @db.Uuid
+  productId         String          @map("product_id") @db.Uuid
+  producedQuantity  Decimal         @map("produced_quantity") @db.Decimal(12, 3)
+  unit              ProductUnit
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  product           Product         @relation("ProductionBatchItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  productionBatch   ProductionBatch @relation("ProductionBatchItem_productionBatch", fields: [productionBatchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([productionBatchId, productId], map: "uq_production_batch_product")
+  @@map("production_batch_items")
+}
+
+model WasteRecord {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String             @map("organization_id") @db.Uuid
+  branchId            String             @map("branch_id") @db.Uuid
+  productId           String             @map("product_id") @db.Uuid
+  quantity            Decimal            @db.Decimal(12, 3)
+  unit                ProductUnit
+  wasteReason         WasteReason        @map("waste_reason")
+  inventoryMovementId String?            @map("inventory_movement_id") @db.Uuid
+  createdByUserId     String             @map("created_by_user_id") @db.Uuid
+  authorizedByUserId  String?            @map("authorized_by_user_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  authorizedByUser    User?              @relation("WasteRecord_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch              Branch             @relation("WasteRecord_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser       User               @relation("WasteRecord_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inventoryMovement   InventoryMovement? @relation("WasteRecord_inventoryMovement", fields: [inventoryMovementId], references: [id], onUpdate: NoAction)
+  organization        Organization       @relation("WasteRecord_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product             Product            @relation("WasteRecord_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("waste_records")
+}
+
+model CashSession {
+  id                             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                 String                @map("organization_id") @db.Uuid
+  branchId                       String                @map("branch_id") @db.Uuid
+  deviceId                       String?               @map("device_id") @db.Uuid
+  openedByUserId                 String                @map("opened_by_user_id") @db.Uuid
+  closedByUserId                 String?               @map("closed_by_user_id") @db.Uuid
+  openingAmountExpected          Decimal               @default(0) @map("opening_amount_expected") @db.Decimal(12, 2)
+  openingAmountCounted           Decimal               @default(0) @map("opening_amount_counted") @db.Decimal(12, 2)
+  openingDiscrepancy             Decimal               @default(0) @map("opening_discrepancy") @db.Decimal(12, 2)
+  openingNote                    String?               @map("opening_note")
+  status                         CashSessionStatus     @default(open)
+  openedAt                       DateTime              @default(now()) @map("opened_at") @db.Timestamptz(6)
+  closedAt                       DateTime?             @map("closed_at") @db.Timestamptz(6)
+  createdAt                      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  cashClosingCashSession         CashClosing?          @relation("CashClosing_cashSession")
+  cashMovementCashSession        CashMovement[]        @relation("CashMovement_cashSession")
+  branch                         Branch                @relation("CashSession_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  closedByUser                   User?                 @relation("CashSession_closedByUser", fields: [closedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  device                         PosDevice?            @relation("CashSession_device", fields: [deviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  openedByUser                   User                  @relation("CashSession_openedByUser", fields: [openedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                   Organization          @relation("CashSession_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryOrderCashSession       DeliveryOrder[]       @relation("DeliveryOrder_cashSession")
+  deliverySettlementCashSession  DeliverySettlement[]  @relation("DeliverySettlement_cashSession")
+  reconciliationBatchCashSession ReconciliationBatch[] @relation("ReconciliationBatch_cashSession")
+  saleCashSession                Sale[]                @relation("Sale_cashSession")
+
+  @@index([branchId], map: "idx_cash_sessions_branch")
+  @@index([status], map: "idx_cash_sessions_status")
+  @@map("cash_sessions")
+}
+
+model CashMovementReason {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String                @map("organization_id") @db.Uuid
+  name                  String                @db.VarChar(120)
+  movementDirection     CashMovementDirection @map("movement_direction")
+  requiresAuthorization Boolean               @default(true) @map("requires_authorization")
+  status                GenericStatus         @default(active)
+  createdAt             DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization          Organization          @relation("CashMovementReason_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashMovementReason    CashMovement[]        @relation("CashMovement_reason")
+
+  @@unique([organizationId, name], map: "uq_cash_reason_org_name")
+  @@map("cash_movement_reasons")
+}
+
+model CashMovement {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String              @map("organization_id") @db.Uuid
+  branchId           String              @map("branch_id") @db.Uuid
+  cashSessionId      String              @map("cash_session_id") @db.Uuid
+  movementType       CashMovementType    @map("movement_type")
+  amount             Decimal             @db.Decimal(12, 2)
+  reasonId           String?             @map("reason_id") @db.Uuid
+  description        String?
+  status             CashMovementStatus  @default(recorded)
+  requestedByUserId  String              @map("requested_by_user_id") @db.Uuid
+  authorizedByUserId String?             @map("authorized_by_user_id") @db.Uuid
+  authorizedAt       DateTime?           @map("authorized_at") @db.Timestamptz(6)
+  rejectedByUserId   String?             @map("rejected_by_user_id") @db.Uuid
+  rejectedAt         DateTime?           @map("rejected_at") @db.Timestamptz(6)
+  cancelledByUserId  String?             @map("cancelled_by_user_id") @db.Uuid
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason String?             @map("cancellation_reason")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  authorizedByUser   User?               @relation("CashMovement_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch             Branch              @relation("CashMovement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cancelledByUser    User?               @relation("CashMovement_cancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession        CashSession         @relation("CashMovement_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       Organization        @relation("CashMovement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reason             CashMovementReason? @relation("CashMovement_reason", fields: [reasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  rejectedByUser     User?               @relation("CashMovement_rejectedByUser", fields: [rejectedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedByUser    User                @relation("CashMovement_requestedByUser", fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([cashSessionId], map: "idx_cash_movements_cash_session")
+  @@index([status], map: "idx_cash_movements_status")
+  @@map("cash_movements")
+}
+
+model CashClosing {
+  id                 String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String         @map("organization_id") @db.Uuid
+  branchId           String         @map("branch_id") @db.Uuid
+  cashSessionId      String         @unique @map("cash_session_id") @db.Uuid
+  closedByUserId     String         @map("closed_by_user_id") @db.Uuid
+  openingAmount      Decimal        @default(0) @map("opening_amount") @db.Decimal(12, 2)
+  cashSalesTotal     Decimal        @default(0) @map("cash_sales_total") @db.Decimal(12, 2)
+  cardSalesTotal     Decimal        @default(0) @map("card_sales_total") @db.Decimal(12, 2)
+  transferSalesTotal Decimal        @default(0) @map("transfer_sales_total") @db.Decimal(12, 2)
+  creditSalesTotal   Decimal        @default(0) @map("credit_sales_total") @db.Decimal(12, 2)
+  cashInTotal        Decimal        @default(0) @map("cash_in_total") @db.Decimal(12, 2)
+  cashOutTotal       Decimal        @default(0) @map("cash_out_total") @db.Decimal(12, 2)
+  expectedCashAmount Decimal        @default(0) @map("expected_cash_amount") @db.Decimal(12, 2)
+  countedCashAmount  Decimal        @default(0) @map("counted_cash_amount") @db.Decimal(12, 2)
+  differenceAmount   Decimal        @default(0) @map("difference_amount") @db.Decimal(12, 2)
+  differenceType     DifferenceType @default(none) @map("difference_type")
+  comment            String?
+  status             GenericStatus  @default(active)
+  closedAt           DateTime       @default(now()) @map("closed_at") @db.Timestamptz(6)
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch             Branch         @relation("CashClosing_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession        CashSession    @relation("CashClosing_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  closedByUser       User           @relation("CashClosing_closedByUser", fields: [closedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       Organization   @relation("CashClosing_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("cash_closings")
+}
+
+model Customer {
+  id                              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                  String                    @map("organization_id") @db.Uuid
+  businessUnitId                  String?                   @map("business_unit_id") @db.Uuid
+  name                            String                    @db.VarChar(180)
+  customerType                    CustomerType              @map("customer_type")
+  phone                           String?                   @db.VarChar(30)
+  email                           String?                   @db.VarChar(180)
+  taxId                           String?                   @map("tax_id") @db.VarChar(30)
+  creditEnabled                   Boolean                   @default(false) @map("credit_enabled")
+  creditLimit                     Decimal                   @default(0) @map("credit_limit") @db.Decimal(12, 2)
+  currentBalance                  Decimal                   @default(0) @map("current_balance") @db.Decimal(12, 2)
+  status                          GenericStatus             @default(active)
+  notes                           String?
+  createdAt                       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                       DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  billingProfileCustomer          BillingProfile[]          @relation("BillingProfile_customer")
+  customerBalanceMovementCustomer CustomerBalanceMovement[] @relation("CustomerBalanceMovement_customer")
+  customerProductPriceCustomer    CustomerProductPrice[]    @relation("CustomerProductPrice_customer")
+  businessUnit                    BusinessUnit?             @relation("Customer_businessUnit", fields: [businessUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                    Organization              @relation("Customer_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryOrderCustomer           DeliveryOrder[]           @relation("DeliveryOrder_customer")
+  deliveryPaymentCustomer         DeliveryPayment[]         @relation("DeliveryPayment_customer")
+  deliveryRouteCustomerCustomer   DeliveryRouteCustomer[]   @relation("DeliveryRouteCustomer_customer")
+  invoiceCustomer                 Invoice[]                 @relation("Invoice_customer")
+  saleCustomer                    Sale[]                    @relation("Sale_customer")
+
+  @@unique([organizationId, name], map: "uq_customers_org_name")
+  @@index([organizationId], map: "idx_customers_organization")
+  @@map("customers")
+}
+
+model CustomerProductPrice {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  branchId       String?       @map("branch_id") @db.Uuid
+  saleMode       SaleMode      @map("sale_mode")
+  price          Decimal       @db.Decimal(12, 2)
+  activeFrom     DateTime      @map("active_from") @db.Timestamptz(6)
+  activeTo       DateTime?     @map("active_to") @db.Timestamptz(6)
+  status         GenericStatus @default(active)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch         Branch?       @relation("CustomerProductPrice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer       Customer      @relation("CustomerProductPrice_customer", fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organization   Organization  @relation("CustomerProductPrice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product        Product       @relation("CustomerProductPrice_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("customer_product_prices")
+}
+
+model CustomerBalanceMovement {
+  id              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String                      @map("organization_id") @db.Uuid
+  customerId      String                      @map("customer_id") @db.Uuid
+  movementType    CustomerBalanceMovementType @map("movement_type")
+  amount          Decimal                     @db.Decimal(12, 2)
+  referenceType   String?                     @map("reference_type") @db.VarChar(80)
+  referenceId     String?                     @map("reference_id") @db.Uuid
+  createdByUserId String                      @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdByUser   User                        @relation("CustomerBalanceMovement_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer        Customer                    @relation("CustomerBalanceMovement_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization    Organization                @relation("CustomerBalanceMovement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([customerId], map: "idx_customer_balance_customer")
+  @@map("customer_balance_movements")
+}
+
+model Sale {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String        @map("organization_id") @db.Uuid
+  branchId           String        @map("branch_id") @db.Uuid
+  cashSessionId      String        @map("cash_session_id") @db.Uuid
+  deviceId           String?       @map("device_id") @db.Uuid
+  customerId         String?       @map("customer_id") @db.Uuid
+  saleNumber         String        @map("sale_number") @db.VarChar(80)
+  status             SaleStatus    @default(draft)
+  saleType           SaleType      @default(counter) @map("sale_type")
+  subtotal           Decimal       @default(0) @db.Decimal(12, 2)
+  discountTotal      Decimal       @default(0) @map("discount_total") @db.Decimal(12, 2)
+  taxTotal           Decimal       @default(0) @map("tax_total") @db.Decimal(12, 2)
+  total              Decimal       @default(0) @db.Decimal(12, 2)
+  createdByUserId    String        @map("created_by_user_id") @db.Uuid
+  cancelledByUserId  String?       @map("cancelled_by_user_id") @db.Uuid
+  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason String?       @map("cancellation_reason")
+  clientGeneratedId  String?       @map("client_generated_id") @db.VarChar(180)
+  syncStatus         String?       @map("sync_status") @db.VarChar(60)
+  syncedAt           DateTime?     @map("synced_at") @db.Timestamptz(6)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  invoiceSaleSale    InvoiceSale[] @relation("InvoiceSale_sale")
+  saleItemSale       SaleItem[]    @relation("SaleItem_sale")
+  salePaymentSale    SalePayment[] @relation("SalePayment_sale")
+  saleReturnSale     SaleReturn[]  @relation("SaleReturn_sale")
+  branch             Branch        @relation("Sale_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cancelledByUser    User?         @relation("Sale_cancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession        CashSession   @relation("Sale_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser      User          @relation("Sale_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer           Customer?     @relation("Sale_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  device             PosDevice?    @relation("Sale_device", fields: [deviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization       Organization  @relation("Sale_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([branchId, saleNumber], map: "uq_sale_branch_number")
+  @@index([branchId], map: "idx_sales_branch")
+  @@index([cashSessionId], map: "idx_sales_cash_session")
+  @@index([createdAt], map: "idx_sales_created_at")
+  @@map("sales")
+}
+
+model SaleItem {
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId                 String           @map("sale_id") @db.Uuid
+  productId              String           @map("product_id") @db.Uuid
+  productNameSnapshot    String           @map("product_name_snapshot") @db.VarChar(180)
+  productTypeSnapshot    ProductType      @map("product_type_snapshot")
+  quantity               Decimal          @db.Decimal(12, 3)
+  unit                   ProductUnit
+  unitPrice              Decimal          @map("unit_price") @db.Decimal(12, 2)
+  discountAmount         Decimal          @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  total                  Decimal          @db.Decimal(12, 2)
+  saleMode               SaleMode         @map("sale_mode")
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  product                Product          @relation("SaleItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                   Sale             @relation("SaleItem_sale", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  saleReturnItemSaleItem SaleReturnItem[] @relation("SaleReturnItem_saleItem")
+
+  @@map("sale_items")
+}
+
+model SalePayment {
+  id                                  String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                      String                    @map("organization_id") @db.Uuid
+  branchId                            String                    @map("branch_id") @db.Uuid
+  saleId                              String                    @map("sale_id") @db.Uuid
+  paymentMethod                       PaymentMethod             @map("payment_method")
+  amount                              Decimal                   @db.Decimal(12, 2)
+  status                              PaymentStatus             @default(completed)
+  reference                           String?                   @db.VarChar(180)
+  provider                            String?                   @db.VarChar(120)
+  createdByUserId                     String                    @map("created_by_user_id") @db.Uuid
+  createdAt                           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  paymentTerminalReferenceSalePayment PaymentTerminalReference? @relation("PaymentTerminalReference_salePayment")
+  reconciliationItemSalePayment       ReconciliationItem[]      @relation("ReconciliationItem_salePayment")
+  branch                              Branch                    @relation("SalePayment_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                       User                      @relation("SalePayment_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                        Organization              @relation("SalePayment_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                                Sale                      @relation("SalePayment_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([saleId], map: "idx_sale_payments_sale")
+  @@map("sale_payments")
+}
+
+model SaleReturn {
+  id                       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String           @map("organization_id") @db.Uuid
+  branchId                 String           @map("branch_id") @db.Uuid
+  saleId                   String           @map("sale_id") @db.Uuid
+  status                   SaleReturnStatus @default(pending)
+  reason                   String
+  authorizedByUserId       String           @map("authorized_by_user_id") @db.Uuid
+  createdByUserId          String           @map("created_by_user_id") @db.Uuid
+  createdAt                DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  saleReturnItemSaleReturn SaleReturnItem[] @relation("SaleReturnItem_saleReturn")
+  authorizedByUser         User             @relation("SaleReturn_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                   Branch           @relation("SaleReturn_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser            User             @relation("SaleReturn_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization             Organization     @relation("SaleReturn_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                     Sale             @relation("SaleReturn_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("sale_returns")
+}
+
+model SaleReturnItem {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleReturnId        String             @map("sale_return_id") @db.Uuid
+  saleItemId          String             @map("sale_item_id") @db.Uuid
+  productId           String             @map("product_id") @db.Uuid
+  quantity            Decimal            @db.Decimal(12, 3)
+  amountRefunded      Decimal            @map("amount_refunded") @db.Decimal(12, 2)
+  returnToInventory   Boolean            @default(false) @map("return_to_inventory")
+  inventoryCondition  InventoryCondition @map("inventory_condition")
+  inventoryMovementId String?            @map("inventory_movement_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  inventoryMovement   InventoryMovement? @relation("SaleReturnItem_inventoryMovement", fields: [inventoryMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product             Product            @relation("SaleReturnItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleItem            SaleItem           @relation("SaleReturnItem_saleItem", fields: [saleItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleReturn          SaleReturn         @relation("SaleReturnItem_saleReturn", fields: [saleReturnId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("sale_return_items")
+}
+
+model DeliveryDriver {
+  id                       String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String               @map("organization_id") @db.Uuid
+  name                     String               @db.VarChar(160)
+  phone                    String?              @db.VarChar(30)
+  status                   GenericStatus        @default(active)
+  notes                    String?
+  createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization             Organization         @relation("DeliveryDriver_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryOrderDriver      DeliveryOrder[]      @relation("DeliveryOrder_driver")
+  deliveryPaymentDriver    DeliveryPayment[]    @relation("DeliveryPayment_driver")
+  deliveryReturnDriver     DeliveryReturn[]     @relation("DeliveryReturn_driver")
+  deliveryRouteDriver      DeliveryRoute[]      @relation("DeliveryRoute_driver")
+  deliverySettlementDriver DeliverySettlement[] @relation("DeliverySettlement_driver")
+
+  @@unique([organizationId, name], map: "uq_delivery_driver_org_name")
+  @@map("delivery_drivers")
+}
+
+model DeliveryRoute {
+  id                         String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId             String                  @map("organization_id") @db.Uuid
+  branchId                   String                  @map("branch_id") @db.Uuid
+  driverId                   String?                 @map("driver_id") @db.Uuid
+  name                       String                  @db.VarChar(160)
+  status                     GenericStatus           @default(active)
+  createdAt                  DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deliveryOrderRoute         DeliveryOrder[]         @relation("DeliveryOrder_route")
+  deliveryRouteCustomerRoute DeliveryRouteCustomer[] @relation("DeliveryRouteCustomer_route")
+  branch                     Branch                  @relation("DeliveryRoute_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver                     DeliveryDriver?         @relation("DeliveryRoute_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization               Organization            @relation("DeliveryRoute_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliverySettlementRoute    DeliverySettlement[]    @relation("DeliverySettlement_route")
+
+  @@unique([branchId, name], map: "uq_delivery_route_branch_name")
+  @@map("delivery_routes")
+}
+
+model DeliveryRouteCustomer {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routeId    String        @map("route_id") @db.Uuid
+  customerId String        @map("customer_id") @db.Uuid
+  sortOrder  Int           @default(0) @map("sort_order")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer   Customer      @relation("DeliveryRouteCustomer_customer", fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  route      DeliveryRoute @relation("DeliveryRouteCustomer_route", fields: [routeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([routeId, customerId], map: "uq_delivery_route_customer")
+  @@map("delivery_route_customers")
+}
+
+model DeliveryOrder {
+  id                             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                 String              @map("organization_id") @db.Uuid
+  branchId                       String              @map("branch_id") @db.Uuid
+  routeId                        String?             @map("route_id") @db.Uuid
+  driverId                       String?             @map("driver_id") @db.Uuid
+  customerId                     String              @map("customer_id") @db.Uuid
+  cashSessionId                  String?             @map("cash_session_id") @db.Uuid
+  status                         DeliveryOrderStatus @default(pending)
+  total                          Decimal             @default(0) @db.Decimal(12, 2)
+  amountCollected                Decimal             @default(0) @map("amount_collected") @db.Decimal(12, 2)
+  amountPending                  Decimal             @default(0) @map("amount_pending") @db.Decimal(12, 2)
+  createdByUserId                String              @map("created_by_user_id") @db.Uuid
+  preparedByUserId               String?             @map("prepared_by_user_id") @db.Uuid
+  loadedAt                       DateTime?           @map("loaded_at") @db.Timestamptz(6)
+  deliveredAt                    DateTime?           @map("delivered_at") @db.Timestamptz(6)
+  closedAt                       DateTime?           @map("closed_at") @db.Timestamptz(6)
+  createdAt                      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deliveryOrderItemDeliveryOrder DeliveryOrderItem[] @relation("DeliveryOrderItem_deliveryOrder")
+  branch                         Branch              @relation("DeliveryOrder_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession                    CashSession?        @relation("DeliveryOrder_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                  User                @relation("DeliveryOrder_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer                       Customer            @relation("DeliveryOrder_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver                         DeliveryDriver?     @relation("DeliveryOrder_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                   Organization        @relation("DeliveryOrder_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  preparedByUser                 User?               @relation("DeliveryOrder_preparedByUser", fields: [preparedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route                          DeliveryRoute?      @relation("DeliveryOrder_route", fields: [routeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryPaymentDeliveryOrder   DeliveryPayment[]   @relation("DeliveryPayment_deliveryOrder")
+  deliveryReturnDeliveryOrder    DeliveryReturn[]    @relation("DeliveryReturn_deliveryOrder")
+
+  @@index([branchId], map: "idx_delivery_orders_branch")
+  @@index([status], map: "idx_delivery_orders_status")
+  @@map("delivery_orders")
+}
+
+model DeliveryOrderItem {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryOrderId   String        @map("delivery_order_id") @db.Uuid
+  productId         String        @map("product_id") @db.Uuid
+  quantityLoaded    Decimal       @default(0) @map("quantity_loaded") @db.Decimal(12, 3)
+  quantityDelivered Decimal       @default(0) @map("quantity_delivered") @db.Decimal(12, 3)
+  quantityReturned  Decimal       @default(0) @map("quantity_returned") @db.Decimal(12, 3)
+  unitPrice         Decimal       @map("unit_price") @db.Decimal(12, 2)
+  total             Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deliveryOrder     DeliveryOrder @relation("DeliveryOrderItem_deliveryOrder", fields: [deliveryOrderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product           Product       @relation("DeliveryOrderItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("delivery_order_items")
+}
+
+model DeliveryPayment {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String          @map("organization_id") @db.Uuid
+  branchId        String          @map("branch_id") @db.Uuid
+  deliveryOrderId String          @map("delivery_order_id") @db.Uuid
+  driverId        String?         @map("driver_id") @db.Uuid
+  customerId      String          @map("customer_id") @db.Uuid
+  amount          Decimal         @db.Decimal(12, 2)
+  paymentMethod   PaymentMethod   @default(cash) @map("payment_method")
+  status          PaymentStatus   @default(completed)
+  collectedAt     DateTime        @map("collected_at") @db.Timestamptz(6)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch          Branch          @relation("DeliveryPayment_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer        Customer        @relation("DeliveryPayment_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryOrder   DeliveryOrder   @relation("DeliveryPayment_deliveryOrder", fields: [deliveryOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver          DeliveryDriver? @relation("DeliveryPayment_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization    Organization    @relation("DeliveryPayment_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("delivery_payments")
+}
+
+model DeliverySettlement {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  branchId            String                   @map("branch_id") @db.Uuid
+  driverId            String?                  @map("driver_id") @db.Uuid
+  routeId             String?                  @map("route_id") @db.Uuid
+  status              DeliverySettlementStatus @default(open)
+  expectedCashAmount  Decimal                  @default(0) @map("expected_cash_amount") @db.Decimal(12, 2)
+  deliveredCashAmount Decimal                  @default(0) @map("delivered_cash_amount") @db.Decimal(12, 2)
+  differenceAmount    Decimal                  @default(0) @map("difference_amount") @db.Decimal(12, 2)
+  receivedByUserId    String?                  @map("received_by_user_id") @db.Uuid
+  cashSessionId       String?                  @map("cash_session_id") @db.Uuid
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt            DateTime?                @map("closed_at") @db.Timestamptz(6)
+  branch              Branch                   @relation("DeliverySettlement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession         CashSession?             @relation("DeliverySettlement_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver              DeliveryDriver?          @relation("DeliverySettlement_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization        Organization             @relation("DeliverySettlement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receivedByUser      User?                    @relation("DeliverySettlement_receivedByUser", fields: [receivedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route               DeliveryRoute?           @relation("DeliverySettlement_route", fields: [routeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("delivery_settlements")
+}
+
+model DeliveryReturn {
+  id                               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                   String               @map("organization_id") @db.Uuid
+  branchId                         String               @map("branch_id") @db.Uuid
+  deliveryOrderId                  String               @map("delivery_order_id") @db.Uuid
+  driverId                         String?              @map("driver_id") @db.Uuid
+  status                           DeliveryReturnStatus @default(pending_review)
+  reviewedByUserId                 String?              @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt                       DateTime?            @map("reviewed_at") @db.Timestamptz(6)
+  createdAt                        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryReturnItemDeliveryReturn DeliveryReturnItem[] @relation("DeliveryReturnItem_deliveryReturn")
+  branch                           Branch               @relation("DeliveryReturn_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryOrder                    DeliveryOrder        @relation("DeliveryReturn_deliveryOrder", fields: [deliveryOrderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver                           DeliveryDriver?      @relation("DeliveryReturn_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                     Organization         @relation("DeliveryReturn_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedByUser                   User?                @relation("DeliveryReturn_reviewedByUser", fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("delivery_returns")
+}
+
+model DeliveryReturnItem {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryReturnId    String             @map("delivery_return_id") @db.Uuid
+  productId           String             @map("product_id") @db.Uuid
+  quantity            Decimal            @db.Decimal(12, 3)
+  condition           InventoryCondition
+  inventoryMovementId String?            @map("inventory_movement_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryReturn      DeliveryReturn     @relation("DeliveryReturnItem_deliveryReturn", fields: [deliveryReturnId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  inventoryMovement   InventoryMovement? @relation("DeliveryReturnItem_inventoryMovement", fields: [inventoryMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product             Product            @relation("DeliveryReturnItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("delivery_return_items")
+}
+
+model PaymentProvider {
+  id                               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                   String                     @map("organization_id") @db.Uuid
+  name                             String                     @db.VarChar(140)
+  providerType                     String                     @map("provider_type") @db.VarChar(80)
+  status                           GenericStatus              @default(active)
+  createdAt                        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                        DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization                     Organization               @relation("PaymentProvider_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentTerminalReferenceProvider PaymentTerminalReference[] @relation("PaymentTerminalReference_provider")
+  reconciliationBatchProvider      ReconciliationBatch[]      @relation("ReconciliationBatch_provider")
+
+  @@unique([organizationId, name], map: "uq_payment_provider_org_name")
+  @@map("payment_providers")
+}
+
+model PaymentTerminalReference {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  branchId       String           @map("branch_id") @db.Uuid
+  salePaymentId  String           @unique @map("sale_payment_id") @db.Uuid
+  providerId     String?          @map("provider_id") @db.Uuid
+  reference      String           @db.VarChar(180)
+  terminalName   String?          @map("terminal_name") @db.VarChar(120)
+  amount         Decimal          @db.Decimal(12, 2)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch         Branch           @relation("PaymentTerminalReference_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization   Organization     @relation("PaymentTerminalReference_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  provider       PaymentProvider? @relation("PaymentTerminalReference_provider", fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salePayment    SalePayment      @relation("PaymentTerminalReference_salePayment", fields: [salePaymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("payment_terminal_references")
+}
+
+model ReconciliationBatch {
+  id                                    String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                        String               @map("organization_id") @db.Uuid
+  branchId                              String               @map("branch_id") @db.Uuid
+  cashSessionId                         String?              @map("cash_session_id") @db.Uuid
+  providerId                            String?              @map("provider_id") @db.Uuid
+  status                                ReconciliationStatus @default(draft)
+  posTotal                              Decimal              @default(0) @map("pos_total") @db.Decimal(12, 2)
+  providerReportedTotal                 Decimal              @default(0) @map("provider_reported_total") @db.Decimal(12, 2)
+  differenceTotal                       Decimal              @default(0) @map("difference_total") @db.Decimal(12, 2)
+  createdByUserId                       String               @map("created_by_user_id") @db.Uuid
+  reviewedByUserId                      String?              @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt                            DateTime?            @map("reviewed_at") @db.Timestamptz(6)
+  createdAt                             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch                                Branch               @relation("ReconciliationBatch_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession                           CashSession?         @relation("ReconciliationBatch_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                         User                 @relation("ReconciliationBatch_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                          Organization         @relation("ReconciliationBatch_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  provider                              PaymentProvider?     @relation("ReconciliationBatch_provider", fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedByUser                        User?                @relation("ReconciliationBatch_reviewedByUser", fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reconciliationItemReconciliationBatch ReconciliationItem[] @relation("ReconciliationItem_reconciliationBatch")
+
+  @@map("reconciliation_batches")
+}
+
+model ReconciliationItem {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reconciliationBatchId String                   @map("reconciliation_batch_id") @db.Uuid
+  salePaymentId         String?                  @map("sale_payment_id") @db.Uuid
+  providerReference     String?                  @map("provider_reference") @db.VarChar(180)
+  posAmount             Decimal                  @default(0) @map("pos_amount") @db.Decimal(12, 2)
+  providerAmount        Decimal                  @default(0) @map("provider_amount") @db.Decimal(12, 2)
+  status                ReconciliationItemStatus
+  notes                 String?
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  reconciliationBatch   ReconciliationBatch      @relation("ReconciliationItem_reconciliationBatch", fields: [reconciliationBatchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  salePayment           SalePayment?             @relation("ReconciliationItem_salePayment", fields: [salePaymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("reconciliation_items")
+}
+
+model BillingProfile {
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String        @map("organization_id") @db.Uuid
+  customerId            String?       @map("customer_id") @db.Uuid
+  rfc                   String        @db.VarChar(13)
+  legalName             String        @map("legal_name") @db.VarChar(220)
+  taxRegime             String        @map("tax_regime") @db.VarChar(10)
+  zipCode               String        @map("zip_code") @db.VarChar(10)
+  email                 String        @db.VarChar(180)
+  status                GenericStatus @default(active)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  customer              Customer?     @relation("BillingProfile_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization          Organization  @relation("BillingProfile_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoiceBillingProfile Invoice[]     @relation("Invoice_billingProfile")
+
+  @@map("billing_profiles")
+}
+
+model Invoice {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String            @map("organization_id") @db.Uuid
+  branchId               String?           @map("branch_id") @db.Uuid
+  customerId             String?           @map("customer_id") @db.Uuid
+  billingProfileId       String?           @map("billing_profile_id") @db.Uuid
+  invoiceType            InvoiceType       @map("invoice_type")
+  status                 InvoiceStatus     @default(draft)
+  cfdiUse                String?           @map("cfdi_use") @db.VarChar(10)
+  paymentMethodSat       String?           @map("payment_method_sat") @db.VarChar(10)
+  paymentFormSat         String?           @map("payment_form_sat") @db.VarChar(10)
+  currency               String            @default("MXN") @db.Char(3)
+  subtotal               Decimal           @default(0) @db.Decimal(12, 2)
+  taxTotal               Decimal           @default(0) @map("tax_total") @db.Decimal(12, 2)
+  total                  Decimal           @default(0) @db.Decimal(12, 2)
+  cfdiUuid               String?           @unique @map("cfdi_uuid") @db.VarChar(80)
+  pacProvider            String?           @map("pac_provider") @db.VarChar(120)
+  pacStatus              String?           @map("pac_status") @db.VarChar(120)
+  issuedAt               DateTime?         @map("issued_at") @db.Timestamptz(6)
+  cancelledAt            DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason     String?           @map("cancellation_reason")
+  rawRequest             Json?             @map("raw_request")
+  rawResponse            Json?             @map("raw_response")
+  invoiceDate            DateTime?         @map("invoice_date") @db.Date
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  invoiceDocumentInvoice InvoiceDocument[] @relation("InvoiceDocument_invoice")
+  invoiceItemInvoice     InvoiceItem[]     @relation("InvoiceItem_invoice")
+  invoiceSaleInvoice     InvoiceSale[]     @relation("InvoiceSale_invoice")
+  billingProfile         BillingProfile?   @relation("Invoice_billingProfile", fields: [billingProfileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                 Branch?           @relation("Invoice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer               Customer?         @relation("Invoice_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           Organization      @relation("Invoice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pacWebhookEventInvoice PacWebhookEvent[] @relation("PacWebhookEvent_invoice")
+
+  @@index([branchId], map: "idx_invoices_branch")
+  @@index([organizationId], map: "idx_invoices_org")
+  @@index([status], map: "idx_invoices_status")
+  @@map("invoices")
+}
+
+model InvoiceSale {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId String   @map("invoice_id") @db.Uuid
+  saleId    String   @map("sale_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice   Invoice  @relation("InvoiceSale_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sale      Sale     @relation("InvoiceSale_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([invoiceId, saleId], map: "uq_invoice_sale")
+  @@map("invoice_sales")
+}
+
+model InvoiceItem {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId     String   @map("invoice_id") @db.Uuid
+  productId     String?  @map("product_id") @db.Uuid
+  description   String
+  quantity      Decimal  @db.Decimal(12, 3)
+  unit          String   @db.VarChar(40)
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(12, 2)
+  subtotal      Decimal  @db.Decimal(12, 2)
+  taxAmount     Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  total         Decimal  @db.Decimal(12, 2)
+  satProductKey String?  @map("sat_product_key") @db.VarChar(20)
+  satUnitKey    String?  @map("sat_unit_key") @db.VarChar(20)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice       Invoice  @relation("InvoiceItem_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product       Product? @relation("InvoiceItem_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("invoice_items")
+}
+
+model InvoiceDocument {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId    String              @map("invoice_id") @db.Uuid
+  documentType InvoiceDocumentType @map("document_type")
+  storageUrl   String              @map("storage_url")
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice      Invoice             @relation("InvoiceDocument_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("invoice_documents")
+}
+
+model PacWebhookEvent {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider    String    @db.VarChar(120)
+  eventId     String    @unique @map("event_id") @db.VarChar(180)
+  invoiceId   String?   @map("invoice_id") @db.Uuid
+  processed   Boolean   @default(false)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+  rawPayload  Json      @map("raw_payload")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice     Invoice?  @relation("PacWebhookEvent_invoice", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("pac_webhook_events")
+}
+
+model AuditLog {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  branchId       String?       @map("branch_id") @db.Uuid
+  userId         String?       @map("user_id") @db.Uuid
+  deviceId       String?       @map("device_id") @db.Uuid
+  action         String        @db.VarChar(120)
+  entityType     String        @map("entity_type") @db.VarChar(120)
+  entityId       String        @map("entity_id") @db.Uuid
+  beforeSnapshot Json?         @map("before_snapshot")
+  afterSnapshot  Json?         @map("after_snapshot")
+  metadata       Json?
+  ipAddress      String?       @map("ip_address") @db.Inet
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch         Branch?       @relation("AuditLog_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  device         PosDevice?    @relation("AuditLog_device", fields: [deviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization   Organization? @relation("AuditLog_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user           User?         @relation("AuditLog_user", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([createdAt], map: "idx_audit_logs_created_at")
+  @@index([organizationId], map: "idx_audit_logs_org")
+  @@map("audit_logs")
+}
+
+model AnalyticsSnapshot {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  branchId       String?               @map("branch_id") @db.Uuid
+  snapshotDate   DateTime              @map("snapshot_date") @db.Date
+  snapshotType   AnalyticsSnapshotType @map("snapshot_type")
+  data           Json
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  branch         Branch?               @relation("AnalyticsSnapshot_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization   Organization          @relation("AnalyticsSnapshot_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("analytics_snapshots")
+}
+
+enum OrganizationStatus {
+  active
+  past_due
+  grace_period
+  suspended_limited
+  cancelled
+
+  @@map("organization_status")
+}
+
+enum GenericStatus {
+  active
+  inactive
+  deleted
+
+  @@map("generic_status")
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  past_due
+  grace_period
+  suspended_limited
+  cancelled
+  expired
+
+  @@map("subscription_status")
+}
+
+enum BillingPeriod {
+  monthly
+  annual
+
+  @@map("billing_period")
+}
+
+enum SubscriptionProvider {
+  mercadopago
+  manual
+
+  @@map("subscription_provider")
+}
+
+enum SubscriptionItemType {
+  base_plan
+  pos_device
+  branch_extra
+  user_extra
+
+  @@map("subscription_item_type")
+}
+
+enum SaasPaymentStatus {
+  pending
+  approved
+  rejected
+  cancelled
+  refunded
+  failed
+
+  @@map("saas_payment_status")
+}
+
+enum UserStatus {
+  active
+  inactive
+  locked
+  deleted
+
+  @@map("user_status")
+}
+
+enum RoleScope {
+  platform
+  organization
+  branch
+
+  @@map("role_scope")
+}
+
+enum DeviceType {
+  pwa
+  windows
+  tablet
+  desktop
+
+  @@map("device_type")
+}
+
+enum DeviceStatus {
+  pending_activation
+  active
+  inactive
+  blocked
+
+  @@map("device_status")
+}
+
+enum ProductType {
+  tortilla
+  masa
+  package
+  retail
+  service
+
+  @@map("product_type")
+}
+
+enum ProductUnit {
+  kg
+  piece
+  package
+  liter
+  service
+
+  @@map("product_unit")
+}
+
+enum SaleMode {
+  by_kg
+  by_amount
+  by_package
+  by_unit
+
+  @@map("sale_mode")
+}
+
+enum InventoryMovementType {
+  production_in
+  sale_out
+  route_load_out
+  route_return_in
+  waste_out
+  manual_adjustment_in
+  manual_adjustment_out
+  return_in
+  return_waste
+
+  @@map("inventory_movement_type")
+}
+
+enum ProductionBatchStatus {
+  open
+  closed
+  cancelled
+
+  @@map("production_batch_status")
+}
+
+enum WasteReason {
+  tortilla_rota
+  masa_echada_a_perder
+  producto_vencido
+  devolucion_no_revendible
+  otro
+
+  @@map("waste_reason")
+}
+
+enum CashSessionStatus {
+  open
+  closing
+  closed
+  cancelled
+
+  @@map("cash_session_status")
+}
+
+enum CashMovementDirection {
+  in_  @map("in")
+  out_ @map("out")
+
+  @@map("cash_movement_direction")
+}
+
+enum CashMovementType {
+  cash_in
+  cash_out
+  adjustment_in
+  adjustment_out
+  route_cash_in
+
+  @@map("cash_movement_type")
+}
+
+enum CashMovementStatus {
+  recorded
+  pending_authorization
+  authorized
+  rejected
+  cancelled
+
+  @@map("cash_movement_status")
+}
+
+enum DifferenceType {
+  none
+  shortage
+  surplus
+
+  @@map("difference_type")
+}
+
+enum SaleStatus {
+  draft
+  completed
+  cancelled
+  partially_refunded
+  refunded
+  invoiced
+
+  @@map("sale_status")
+}
+
+enum SaleType {
+  counter
+  customer_order
+  route
+
+  @@map("sale_type")
+}
+
+enum PaymentMethod {
+  cash
+  card
+  transfer
+  credit
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  cancelled
+  refunded
+
+  @@map("payment_status")
+}
+
+enum SaleReturnStatus {
+  pending
+  approved
+  rejected
+  cancelled
+
+  @@map("sale_return_status")
+}
+
+enum InventoryCondition {
+  sellable
+  waste
+  review_required
+
+  @@map("inventory_condition")
+}
+
+enum CustomerType {
+  tienda
+  puesto
+  comedor
+  repartidor
+  cliente_frecuente
+  empresa
+  otro
+
+  @@map("customer_type")
+}
+
+enum CustomerBalanceMovementType {
+  charge
+  payment
+  adjustment
+  refund
+
+  @@map("customer_balance_movement_type")
+}
+
+enum DeliveryOrderStatus {
+  pending
+  prepared
+  loaded
+  in_route
+  delivered
+  partially_paid
+  paid
+  returned
+  cancelled
+
+  @@map("delivery_order_status")
+}
+
+enum DeliverySettlementStatus {
+  open
+  closed
+  cancelled
+
+  @@map("delivery_settlement_status")
+}
+
+enum DeliveryReturnStatus {
+  pending_review
+  returned_to_inventory
+  marked_as_waste
+  cancelled
+
+  @@map("delivery_return_status")
+}
+
+enum ReconciliationStatus {
+  draft
+  matched
+  difference
+  reviewed
+  cancelled
+
+  @@map("reconciliation_status")
+}
+
+enum ReconciliationItemStatus {
+  matched
+  missing_in_provider
+  missing_in_pos
+  amount_mismatch
+
+  @@map("reconciliation_item_status")
+}
+
+enum InvoiceType {
+  individual
+  global_public
+
+  @@map("invoice_type")
+}
+
+enum InvoiceStatus {
+  draft
+  requested
+  stamped
+  failed
+  cancel_requested
+  cancelled
+
+  @@map("invoice_status")
+}
+
+enum InvoiceDocumentType {
+  xml
+  pdf
+
+  @@map("invoice_document_type")
+}
+
+enum AnalyticsSnapshotType {
+  daily_sales
+  daily_cash
+  daily_inventory
+  daily_routes
+  monthly_summary
+
+  @@map("analytics_snapshot_type")
+}

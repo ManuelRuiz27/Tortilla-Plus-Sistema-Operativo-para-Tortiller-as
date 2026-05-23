@@ -47,13 +47,23 @@
 /docs/backend/01-services.md
 /docs/backend/02-openapi-contract.md
 /docs/backend/03-critical-flows.md
-/docs/backend/04-backend-qa.md
+/docs/backend/04-backend-qa-core.md
+/docs/backend/05-backend-qa-modules.md
 /docs/database/01-data-model.md
 /docs/database/02-erd-rules.md
 /docs/database/03-prisma-schema.prisma
 /docs/database/04-ddl-postgresql.sql
 /docs/database/05-seed.sql
+/docs/development/05-documentation-alignment.md
 ```
+
+## 5.1 Fuentes canonicas de handoff
+
+- Roadmap, reglas de ingenieria, servicios, flujos criticos y QA son la base para planear sprints.
+- Prisma sera la fuente principal de migraciones del backend cuando Sprint 0 lo normalice y valide.
+- El DDL PostgreSQL es referencia de comparacion para revisar que la migracion inicial no pierda reglas criticas.
+- El seed documentado en V0.1 es guia de contenido. Sprint 0 debe producir un seed minimo ejecutable e idempotente dentro del proyecto.
+- Archivos de database sin extension son drafts no canonicos.
 
 ## 6. Decisiones cerradas
 

@@ -1,5 +1,7 @@
 -- Tortilla Plus — Seed Inicial V0.1
 -- Ejecutar después de 04-ddl-postgresql.sql
+-- Estado: draft extendido no canonico.
+-- Usar docs/database/05-seed.sql como indice canonico y crear seed ejecutable en Sprint 0.
 
 BEGIN;
 
