@@ -124,6 +124,31 @@ La validacion runtime cubre backend real + DB real y un smoke E2E minimo de la P
 El E2E minimo no reemplaza pruebas navegador profundas de POS completo, ruta completa ni caja completa.
 ```
 
+### 2.4 Cierre de auditoria operativa
+
+Estado: cerrado para estabilidad operativa P0/P1.
+
+Checklist final:
+
+```txt
+[x] VITE_USE_MOCKS=false
+[x] audit:stability:e2e
+[x] POS real
+[x] cliente real
+[x] credito real
+[x] caja real
+[x] ruta real
+[x] liquidacion real
+[x] inventario real
+```
+
+Criterio usado para el cierre:
+
+```txt
+El flujo operativo central queda validado con backend real, PostgreSQL local,
+datos seed reales y mocks apagados. La PWA tiene smoke E2E minimo contra API real.
+```
+
 ---
 
 ## 3. Estado real del monorepo
