@@ -14,4 +14,9 @@ test("manager can enter operational routes with mocks disabled", async ({ page }
   await expect(page.getByRole("heading", { name: "Pedidos de hoy" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Liquidaciones pendientes" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
+
+  await page.goto("/app/manager/billing");
+  await expect(page.getByRole("heading", { name: "Facturas del dia" })).toBeVisible();
+  await expect(page.getByText("Pendiente de facturar")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Facturas emitidas" })).toBeVisible();
 });

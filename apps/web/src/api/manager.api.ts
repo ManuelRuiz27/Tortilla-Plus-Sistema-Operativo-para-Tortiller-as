@@ -982,9 +982,11 @@ export function depositDeliverySettlementRequest(settlementId: string): Promise<
 }
 
 export function billingSummaryRequest(filters: { branchId?: string | null; date: string }): Promise<BillingSummary> {
-  void filters;
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("billing-summary"));
+    const params = new URLSearchParams();
+    params.set("date", filters.date);
+    if (filters.branchId) params.set("branchId", filters.branchId);
+    return httpClient<BillingSummary>(`/billing/summary?${params.toString()}`);
   }
 
   return Promise.resolve(buildDemoBillingSummary());

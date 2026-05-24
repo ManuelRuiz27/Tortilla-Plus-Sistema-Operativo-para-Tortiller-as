@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/index.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
-    "test:integration": "npm run build && node --test dist/tests/integration/*.test.js",
+    "test:integration": "npm run build && node --test --test-concurrency=1 dist/tests/integration/*.test.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "format": "node -e \"console.log('format pending: no formatter installed in Sprint 0 minimal setup')\"",
     "db:validate": "prisma validate",

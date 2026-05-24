@@ -12,7 +12,7 @@ export default defineConfig({
     timeout: 10_000
   },
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: "http://127.0.0.1:5179",
     trace: "on-first-retry"
   },
   projects: [
@@ -23,23 +23,29 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "npm run dev:api",
-      cwd: rootDir,
-      reuseExistingServer: true,
-      timeout: 60_000,
-      url: "http://127.0.0.1:3000/api/v1/health"
-    },
-    {
-      command: "npm run dev:web -- --host 127.0.0.1",
+      command: "npm run build -w @tortilla-plus/api && npm run start -w @tortilla-plus/api",
       cwd: rootDir,
       env: {
-        VITE_API_BASE_URL: "http://127.0.0.1:3000/api/v1",
+        DATABASE_URL: "postgresql://tortilla_plus:tortilla_plus_dev@localhost:5432/tortilla_plus?schema=public",
+        HOST: "127.0.0.1",
+        JWT_SECRET: "change_me_in_local_development",
+        PORT: "3199"
+      },
+      reuseExistingServer: true,
+      timeout: 60_000,
+      url: "http://127.0.0.1:3199/api/v1/health"
+    },
+    {
+      command: "npm run dev -w @tortilla-plus/web -- --host 127.0.0.1 --port 5179",
+      cwd: rootDir,
+      env: {
+        VITE_API_BASE_URL: "http://127.0.0.1:3199/api/v1",
         VITE_APP_ENV: "audit",
         VITE_USE_MOCKS: "false"
       },
       reuseExistingServer: true,
       timeout: 60_000,
-      url: "http://127.0.0.1:5173"
+      url: "http://127.0.0.1:5179"
     }
   ]
 });

@@ -81,6 +81,11 @@ import {
   reorderRouteCustomers,
   reviewDeliveryReturn,
 } from "./services/delivery-service.js";
+import {
+  createGlobalDailyInvoice,
+  createIndividualInvoice,
+  getBillingSummary,
+} from "./services/billing-service.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -466,6 +471,27 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && deliverySettlementDepositMatch) {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await depositSettlementToCash(currentUser, deliverySettlementDepositMatch[1], getIdempotencyKey(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/billing/summary") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getBillingSummary(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      date: url.searchParams.get("date"),
+    }));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/billing/invoices/individual") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createIndividualInvoice(currentUser, await readJson(request)));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/billing/invoices/global-daily") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createGlobalDailyInvoice(currentUser, await readJson(request)));
     return;
   }
 
