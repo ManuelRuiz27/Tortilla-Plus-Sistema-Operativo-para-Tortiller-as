@@ -513,6 +513,15 @@ async function main() {
     },
   });
 
+  await upsertCustomerPrice({
+    organizationId: organization.id,
+    branchId: branch.id,
+    customerId: demoCustomer.id,
+    productId: tortillaProduct.id,
+    saleMode: "by_kg",
+    price: "22.00",
+  });
+
   const demoDriver = await prisma.deliveryDriver.upsert({
     where: {
       organizationId_name: {
@@ -611,6 +620,13 @@ async function main() {
   await upsertDemoUser({
     organizationId: organization.id,
     branchId: branch.id,
+    roleId: managerRole.id,
+    email: "manager.demo@tortillaplus.mx",
+    name: "Gerente Demo",
+  });
+  await upsertDemoUser({
+    organizationId: organization.id,
+    branchId: branch.id,
     roleId: supervisorRole.id,
     email: "supervisor.demo@tortillaplus.mx",
     name: "Supervisor Demo",
@@ -702,6 +718,57 @@ async function upsertBranchPrice(input: {
       saleMode: input.saleMode,
       price: input.price,
       currency: "MXN",
+      activeFrom: new Date(),
+      status: "active",
+    },
+  });
+}
+
+async function upsertCustomerPrice(input: {
+  organizationId: string;
+  branchId: string;
+  customerId: string;
+  productId: string;
+  saleMode: "by_kg" | "by_amount" | "by_package" | "by_unit";
+  price: string;
+}) {
+  const existing = await prisma.customerProductPrice.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      customerId: input.customerId,
+      productId: input.productId,
+      saleMode: input.saleMode,
+      status: "active",
+      activeTo: null,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (existing) {
+    await prisma.customerProductPrice.update({
+      where: {
+        id: existing.id,
+      },
+      data: {
+        price: input.price,
+        activeFrom: new Date(),
+        status: "active",
+      },
+    });
+    return;
+  }
+
+  await prisma.customerProductPrice.create({
+    data: {
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      customerId: input.customerId,
+      productId: input.productId,
+      saleMode: input.saleMode,
+      price: input.price,
       activeFrom: new Date(),
       status: "active",
     },

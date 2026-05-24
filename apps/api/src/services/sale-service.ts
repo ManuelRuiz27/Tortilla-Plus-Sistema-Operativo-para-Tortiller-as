@@ -227,7 +227,7 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
   await assertFeatureAvailable(currentUser, "pos_basic");
   await assertPermission(currentUser.id, "payments.create");
   const body = asRecord(input);
-  const payments = asPayments(body.payments);
+  const payments = parseSalePayments(body.payments);
   const sale = await getSaleOrThrow(currentUser.organizationId, saleId);
   await assertBranchAccess(currentUser, sale.branchId);
 
@@ -610,6 +610,22 @@ export function validatePaymentTotal(total: string, payments: Array<{ amount: st
   const actual = payments.reduce((sum, payment) => sum + toCents(payment.amount), 0);
 
   return expected === actual;
+}
+
+export function calculateCreditUsage(input: {
+  currentBalance: string;
+  creditLimit: string;
+  creditAmount: string;
+}) {
+  const nextBalanceCents = toCents(input.currentBalance) + toCents(input.creditAmount);
+  const limitCents = toCents(input.creditLimit);
+  const availableCents = limitCents - toCents(input.currentBalance);
+
+  return {
+    nextBalance: (nextBalanceCents / 100).toFixed(2),
+    availableCredit: (availableCents / 100).toFixed(2),
+    exceedsLimit: nextBalanceCents > limitCents,
+  };
 }
 
 export function calculateReturnAmount(input: {
@@ -1042,10 +1058,13 @@ async function assertCreditPayments(
     throw new DomainError(400, "CUSTOMER_CREDIT_DISABLED", "Cliente sin credito habilitado.");
   }
 
-  const nextBalance = toCents(customer.currentBalance) + creditTotal;
-  const limit = toCents(customer.creditLimit);
+  const creditUsage = calculateCreditUsage({
+    currentBalance: normalizeMoney(customer.currentBalance),
+    creditLimit: normalizeMoney(customer.creditLimit),
+    creditAmount: (creditTotal / 100).toFixed(2),
+  });
 
-  if (nextBalance > limit) {
+  if (creditUsage.exceedsLimit) {
     await assertPermission(currentUser.id, "customers.manage");
     const authorizationPin = optionalString(body.authorizationPin);
     if (!authorizationPin) {
@@ -1151,7 +1170,7 @@ function asMoney(value: unknown, field: string): string {
   return amount.toFixed(2);
 }
 
-function asPayments(value: unknown) {
+export function parseSalePayments(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new DomainError(400, "INVALID_REQUEST", "Pagos requeridos.");
   }

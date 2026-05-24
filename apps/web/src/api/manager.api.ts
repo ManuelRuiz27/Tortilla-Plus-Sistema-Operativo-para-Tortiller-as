@@ -16,6 +16,7 @@ import {
   buildDemoWithdrawals,
   useMocks
 } from "./mock-data";
+import { ApiErrorException } from "./api-error";
 import { httpClient } from "./http-client";
 import type {
   BillingSummary,
@@ -339,10 +340,18 @@ function mapDeliverySettlement(settlement: ApiDeliverySettlement): DeliverySettl
 }
 
 export function managerDashboardRequest(): Promise<ManagerDashboardSummary> {
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("manager-dashboard"));
+  }
+
   return Promise.resolve(buildDemoManagerSummary());
 }
 
 export function pendingWithdrawalsRequest(): Promise<PendingWithdrawal[]> {
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("pending-withdrawals"));
+  }
+
   return Promise.resolve(buildDemoWithdrawals());
 }
 
@@ -411,6 +420,10 @@ export function createWasteRecordRequest(payload: {
 }
 
 export function productionBatchesRequest(): Promise<ProductionBatch[]> {
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("production-batches"));
+  }
+
   return Promise.resolve(buildDemoProduction());
 }
 
@@ -802,13 +815,28 @@ export function reorderRouteCustomersRequest(payload: {
 }
 
 export async function deliveryOrdersRequest(routeId: string, branchId: string): Promise<DeliveryOrder[]> {
+  return deliveryOrdersListRequest({ branchId, routeId });
+}
+
+export async function deliveryOrdersListRequest(filters: {
+  branchId: string;
+  routeId?: string;
+  driverId?: string;
+  customerId?: string;
+  status?: string;
+  date?: string;
+}): Promise<DeliveryOrder[]> {
   if (useMocks) {
-    return Promise.resolve(buildDemoDeliveryOrders(routeId, branchId));
+    return Promise.resolve(buildDemoDeliveryOrders(filters.routeId, filters.branchId));
   }
 
   const params = new URLSearchParams();
-  params.set("branchId", branchId);
-  params.set("routeId", routeId);
+  params.set("branchId", filters.branchId);
+  if (filters.routeId) params.set("routeId", filters.routeId);
+  if (filters.driverId) params.set("driverId", filters.driverId);
+  if (filters.customerId) params.set("customerId", filters.customerId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.date) params.set("date", filters.date);
   const orders = await httpClient<ApiDeliveryOrder[]>(`/delivery-orders?${params.toString()}`);
   return orders.map(mapDeliveryOrder);
 }
@@ -955,6 +983,10 @@ export function depositDeliverySettlementRequest(settlementId: string): Promise<
 
 export function billingSummaryRequest(filters: { branchId?: string | null; date: string }): Promise<BillingSummary> {
   void filters;
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("billing-summary"));
+  }
+
   return Promise.resolve(buildDemoBillingSummary());
 }
 
@@ -982,9 +1014,25 @@ export function createGlobalDailyInvoiceRequest(payload: { branchId: string; dat
 
 export function reportsSummaryRequest(filters: { branchId?: string | null; from: string; to: string }): Promise<ReportsSummary> {
   void filters;
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("reports-summary"));
+  }
+
   return Promise.resolve(buildDemoReportsSummary());
 }
 
 export function settingsSummaryRequest(): Promise<SettingsSummary> {
+  if (!useMocks) {
+    return Promise.reject(demoModuleUnavailable("settings-summary"));
+  }
+
   return Promise.resolve(buildDemoSettingsSummary());
+}
+
+function demoModuleUnavailable(moduleName: string): ApiErrorException {
+  return new ApiErrorException({
+    statusCode: 501,
+    error: "DEMO_MODULE_DISABLED",
+    message: `El modulo ${moduleName} usa datos demo y esta bloqueado con VITE_USE_MOCKS=false.`
+  });
 }

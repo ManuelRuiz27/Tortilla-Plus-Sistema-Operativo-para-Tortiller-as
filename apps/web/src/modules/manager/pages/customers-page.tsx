@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { CreditCard, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { assignCustomerToRouteRequest, createCustomerRequest, deliveryRoutesRequest, managerCustomersRequest } from "../../../api/manager.api";
+import {
+  assignCustomerToRouteRequest,
+  createCustomerRequest,
+  deliveryRoutesRequest,
+  managerCustomersRequest,
+  recordCustomerPaymentRequest
+} from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
@@ -31,6 +37,10 @@ export function CustomersPage() {
   const [creditLimit, setCreditLimit] = useState("0.00");
   const [routeByCustomer, setRouteByCustomer] = useState<Record<string, string>>({});
   const [sortByCustomer, setSortByCustomer] = useState<Record<string, string>>({});
+  const [paymentCustomerId, setPaymentCustomerId] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
+  const [paymentReference, setPaymentReference] = useState("");
   const { data = [], isError, isLoading } = useQuery({
     queryFn: managerCustomersRequest,
     queryKey: ["manager-customers"]
@@ -53,6 +63,19 @@ export function CustomersPage() {
   const assignRouteMutation = useMutation({
     mutationFn: assignCustomerToRouteRequest,
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] })
+  });
+  const paymentMutation = useMutation({
+    mutationFn: recordCustomerPaymentRequest,
+    onSuccess: () => {
+      const customerId = paymentCustomerId;
+      setPaymentCustomerId("");
+      setPaymentAmount("");
+      setPaymentReference("");
+      void queryClient.invalidateQueries({ queryKey: ["manager-customers"] });
+      if (customerId) {
+        void queryClient.invalidateQueries({ queryKey: ["customer-balance", customerId] });
+      }
+    }
   });
 
   function submitCustomer() {
@@ -82,6 +105,26 @@ export function CustomersPage() {
       sortOrder: Number(sortByCustomer[customerId] || 0)
     });
   }
+
+  function startPayment(customer: ManagerCustomer) {
+    setPaymentCustomerId(customer.id);
+    setPaymentAmount(customer.currentBalance > 0 ? customer.currentBalance.toFixed(2) : "");
+    setPaymentMethod("cash");
+    setPaymentReference("");
+  }
+
+  function recordPayment() {
+    if (!branchId || !paymentCustomerId || !paymentAmount.trim()) return;
+    paymentMutation.mutate({
+      customerId: paymentCustomerId,
+      branchId,
+      amount: paymentAmount,
+      paymentMethod,
+      reference: paymentReference.trim() || undefined
+    });
+  }
+
+  const paymentCustomer = data.find((customer) => customer.id === paymentCustomerId) ?? null;
 
   return (
     <section>
@@ -115,6 +158,37 @@ export function CustomersPage() {
           </PermissionButton>
         </div>
       </div>
+
+      {paymentCustomer ? (
+        <div className="mb-5 rounded-md border border-tp-border bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Cobrar saldo</p>
+              <p className="text-sm text-tp-muted">{paymentCustomer.name} - saldo {formatManagerMoney(paymentCustomer.currentBalance)}</p>
+            </div>
+            <button className="text-sm font-semibold text-tp-muted hover:text-tp-text" onClick={() => setPaymentCustomerId("")} type="button">
+              Cancelar
+            </button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_160px_1fr_auto]">
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Monto" value={paymentAmount} />
+            <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} value={paymentMethod}>
+              <option value="cash">Efectivo</option>
+              <option value="card">Tarjeta</option>
+              <option value="transfer">Transferencia</option>
+            </select>
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" disabled={paymentMethod === "cash"} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Referencia" value={paymentReference} />
+            <PermissionButton
+              disabled={!branchId || !paymentAmount.trim() || ((paymentMethod === "card" || paymentMethod === "transfer") && !paymentReference.trim()) || paymentMutation.isPending}
+              onClick={recordPayment}
+              permission="payments.create"
+            >
+              <CreditCard className="h-4 w-4" aria-hidden="true" />
+              Cobrar
+            </PermissionButton>
+          </div>
+        </div>
+      ) : null}
 
       <div className="overflow-x-auto rounded-md border border-tp-border bg-white">
         <table className="w-full text-left text-sm">
@@ -161,6 +235,15 @@ export function CustomersPage() {
                   <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/pos/sale?customerId=${customer.id}`}>
                     Vender
                   </Link>
+                  <PermissionButton
+                    className="min-h-0 px-0 py-0 text-tp-primary hover:bg-transparent hover:underline"
+                    disabled={!branchId || customer.currentBalance <= 0}
+                    onClick={() => startPayment(customer)}
+                    permission="payments.create"
+                    variant="ghost"
+                  >
+                    Cobrar
+                  </PermissionButton>
                   <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/manager/customers/${customer.id}`}>
                     Ver detalle
                   </Link>

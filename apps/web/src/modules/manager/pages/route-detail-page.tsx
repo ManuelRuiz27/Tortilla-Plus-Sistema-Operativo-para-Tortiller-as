@@ -27,6 +27,8 @@ import { labelStatus } from "../../../shared/utils/labels";
 import type { DeliveryOrder } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
 
+type RouteTab = "customers" | "orders" | "delivery" | "payments" | "settlement";
+
 export function RouteDetailPage() {
   const { routeId = "" } = useParams();
   const branchId = useBranchStore((state) => state.activeBranchId);
@@ -46,6 +48,7 @@ export function RouteDetailPage() {
   const [routeSortOrder, setRouteSortOrder] = useState("0");
   const [settlementId, setSettlementId] = useState("");
   const [deliveredCashAmount, setDeliveredCashAmount] = useState("");
+  const [activeTab, setActiveTab] = useState<RouteTab>("customers");
 
   const routesQuery = useQuery({
     enabled: Boolean(branchId),
@@ -105,6 +108,9 @@ export function RouteDetailPage() {
       setPaymentReference("");
       setAuthorizationPin("");
       void queryClient.invalidateQueries({ queryKey: ["delivery-orders", routeId, branchId] });
+      void queryClient.invalidateQueries({ queryKey: ["manager-customers"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
+      void queryClient.invalidateQueries({ queryKey: ["delivery-settlements", routeId, branchId] });
     }
   });
   const createSettlementMutation = useMutation({
@@ -141,6 +147,21 @@ export function RouteDetailPage() {
   const availableCustomers = customers.filter(
     (customer) => !route.customers.some((assignment) => assignment.customerId === customer.id)
   );
+  const selectedPaymentOrder = orders.find((order) => order.id === paymentOrderId) ?? null;
+  const selectedPaymentCustomer = selectedPaymentOrder
+    ? customers.find((customer) => customer.id === selectedPaymentOrder.customerId) ?? null
+    : null;
+  const selectedCreditAvailable = selectedPaymentCustomer
+    ? selectedPaymentCustomer.creditLimit - selectedPaymentCustomer.currentBalance
+    : 0;
+  const selectedSettlement = settlements.find((settlement) => settlement.id === settlementId) ?? null;
+  const tabs: Array<{ id: RouteTab; label: string }> = [
+    { id: "customers", label: "Clientes" },
+    { id: "orders", label: "Pedidos" },
+    { id: "delivery", label: "Carga / entrega" },
+    { id: "payments", label: "Cobros" },
+    { id: "settlement", label: "Liquidacion" }
+  ];
 
   function createOrder() {
     if (!branchId || !route || !customerId || orderItems.length === 0) return;
@@ -223,8 +244,25 @@ export function RouteDetailPage() {
         <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{labelStatus(route.status)}</StatusBadge>
       </div>
 
-      <div className="mb-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-md border border-tp-border bg-white p-5 xl:col-span-2">
+      <div className="mb-5 flex gap-2 overflow-x-auto border-b border-tp-border">
+        {tabs.map((tab) => (
+          <button
+            className={`min-h-11 whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition ${
+              activeTab === tab.id
+                ? "border-tp-primary text-tp-primary"
+                : "border-transparent text-tp-muted hover:text-tp-text"
+            }`}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`${["customers", "orders", "payments"].includes(activeTab) ? "mb-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]" : "hidden"}`}>
+        <article className={`${activeTab === "customers" ? "rounded-md border border-tp-border bg-white p-5 xl:col-span-2" : "hidden"}`}>
           <h2 className="mb-4 text-sm font-semibold">Clientes de la ruta</h2>
           <div className="mb-4 grid gap-3 md:grid-cols-[1fr_120px_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setRouteCustomerId(event.target.value)} value={routeCustomerId}>
@@ -276,7 +314,7 @@ export function RouteDetailPage() {
           </div>
         </article>
 
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        <article className={`${activeTab === "orders" ? "rounded-md border border-tp-border bg-white p-5" : "hidden"}`}>
           <h2 className="mb-4 text-sm font-semibold">Nuevo pedido</h2>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setCustomerId(event.target.value)} value={customerId}>
@@ -313,8 +351,62 @@ export function RouteDetailPage() {
           </div>
         </article>
 
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        <article className={`${activeTab === "orders" ? "rounded-md border border-tp-border bg-white p-5" : "hidden"}`}>
+          <h2 className="mb-4 text-sm font-semibold">Pedidos de la ruta</h2>
+          <div className="space-y-3">
+            {orders.length === 0 ? (
+              <p className="text-sm text-tp-muted">Sin pedidos registrados.</p>
+            ) : (
+              orders.map((order) => (
+                <button
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-tp-border px-3 py-3 text-left text-sm hover:bg-tp-soft"
+                  key={order.id}
+                  onClick={() => {
+                    setPaymentOrderId(order.id);
+                    setActiveTab("payments");
+                  }}
+                  type="button"
+                >
+                  <span>
+                    <span className="block font-semibold">{order.customerName ?? order.customerId}</span>
+                    <span className="text-xs text-tp-muted">{labelStatus(order.status)}</span>
+                  </span>
+                  <span className="text-right">
+                    <span className="block font-semibold">{formatManagerMoney(order.total)}</span>
+                    <span className="text-xs text-tp-muted">Pendiente {formatManagerMoney(order.amountPending)}</span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className={`${activeTab === "payments" ? "rounded-md border border-tp-border bg-white p-5 xl:col-span-2" : "hidden"}`}>
           <h2 className="mb-4 text-sm font-semibold">Cobro en ruta</h2>
+          {selectedPaymentOrder ? (
+            <div className="mb-4 grid gap-3 rounded-md border border-tp-border bg-tp-soft p-3 text-sm md:grid-cols-5">
+              <div>
+                <p className="text-xs uppercase text-tp-muted">Cliente</p>
+                <p className="font-semibold">{selectedPaymentOrder.customerName ?? selectedPaymentOrder.customerId}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-tp-muted">Saldo actual</p>
+                <p className="font-semibold">{formatManagerMoney(selectedPaymentCustomer?.currentBalance ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-tp-muted">Limite</p>
+                <p className="font-semibold">{formatManagerMoney(selectedPaymentCustomer?.creditLimit ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-tp-muted">Disponible</p>
+                <p className="font-semibold">{formatManagerMoney(selectedCreditAvailable)}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase text-tp-muted">Pendiente pedido</p>
+                <p className="font-semibold">{formatManagerMoney(selectedPaymentOrder.amountPending)}</p>
+              </div>
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-[1fr_120px_130px_1fr_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentOrderId(event.target.value)} value={paymentOrderId}>
               <option value="">Pedido</option>
@@ -339,7 +431,7 @@ export function RouteDetailPage() {
         </article>
       </div>
 
-      <div className="mb-5 overflow-x-auto rounded-md border border-tp-border bg-white">
+      <div className={`${activeTab === "delivery" ? "mb-5 overflow-x-auto rounded-md border border-tp-border bg-white" : "hidden"}`}>
         <table className="w-full text-left text-sm">
           <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
             <tr>
@@ -388,7 +480,7 @@ export function RouteDetailPage() {
         </table>
       </div>
 
-      <article className="rounded-md border border-tp-border bg-white p-5">
+      <article className={`${activeTab === "settlement" ? "rounded-md border border-tp-border bg-white p-5" : "hidden"}`}>
         <h2 className="mb-4 text-sm font-semibold">Cierre de ruta</h2>
         <div className="grid gap-3 md:grid-cols-[auto_1fr_160px_auto_auto]">
           <PermissionButton disabled={createSettlementMutation.isPending} onClick={createSettlement} permission="routes.manage" variant="secondary">
@@ -404,11 +496,22 @@ export function RouteDetailPage() {
             ))}
           </select>
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setDeliveredCashAmount(event.target.value)} placeholder="Efectivo" value={deliveredCashAmount} />
-          <PermissionButton disabled={!settlementId || !deliveredCashAmount || closeSettlementMutation.isPending} onClick={() => closeSettlementMutation.mutate({ settlementId, deliveredCashAmount })} permission="routes.manage" variant="secondary">
+          <PermissionButton
+            disabled={!settlementId || selectedSettlement?.status !== "open" || !deliveredCashAmount || closeSettlementMutation.isPending}
+            onClick={() => closeSettlementMutation.mutate({ settlementId, deliveredCashAmount })}
+            permission="routes.manage"
+            variant="secondary"
+          >
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Cerrar
           </PermissionButton>
-          <PermissionButton disabled={!settlementId || depositMutation.isPending} onClick={() => depositMutation.mutate(settlementId)} permission="routes.manage">Depositar</PermissionButton>
+          <PermissionButton
+            disabled={!settlementId || selectedSettlement?.status !== "closed" || Boolean(selectedSettlement?.cashSessionId) || depositMutation.isPending}
+            onClick={() => depositMutation.mutate(settlementId)}
+            permission="routes.manage"
+          >
+            Depositar
+          </PermissionButton>
         </div>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-sm">

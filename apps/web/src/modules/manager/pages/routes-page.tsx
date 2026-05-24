@@ -6,13 +6,21 @@ import {
   createDeliveryDriverRequest,
   createDeliveryRouteRequest,
   deliveryDriversRequest,
-  deliveryRoutesRequest
+  deliveryOrdersListRequest,
+  deliveryRoutesRequest,
+  deliverySettlementsRequest
 } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { labelStatus } from "../../../shared/utils/labels";
+import type { DeliveryOrder, DeliverySettlement } from "../types/manager.types";
+import { formatManagerMoney } from "../utils/money";
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function RoutesPage() {
   const queryClient = useQueryClient();
@@ -29,6 +37,16 @@ export function RoutesPage() {
   const driversQuery = useQuery({
     queryFn: deliveryDriversRequest,
     queryKey: ["delivery-drivers"]
+  });
+  const todayOrdersQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => deliveryOrdersListRequest({ branchId: branchId ?? "", date: today() }),
+    queryKey: ["delivery-orders-today", branchId, today()]
+  });
+  const settlementsQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => deliverySettlementsRequest({ branchId: branchId ?? "" }),
+    queryKey: ["delivery-settlements", branchId]
   });
   const createDriverMutation = useMutation({
     mutationFn: createDeliveryDriverRequest,
@@ -57,11 +75,23 @@ export function RoutesPage() {
     createRouteMutation.mutate({ branchId, name: routeName.trim(), driverId: driverId || undefined });
   }
 
-  if (routesQuery.isLoading || driversQuery.isLoading) return <LoadingState message="Cargando rutas..." />;
-  if (routesQuery.isError || driversQuery.isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar rutas.</p>;
+  if (routesQuery.isLoading || driversQuery.isLoading || todayOrdersQuery.isLoading || settlementsQuery.isLoading) return <LoadingState message="Cargando rutas..." />;
+  if (routesQuery.isError || driversQuery.isError || todayOrdersQuery.isError || settlementsQuery.isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar rutas.</p>;
 
   const routes = routesQuery.data ?? [];
   const drivers = driversQuery.data ?? [];
+  const todayOrders = todayOrdersQuery.data ?? [];
+  const settlements = settlementsQuery.data ?? [];
+  const pendingOrders = todayOrders.filter((order) => !["paid", "cancelled"].includes(order.status));
+  const pendingSettlements = settlements.filter((settlement) => settlement.status === "open" || (settlement.status === "closed" && !settlement.cashSessionId));
+
+  function routeOrders(routeId: string): DeliveryOrder[] {
+    return todayOrders.filter((order) => order.routeId === routeId);
+  }
+
+  function routeSettlements(routeId: string): DeliverySettlement[] {
+    return settlements.filter((settlement) => settlement.routeId === routeId);
+  }
 
   return (
     <section>
@@ -85,6 +115,54 @@ export function RoutesPage() {
             <p className="text-xl font-semibold">{routes.reduce((sum, route) => sum + route.customerCount, 0)}</p>
           </div>
         </div>
+      </div>
+
+      <div className="mb-5 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <section className="rounded-md border border-tp-border bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Pedidos de hoy</h2>
+              <p className="mt-1 text-sm text-tp-muted">{pendingOrders.length} pedidos requieren seguimiento.</p>
+            </div>
+            <span className="text-sm font-semibold">{formatManagerMoney(todayOrders.reduce((sum, order) => sum + order.amountPending, 0))} pendiente</span>
+          </div>
+          <div className="divide-y divide-tp-border">
+            {todayOrders.length === 0 ? (
+              <p className="py-3 text-sm text-tp-muted">Sin pedidos para hoy.</p>
+            ) : (
+              todayOrders.slice(0, 6).map((order) => (
+                <Link className="grid gap-2 py-3 text-sm hover:bg-tp-soft md:grid-cols-[1fr_140px_120px]" key={order.id} to={order.routeId ? `/app/manager/routes/${order.routeId}` : "/app/manager/routes"}>
+                  <span>
+                    <span className="block font-semibold">{order.customerName ?? order.customerId}</span>
+                    <span className="text-xs text-tp-muted">{order.routeId ? routes.find((route) => route.id === order.routeId)?.name ?? "Ruta" : "Sin ruta"}</span>
+                  </span>
+                  <span>{formatManagerMoney(order.amountPending)} pendiente</span>
+                  <StatusBadge tone={order.status === "paid" ? "success" : "warning"}>{labelStatus(order.status)}</StatusBadge>
+                </Link>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-md border border-tp-border bg-white p-4">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold">Liquidaciones pendientes</h2>
+            <p className="mt-1 text-sm text-tp-muted">Cierres abiertos o efectivo cerrado sin deposito.</p>
+          </div>
+          <div className="divide-y divide-tp-border">
+            {pendingSettlements.length === 0 ? (
+              <p className="py-3 text-sm text-tp-muted">Sin liquidaciones pendientes.</p>
+            ) : (
+              pendingSettlements.slice(0, 6).map((settlement) => (
+                <Link className="grid gap-2 py-3 text-sm hover:bg-tp-soft md:grid-cols-[1fr_120px_100px]" key={settlement.id} to={settlement.routeId ? `/app/manager/routes/${settlement.routeId}` : "/app/manager/routes"}>
+                  <span className="font-semibold">{settlement.routeId ? routes.find((route) => route.id === settlement.routeId)?.name ?? "Ruta" : "Sin ruta"}</span>
+                  <span>{formatManagerMoney(settlement.status === "closed" ? settlement.deliveredCashAmount : settlement.expectedCashAmount)}</span>
+                  <StatusBadge tone={settlement.status === "closed" ? "success" : "warning"}>{settlement.cashSessionId ? "Depositada" : labelStatus(settlement.status)}</StatusBadge>
+                </Link>
+              ))
+            )}
+          </div>
+        </section>
       </div>
 
       <div className="mb-5 grid gap-4 xl:grid-cols-2">
@@ -130,12 +208,18 @@ export function RoutesPage() {
           </thead>
           <tbody>
             {routes.map((route) => (
+              (() => {
+                const orders = routeOrders(route.id);
+                const pendingRouteOrders = orders.filter((order) => !["paid", "cancelled"].includes(order.status));
+                const routePendingSettlements = routeSettlements(route.id).filter((settlement) => settlement.status === "open" || (settlement.status === "closed" && !settlement.cashSessionId));
+
+                return (
               <tr className="border-t border-tp-border" key={route.id}>
                 <td className="px-4 py-3 font-semibold">{route.name}</td>
                 <td className="px-4 py-3">{route.driverName ?? "Sin asignar"}</td>
                 <td className="px-4 py-3">{route.customerCount}</td>
-                <td className="px-4 py-3">Pendiente de listado</td>
-                <td className="px-4 py-3">Sin cierre</td>
+                <td className="px-4 py-3">{orders.length} hoy / {pendingRouteOrders.length} pendientes</td>
+                <td className="px-4 py-3">{routePendingSettlements.length > 0 ? `${routePendingSettlements.length} pendiente` : "Al corriente"}</td>
                 <td className="px-4 py-3">
                   <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{labelStatus(route.status)}</StatusBadge>
                 </td>
@@ -145,6 +229,8 @@ export function RoutesPage() {
                   </Link>
                 </td>
               </tr>
+                );
+              })()
             ))}
           </tbody>
         </table>
