@@ -86,6 +86,8 @@ Scripts agregados:
 npm run audit:stability
 npm run test:integration
 npm run audit:stability:integration
+npm run test:e2e
+npm run audit:stability:e2e
 ```
 
 Validacion ejecutada:
@@ -95,6 +97,7 @@ lint -> OK
 build -> OK
 unit tests -> OK, 18/18
 integration tests backend + DB -> OK, 3/3
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 1/1
 ```
 
 Cobertura agregada:
@@ -114,11 +117,11 @@ P1-04 Cobrar saldo en clientes -> cubierto
 P1-05 Navegacion owner operativa -> cubierta con menu actual
 ```
 
-Limitacion vigente:
+Limitacion vigente despues del E2E minimo:
 
 ```txt
-La validacion runtime actual cubre backend real + DB real.
-Todavia falta una prueba E2E minima de la PWA con navegador usando Playwright y VITE_USE_MOCKS=false.
+La validacion runtime cubre backend real + DB real y un smoke E2E minimo de la PWA.
+El E2E minimo no reemplaza pruebas navegador profundas de POS completo, ruta completa ni caja completa.
 ```
 
 ---
