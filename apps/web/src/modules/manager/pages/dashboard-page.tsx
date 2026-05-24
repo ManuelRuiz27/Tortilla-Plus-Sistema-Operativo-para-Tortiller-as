@@ -13,26 +13,26 @@ export function DashboardPage() {
   });
 
   if (isLoading) {
-    return <LoadingState message="Cargando operación del día..." />;
+    return <LoadingState message="Cargando el dia..." />;
   }
 
   if (isError || !data) {
-    return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar el dashboard.</p>;
+    return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar el inicio.</p>;
   }
 
   const metrics = [
-    { label: "Ventas del día", value: formatManagerMoney(data.salesToday), icon: ReceiptText },
+    { label: "Ventas de hoy", value: formatManagerMoney(data.salesToday), icon: ReceiptText },
     { label: "Efectivo esperado", value: formatManagerMoney(data.cashExpected), icon: CreditCard },
     { label: "Retiros pendientes", value: String(data.pendingWithdrawals), icon: AlertTriangle },
-    { label: "Stock negativo", value: String(data.negativeStockItems), icon: Boxes },
+    { label: "Productos por revisar", value: String(data.negativeStockItems), icon: Boxes },
     { label: "Rutas activas", value: String(data.activeRoutes), icon: Route }
   ];
 
   return (
     <section>
       <div className="mb-6">
-        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Dashboard</p>
-        <h1 className="mt-3 text-2xl font-semibold">Operación del día</h1>
+        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Inicio</p>
+        <h1 className="mt-3 text-2xl font-semibold">Resumen de hoy</h1>
       </div>
 
       <div className="mb-5 grid gap-3">
@@ -43,7 +43,7 @@ export function DashboardPage() {
         ) : null}
         {data.negativeStockItems > 0 ? (
           <Link className="rounded-md border border-red-100 bg-red-50 p-4 text-sm font-semibold text-tp-danger" to="/app/manager/inventory">
-            Hay {data.negativeStockItems} producto con stock negativo.
+            Hay {data.negativeStockItems} producto por revisar en inventario.
           </Link>
         ) : null}
       </div>

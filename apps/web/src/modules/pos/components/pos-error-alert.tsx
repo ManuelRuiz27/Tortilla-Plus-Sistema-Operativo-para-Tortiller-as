@@ -7,14 +7,14 @@ type PosErrorAlertProps = {
 
 const POS_ERROR_MESSAGES: Record<string, string> = {
   NO_OPEN_CASH_SESSION: "No hay caja abierta para vender.",
-  CARD_REFERENCE_REQUIRED: "Captura la referencia de la terminal.",
+  CARD_REFERENCE_REQUIRED: "Captura el folio de la terminal.",
   PAYMENT_TOTAL_MISMATCH: "El pago no coincide con el total.",
   PRODUCT_INACTIVE: "Este producto ya no está activo.",
   PRICE_NOT_FOUND: "Este producto no tiene precio configurado.",
-  INSUFFICIENT_STOCK: "Stock insuficiente.",
-  NEGATIVE_STOCK_NOT_ALLOWED: "No se permite stock negativo para este producto.",
+  INSUFFICIENT_STOCK: "No hay suficiente producto.",
+  NEGATIVE_STOCK_NOT_ALLOWED: "La existencia no puede quedar en negativo.",
   BRANCH_ACCESS_DENIED: "No tienes acceso a esta sucursal.",
-  UNKNOWN_ERROR: "No se pudo completar la operación."
+  UNKNOWN_ERROR: "No se pudo completar la operacion."
 };
 
 function getErrorMessage(error: ApiError | string): string {

@@ -8,7 +8,7 @@ export function AuthLayout() {
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">
             Tortilla Plus
           </p>
-          <h1 className="mt-3 text-3xl font-semibold">Acceso operativo</h1>
+          <h1 className="mt-3 text-3xl font-semibold">Entrar al sistema</h1>
         </div>
         <Outlet />
       </div>

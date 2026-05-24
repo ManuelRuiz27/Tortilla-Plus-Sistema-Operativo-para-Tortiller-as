@@ -14,6 +14,7 @@ import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { useCashStore } from "../../../shared/stores/cash.store";
+import { labelMovement, labelStatus } from "../../../shared/utils/labels";
 import { formatManagerMoney } from "../utils/money";
 import { useEffect, useState } from "react";
 
@@ -107,7 +108,7 @@ export function CashPage() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Caja</p>
           <h1 className="mt-3 text-2xl font-semibold">Caja actual</h1>
-          <p className="mt-2 text-sm text-tp-muted">Resumen, movimientos manuales y cierre de caja.</p>
+          <p className="mt-2 text-sm text-tp-muted">Revisa entradas, salidas y cierre de efectivo.</p>
         </div>
         <Button variant="secondary">
           <Link to="/app/manager/withdrawals">Ver retiros pendientes</Link>
@@ -127,8 +128,8 @@ export function CashPage() {
           <article className="rounded-md border border-tp-border bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">{session.id}</h2>
-                <p className="mt-1 text-sm text-tp-muted">Sesion abierta para la sucursal activa.</p>
+                <h2 className="text-lg font-semibold">Caja abierta</h2>
+                <p className="mt-1 text-sm text-tp-muted">Lista para ventas y movimientos de efectivo.</p>
               </div>
               <StatusBadge tone="success">Caja abierta</StatusBadge>
             </div>
@@ -164,7 +165,7 @@ export function CashPage() {
             <div className="grid gap-3 md:grid-cols-[140px_1fr_1fr]">
               <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setAmount(event.target.value)} placeholder="Monto" value={amount} />
               <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setDescription(event.target.value)} placeholder="Descripcion" value={description} />
-              <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setReasonId(event.target.value)} placeholder="reasonId opcional" value={reasonId} />
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setReasonId(event.target.value)} placeholder="Motivo opcional" value={reasonId} />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <PermissionButton disabled={!amount.trim() || isMutating} onClick={submitIncome} permission="cash.withdraw.request">
@@ -179,7 +180,7 @@ export function CashPage() {
           </article>
 
           <article className="rounded-md border border-tp-border bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold">Movimientos de la sesion</h2>
+            <h2 className="mb-4 text-sm font-semibold">Movimientos de esta caja</h2>
             <div className="space-y-3">
               {(summary?.movements ?? []).length === 0 ? (
                 <p className="text-sm text-tp-muted">Sin movimientos manuales.</p>
@@ -187,12 +188,12 @@ export function CashPage() {
                 summary?.movements.map((movement) => (
                   <div className="flex items-center justify-between border-t border-tp-border pt-3 first:border-t-0 first:pt-0" key={movement.id}>
                     <div>
-                      <p className="font-semibold">{movement.movementType}</p>
+                      <p className="font-semibold">{labelMovement(movement.movementType)}</p>
                       <p className="text-xs text-tp-muted">{movement.description ?? movement.createdAt}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">{formatManagerMoney(movement.amount)}</p>
-                      <StatusBadge tone={movement.status === "authorized" || movement.status === "recorded" ? "success" : "warning"}>{movement.status}</StatusBadge>
+                      <StatusBadge tone={movement.status === "authorized" || movement.status === "recorded" ? "success" : "warning"}>{labelStatus(movement.status)}</StatusBadge>
                     </div>
                   </div>
                 ))

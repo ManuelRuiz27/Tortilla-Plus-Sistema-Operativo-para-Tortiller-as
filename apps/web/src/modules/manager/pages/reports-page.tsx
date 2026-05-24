@@ -59,8 +59,8 @@ export function ReportsPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Reportes</p>
-          <h1 className="mt-3 text-2xl font-semibold">Control operativo</h1>
-          <p className="mt-2 text-sm text-tp-muted">Ventas, productos, sucursales y diferencias de caja sin BI avanzado.</p>
+          <h1 className="mt-3 text-2xl font-semibold">Como va el negocio</h1>
+          <p className="mt-2 text-sm text-tp-muted">Ventas, productos y diferencias de caja en el periodo elegido.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setFrom(event.target.value)} type="date" value={from} />
@@ -72,7 +72,7 @@ export function ReportsPage() {
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <article className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm text-tp-muted">Ventas periodo</p>
+          <p className="text-sm text-tp-muted">Ventas del periodo</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(totalSales)}</p>
         </article>
         <article className="rounded-md border border-tp-border bg-white p-5">
@@ -80,7 +80,7 @@ export function ReportsPage() {
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(totalWithdrawals)}</p>
         </article>
         <article className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm text-tp-muted">Diferencias caja</p>
+          <p className="text-sm text-tp-muted">Diferencias de caja</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(totalDifferences)}</p>
         </article>
       </div>

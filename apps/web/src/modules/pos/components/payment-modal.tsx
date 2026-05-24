@@ -128,7 +128,7 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
           {mode === "card" ? (
             <>
               <label className="block text-sm font-semibold" htmlFor="card-reference">
-                Referencia terminal
+                Folio de la terminal
               </label>
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
@@ -177,7 +177,7 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
                 disabled={isSubmitting}
                 onChange={(event) => setReference(event.target.value)}
-                placeholder="Referencia tarjeta"
+                placeholder="Folio de tarjeta"
                 value={reference}
               />
               <p className="text-sm text-tp-muted">

@@ -25,7 +25,7 @@ export function CartPanel({
   const canCheckout = items.length > 0 && total > 0;
 
   function clearWithConfirm() {
-    if (items.length === 0 || window.confirm("¿Vaciar carrito?")) {
+    if (items.length === 0 || window.confirm("Vaciar esta venta?")) {
       onClearCart();
     }
   }
@@ -33,7 +33,7 @@ export function CartPanel({
   return (
     <aside className="flex min-h-0 flex-col rounded-md border border-tp-border bg-white p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Carrito</h2>
+        <h2 className="text-lg font-semibold">Venta actual</h2>
         <button
           className="text-xs font-semibold text-tp-muted hover:text-tp-danger disabled:opacity-40"
           disabled={items.length === 0}
@@ -46,7 +46,7 @@ export function CartPanel({
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
         {items.length === 0 ? (
           <div className="grid h-full min-h-52 place-items-center text-center text-sm text-tp-muted">
-            Agrega productos para iniciar una venta.
+            Agrega productos para comenzar.
           </div>
         ) : (
           items.map((item) => (
@@ -74,7 +74,7 @@ export function CartPanel({
           onClick={onCancelTicket}
           variant="danger"
         >
-          Cancelar ticket
+          Cancelar venta
         </Button>
       </div>
     </aside>

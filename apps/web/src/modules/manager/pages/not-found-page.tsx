@@ -7,9 +7,9 @@ export function NotFoundPage() {
       <section className="max-w-md rounded-md border border-tp-border bg-white p-6 text-center">
         <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">404</p>
         <h1 className="mt-3 text-2xl font-semibold">Ruta no encontrada</h1>
-        <p className="mt-3 text-sm text-tp-muted">La pantalla solicitada no existe.</p>
+        <p className="mt-3 text-sm text-tp-muted">No encontramos esa pantalla.</p>
         <Button className="mt-5" variant="secondary">
-          <Link to="/app/manager/dashboard">Volver al dashboard</Link>
+          <Link to="/app/manager/dashboard">Volver al inicio</Link>
         </Button>
       </section>
     </main>

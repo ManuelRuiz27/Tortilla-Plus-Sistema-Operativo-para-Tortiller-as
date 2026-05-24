@@ -14,6 +14,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelMovement, labelSaleMode, labelStatus } from "../../../shared/utils/labels";
 import type { ManagerCustomer, ManagerPrice } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
 
@@ -124,9 +125,9 @@ export function CustomerDetailPage() {
             Clientes
           </Link>
           <h1 className="mt-3 text-2xl font-semibold">{customer.name}</h1>
-          <p className="mt-2 text-sm text-tp-muted">Datos fiscales, credito, saldo y precios especiales.</p>
+          <p className="mt-2 text-sm text-tp-muted">Datos, credito, saldo y precios especiales.</p>
         </div>
-        <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{customer.status}</StatusBadge>
+        <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{labelStatus(customer.status)}</StatusBadge>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -141,9 +142,9 @@ export function CustomerDetailPage() {
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setEmail(event.target.value)} placeholder="Email" value={email} />
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setTaxId(event.target.value)} placeholder="RFC" value={taxId} />
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setStatus(event.target.value as ManagerCustomer["status"])} value={status}>
-              <option value="active">active</option>
-              <option value="inactive">inactive</option>
-              <option value="deleted">deleted</option>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+              <option value="deleted">Eliminado</option>
             </select>
           </div>
           <textarea className="mt-3 min-h-24 w-full rounded-md border border-tp-border px-3 py-2 text-sm" onChange={(event) => setNotes(event.target.value)} placeholder="Notas operativas" value={notes} />
@@ -170,7 +171,7 @@ export function CustomerDetailPage() {
           <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
             <label className="flex h-11 items-center gap-2 rounded-md border border-tp-border px-3 text-sm text-tp-muted">
               <input checked={creditEnabled} onChange={(event) => setCreditEnabled(event.target.checked)} type="checkbox" />
-              Credito activo
+              Permitir credito
             </label>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" disabled={!creditEnabled} inputMode="decimal" onChange={(event) => setCreditLimit(event.target.value)} value={creditLimit} />
             <PermissionButton disabled={creditMutation.isPending} onClick={saveCredit} permission="customers.manage" variant="secondary">Guardar credito</PermissionButton>
@@ -185,7 +186,7 @@ export function CustomerDetailPage() {
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSaleMode(event.target.value as ManagerPrice["saleMode"])} value={saleMode}>
-              {saleModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+              {saleModes.map((mode) => <option key={mode} value={mode}>{labelSaleMode(mode)}</option>)}
             </select>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setPrice(event.target.value)} placeholder="Precio" value={price} />
             <PermissionButton disabled={!productId || !price.trim() || priceMutation.isPending} onClick={savePrice} permission="customers.manage">
@@ -204,7 +205,7 @@ export function CustomerDetailPage() {
               balance?.movements.map((movement) => (
                 <div className="flex items-center justify-between border-t border-tp-border pt-3 first:border-t-0 first:pt-0" key={movement.id}>
                   <div>
-                    <p className="font-semibold">{movement.movementType}</p>
+                    <p className="font-semibold">{labelMovement(movement.movementType)}</p>
                     <p className="text-xs text-tp-muted">{movement.createdAt}</p>
                   </div>
                   <p className="text-sm font-semibold">{formatManagerMoney(movement.amount)}</p>

@@ -21,9 +21,10 @@ import { useBranchStore } from "../stores/branch.store";
 import { useCashStore } from "../stores/cash.store";
 import { useSubscriptionStore } from "../stores/subscription.store";
 import { cn } from "../utils/cn";
+import { labelStatus } from "../utils/labels";
 
 const navItems = [
-  { to: "/app/manager/dashboard", label: "Dashboard", icon: BarChart3 },
+  { to: "/app/manager/dashboard", label: "Inicio", icon: BarChart3 },
   { to: "/app/manager/cash", label: "Caja", icon: CreditCard },
   { to: "/app/manager/withdrawals", label: "Retiros", icon: AlertTriangle },
   { to: "/app/manager/inventory", label: "Inventario", icon: Boxes },
@@ -32,9 +33,9 @@ const navItems = [
   { to: "/app/manager/prices", label: "Precios", icon: BadgeDollarSign },
   { to: "/app/manager/customers", label: "Clientes", icon: Users },
   { to: "/app/manager/routes", label: "Rutas", icon: Route },
-  { to: "/app/manager/billing", label: "Facturacion", icon: FileText },
+  { to: "/app/manager/billing", label: "Facturas", icon: FileText },
   { to: "/app/manager/reports", label: "Reportes", icon: BarChart3 },
-  { to: "/app/manager/settings", label: "Configuracion", icon: Settings }
+  { to: "/app/manager/settings", label: "Ajustes", icon: Settings }
 ];
 
 export function ManagerLayout() {
@@ -59,7 +60,7 @@ export function ManagerLayout() {
       <aside className="border-b border-tp-border bg-white px-3 py-4 lg:border-b-0 lg:border-r">
         <div className="mb-4 px-3 lg:mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Tortilla Plus</p>
-          <p className="mt-1 text-xs text-tp-muted">Gerencia operativa</p>
+          <p className="mt-1 text-xs text-tp-muted">Vista del negocio</p>
         </div>
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
           {navItems.map((item) => (
@@ -88,7 +89,7 @@ export function ManagerLayout() {
               <p className="text-xs text-tp-muted">{user?.fullName ?? "Usuario"}</p>
             </div>
             <StatusBadge tone={subscriptionStatus === "active" ? "success" : "warning"}>
-              {planCode} - {subscriptionStatus}
+              Plan {labelStatus(planCode)} - {labelStatus(subscriptionStatus)}
             </StatusBadge>
           </div>
           <Button variant="ghost" onClick={handleLogout}>

@@ -19,6 +19,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelStatus } from "../../../shared/utils/labels";
 import type { DeliveryOrder } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
 
@@ -125,9 +126,9 @@ export function RouteDetailPage() {
             Rutas
           </Link>
           <h1 className="mt-3 text-2xl font-semibold">{route.name}</h1>
-          <p className="mt-2 text-sm text-tp-muted">Pedidos, carga, entrega, cobro y liquidacion de ruta.</p>
+          <p className="mt-2 text-sm text-tp-muted">Prepara pedidos, registra entregas y cierra el efectivo de la ruta.</p>
         </div>
-        <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{route.status}</StatusBadge>
+        <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{labelStatus(route.status)}</StatusBadge>
       </div>
 
       <div className="mb-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
@@ -159,10 +160,10 @@ export function RouteDetailPage() {
             </select>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Monto" value={paymentAmount} />
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} value={paymentMethod}>
-              <option value="cash">cash</option>
-              <option value="card">card</option>
-              <option value="transfer">transfer</option>
-              <option value="credit">credit</option>
+              <option value="cash">Efectivo</option>
+              <option value="card">Tarjeta</option>
+              <option value="transfer">Transferencia</option>
+              <option value="credit">Credito</option>
             </select>
             <PermissionButton disabled={!paymentOrderId || !paymentAmount.trim() || paymentMutation.isPending} onClick={recordPayment} permission="routes.manage">
               <CreditCard className="h-4 w-4" aria-hidden="true" />
@@ -181,7 +182,7 @@ export function RouteDetailPage() {
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Pendiente</th>
               <th className="px-4 py-3">Estado</th>
-              <th className="px-4 py-3">Acciones</th>
+              <th className="px-4 py-3">Que hacer</th>
             </tr>
           </thead>
           <tbody>
@@ -191,7 +192,7 @@ export function RouteDetailPage() {
                 <td className="px-4 py-3">{order.customerName ?? order.customerId}</td>
                 <td className="px-4 py-3">{formatManagerMoney(order.total)}</td>
                 <td className="px-4 py-3">{formatManagerMoney(order.amountPending)}</td>
-                <td className="px-4 py-3"><StatusBadge tone={order.status === "paid" || order.status === "delivered" ? "success" : "warning"}>{order.status}</StatusBadge></td>
+                <td className="px-4 py-3"><StatusBadge tone={order.status === "paid" || order.status === "delivered" ? "success" : "warning"}>{labelStatus(order.status)}</StatusBadge></td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
                     <PermissionButton disabled={order.status !== "pending" || actionMutation.isPending} onClick={() => act(order.id, "prepare")} permission="routes.manage" variant="secondary">Preparar</PermissionButton>
@@ -207,13 +208,13 @@ export function RouteDetailPage() {
       </div>
 
       <article className="rounded-md border border-tp-border bg-white p-5">
-        <h2 className="mb-4 text-sm font-semibold">Liquidacion</h2>
+        <h2 className="mb-4 text-sm font-semibold">Cierre de ruta</h2>
         <div className="grid gap-3 md:grid-cols-[auto_1fr_160px_auto_auto]">
           <PermissionButton disabled={createSettlementMutation.isPending} onClick={createSettlement} permission="routes.manage" variant="secondary">
             <PackageCheck className="h-4 w-4" aria-hidden="true" />
             Crear
           </PermissionButton>
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSettlementId(event.target.value)} placeholder="settlementId" value={settlementId} />
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSettlementId(event.target.value)} placeholder="Folio de cierre" value={settlementId} />
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setDeliveredCashAmount(event.target.value)} placeholder="Efectivo" value={deliveredCashAmount} />
           <PermissionButton disabled={!settlementId || !deliveredCashAmount || closeSettlementMutation.isPending} onClick={() => closeSettlementMutation.mutate({ settlementId, deliveredCashAmount })} permission="routes.manage" variant="secondary">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />

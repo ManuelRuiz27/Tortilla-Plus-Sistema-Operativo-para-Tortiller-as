@@ -43,12 +43,13 @@ export function OpenCashPage() {
 
   return (
     <section className="max-w-xl rounded-md border border-tp-border bg-white p-6">
-      <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Apertura de caja</p>
+      <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Abrir caja</p>
       <h1 className="mt-3 text-2xl font-semibold">{branchName}</h1>
+      <p className="mt-2 text-sm text-tp-muted">Confirma con cuanto efectivo empieza el turno.</p>
       <div className="mt-6 grid gap-4">
         <div>
           <label className="text-sm font-semibold" htmlFor="openingAmount">
-            Saldo contado
+            Efectivo inicial
           </label>
           <input
             className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
@@ -76,7 +77,7 @@ export function OpenCashPage() {
         {error ? <p className="rounded-md bg-red-50 p-3 text-sm text-tp-danger">{error}</p> : null}
         {openCashMutation.isError ? (
           <p className="rounded-md bg-red-50 p-3 text-sm text-tp-danger">
-            No se pudo abrir caja.
+            No se pudo abrir la caja.
           </p>
         ) : null}
         <Button disabled={openCashMutation.isPending} onClick={openCash}>

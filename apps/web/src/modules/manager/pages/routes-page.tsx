@@ -12,6 +12,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelStatus } from "../../../shared/utils/labels";
 
 export function RoutesPage() {
   const queryClient = useQueryClient();
@@ -67,8 +68,8 @@ export function RoutesPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Rutas</p>
-          <h1 className="mt-3 text-2xl font-semibold">Reparto por sucursal</h1>
-          <p className="mt-2 text-sm text-tp-muted">Alta de repartidores, rutas activas y carga operativa del dia.</p>
+          <h1 className="mt-3 text-2xl font-semibold">Reparto</h1>
+          <p className="mt-2 text-sm text-tp-muted">Organiza repartidores, rutas y clientes por atender.</p>
         </div>
         <div className="grid grid-cols-3 gap-3 text-right">
           <div>
@@ -122,7 +123,7 @@ export function RoutesPage() {
               <th className="px-4 py-3">Repartidor</th>
               <th className="px-4 py-3">Clientes</th>
               <th className="px-4 py-3">Pedidos</th>
-              <th className="px-4 py-3">Liquidacion</th>
+              <th className="px-4 py-3">Cierre</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -136,11 +137,11 @@ export function RoutesPage() {
                 <td className="px-4 py-3">Pendiente de listado</td>
                 <td className="px-4 py-3">Sin cierre</td>
                 <td className="px-4 py-3">
-                  <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{route.status}</StatusBadge>
+                  <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{labelStatus(route.status)}</StatusBadge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/manager/routes/${route.id}`}>
-                    Operar
+                    Abrir
                   </Link>
                 </td>
               </tr>

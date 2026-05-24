@@ -7,6 +7,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelStatus } from "../../../shared/utils/labels";
 import { formatManagerMoney } from "../utils/money";
 
 const saleStatusTone = {
@@ -43,8 +44,8 @@ export function BillingPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["billing-summary", branchId, date] })
   });
 
-  if (isLoading) return <LoadingState message="Cargando facturacion..." />;
-  if (isError || !data) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar facturacion.</p>;
+  if (isLoading) return <LoadingState message="Cargando facturas..." />;
+  if (isError || !data) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar las facturas.</p>;
 
   function createGlobal() {
     if (!branchId || !data) return;
@@ -57,9 +58,9 @@ export function BillingPage() {
     <section>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Facturacion</p>
-          <h1 className="mt-3 text-2xl font-semibold">CFDI individual y global diaria</h1>
-          <p className="mt-2 text-sm text-tp-muted">Ventas completadas, folios emitidos y estado de timbrado.</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Facturas</p>
+          <h1 className="mt-3 text-2xl font-semibold">Facturas del dia</h1>
+          <p className="mt-2 text-sm text-tp-muted">Revisa ventas pendientes de facturar y facturas emitidas.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setDate(event.target.value)} type="date" value={date} />
@@ -69,7 +70,7 @@ export function BillingPage() {
           </Button>
           <PermissionButton disabled={!branchId || data.globalDaily.status !== "not_created" || globalMutation.isPending} onClick={createGlobal} permission="billing.manage">
             <FilePlus2 className="h-4 w-4" aria-hidden="true" />
-            Global diaria
+            Crear factura global
           </PermissionButton>
         </div>
       </div>
@@ -78,15 +79,15 @@ export function BillingPage() {
 
       <div className="mb-5 grid gap-4 md:grid-cols-3">
         <article className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm text-tp-muted">Facturable</p>
+          <p className="text-sm text-tp-muted">Pendiente de facturar</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(billableTotal)}</p>
         </article>
         <article className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm text-tp-muted">Global del dia</p>
+          <p className="text-sm text-tp-muted">Factura global</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(data.globalDaily.total)}</p>
         </article>
         <article className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm text-tp-muted">Errores de timbrado</p>
+          <p className="text-sm text-tp-muted">Facturas con error</p>
           <p className="mt-2 text-2xl font-semibold">{data.stampErrors}</p>
         </article>
       </div>
@@ -116,11 +117,11 @@ export function BillingPage() {
                     <td className="px-4 py-3 font-semibold">{sale.folio}</td>
                     <td className="px-4 py-3">{sale.customerName}</td>
                     <td className="px-4 py-3">{formatManagerMoney(sale.total)}</td>
-                    <td className="px-4 py-3"><StatusBadge tone={saleStatusTone[sale.status]}>{sale.status}</StatusBadge></td>
+                    <td className="px-4 py-3"><StatusBadge tone={saleStatusTone[sale.status]}>{labelStatus(sale.status)}</StatusBadge></td>
                     <td className="px-4 py-3 text-right">
                       <PermissionButton disabled={sale.status !== "billable" || individualMutation.isPending} onClick={() => individualMutation.mutate({ saleId: sale.id })} permission="billing.manage" variant="secondary">
                         <Stamp className="h-4 w-4" aria-hidden="true" />
-                        Timbrar
+                        Emitir
                       </PermissionButton>
                     </td>
                   </tr>
@@ -153,7 +154,7 @@ export function BillingPage() {
                       <p className="text-xs text-tp-muted">{invoice.issuedAt}</p>
                     </td>
                     <td className="px-4 py-3">{invoice.customerName}</td>
-                    <td className="px-4 py-3"><StatusBadge tone={invoiceStatusTone[invoice.status]}>{invoice.status}</StatusBadge></td>
+                    <td className="px-4 py-3"><StatusBadge tone={invoiceStatusTone[invoice.status]}>{labelStatus(invoice.status)}</StatusBadge></td>
                   </tr>
                 ))}
               </tbody>

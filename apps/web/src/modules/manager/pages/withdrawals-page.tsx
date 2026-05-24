@@ -44,8 +44,9 @@ export function WithdrawalsPage() {
   return (
     <section>
       <div className="mb-6">
-        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Caja</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Retiros</p>
         <h1 className="mt-3 text-2xl font-semibold">Retiros pendientes</h1>
+        <p className="mt-2 text-sm text-tp-muted">Revisa las salidas de efectivo antes de autorizarlas.</p>
       </div>
       {error ? <p className="mb-4 rounded-md bg-red-50 p-3 text-sm text-tp-danger">{error}</p> : null}
       <div className="overflow-x-auto rounded-md border border-tp-border bg-white">
@@ -57,7 +58,7 @@ export function WithdrawalsPage() {
               <th className="px-4 py-3">Motivo</th>
               <th className="px-4 py-3">Monto</th>
               <th className="px-4 py-3">PIN</th>
-              <th className="px-4 py-3">Acciones</th>
+              <th className="px-4 py-3">Que hacer</th>
             </tr>
           </thead>
           <tbody>
@@ -106,7 +107,6 @@ export function WithdrawalsPage() {
           <div className="p-6 text-sm text-tp-muted">No hay retiros pendientes.</div>
         ) : null}
       </div>
-      <p className="mt-3 text-xs text-tp-muted">PIN demo valido: 1234</p>
     </section>
   );
 }

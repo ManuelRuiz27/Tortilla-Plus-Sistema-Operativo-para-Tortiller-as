@@ -11,6 +11,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelStatus } from "../../../shared/utils/labels";
 
 export function ProductionPage() {
   const queryClient = useQueryClient();
@@ -66,8 +67,8 @@ export function ProductionPage() {
     <section className="max-w-5xl">
       <div className="mb-6">
         <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Produccion</p>
-        <h1 className="mt-3 text-2xl font-semibold">Produccion del dia</h1>
-        <p className="mt-2 text-sm text-tp-muted">Registra producto terminado y cierra el lote para ingresar inventario.</p>
+        <h1 className="mt-3 text-2xl font-semibold">Produccion de hoy</h1>
+        <p className="mt-2 text-sm text-tp-muted">Registra lo que se preparo y mandalo a inventario al cerrar.</p>
       </div>
 
       <div className="mb-5 rounded-md border border-tp-border bg-white p-4">
@@ -86,7 +87,7 @@ export function ProductionPage() {
             </label>
           ))}
         </div>
-        {products.length === 0 ? <p className="text-sm text-tp-muted">No hay productos marcados como produccion.</p> : null}
+        {products.length === 0 ? <p className="text-sm text-tp-muted">No hay productos marcados para producir.</p> : null}
         <div className="mt-4 flex justify-end">
           <PermissionButton disabled={!branchId || !hasQuantities || createMutation.isPending} onClick={submit} permission="production.manage">Registrar lote</PermissionButton>
         </div>
@@ -101,7 +102,7 @@ export function ProductionPage() {
                 <p className="mt-2 text-sm text-tp-muted">Tortilla: {batch.tortillaKg} kg - Masa: {batch.masaKg} kg</p>
               </div>
               <div className="flex items-center gap-2">
-                <StatusBadge tone={batch.status === "open" ? "success" : "neutral"}>{batch.status}</StatusBadge>
+                <StatusBadge tone={batch.status === "open" ? "success" : "neutral"}>{labelStatus(batch.status)}</StatusBadge>
                 <PermissionButton disabled={batch.status !== "open" || closeMutation.isPending} onClick={() => closeMutation.mutate(batch.id)} permission="production.manage" variant="secondary">
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                   Cerrar
@@ -110,7 +111,7 @@ export function ProductionPage() {
             </div>
           </article>
         ))}
-        {batches.length === 0 ? <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-muted">Sin lotes de produccion registrados.</p> : null}
+        {batches.length === 0 ? <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-muted">Todavia no hay produccion registrada.</p> : null}
       </div>
     </section>
   );

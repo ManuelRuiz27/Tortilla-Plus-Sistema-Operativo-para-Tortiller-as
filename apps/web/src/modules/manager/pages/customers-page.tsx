@@ -6,6 +6,7 @@ import { createCustomerRequest, managerCustomersRequest } from "../../../api/man
 import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
+import { labelStatus } from "../../../shared/utils/labels";
 import type { ManagerCustomer } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
 
@@ -63,8 +64,8 @@ export function CustomersPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Clientes</p>
-          <h1 className="mt-3 text-2xl font-semibold">Cuentas recurrentes</h1>
-          <p className="mt-2 text-sm text-tp-muted">Control de clientes, credito y saldos operativos.</p>
+          <h1 className="mt-3 text-2xl font-semibold">Clientes frecuentes</h1>
+          <p className="mt-2 text-sm text-tp-muted">Guarda contactos, credito y saldos pendientes.</p>
         </div>
         <div className="text-right">
           <p className="text-xs uppercase text-tp-muted">Saldo abierto</p>
@@ -86,7 +87,7 @@ export function CustomersPage() {
           </label>
           <PermissionButton disabled={!name.trim() || createMutation.isPending} onClick={submitCustomer} permission="customers.manage">
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Crear
+            Agregar
           </PermissionButton>
         </div>
       </div>
@@ -116,7 +117,7 @@ export function CustomersPage() {
                 <td className="px-4 py-3">{customer.creditEnabled ? formatManagerMoney(customer.creditLimit) : "Sin credito"}</td>
                 <td className="px-4 py-3 font-semibold">{formatManagerMoney(customer.currentBalance)}</td>
                 <td className="px-4 py-3">
-                  <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{customer.status}</StatusBadge>
+                  <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{labelStatus(customer.status)}</StatusBadge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/manager/customers/${customer.id}`}>

@@ -109,7 +109,7 @@ export function SalePage() {
   }
 
   function handleCancelTicket() {
-    if (items.length === 0 || !window.confirm("Cancelar ticket actual?")) {
+    if (items.length === 0 || !window.confirm("Cancelar esta venta?")) {
       return;
     }
 
@@ -177,11 +177,11 @@ export function SalePage() {
     <section className="grid min-h-[calc(100vh-7rem)] gap-5 lg:grid-cols-[1fr_380px]">
       <div className="min-w-0">
         <div className="rounded-md border border-tp-border bg-white p-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">POS Cajero</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Venta en mostrador</p>
           <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold">Venta rapida</h1>
-              <p className="mt-1 text-sm text-tp-muted">Captura por kg, monto, paquete o retail.</p>
+              <h1 className="text-2xl font-semibold">Nueva venta</h1>
+              <p className="mt-1 text-sm text-tp-muted">Agrega tortillas, masa, paquetes o productos de mostrador.</p>
             </div>
           </div>
         </div>
@@ -234,7 +234,7 @@ export function SalePage() {
           </Button>
           <Button className="min-h-20 justify-start px-5 text-left" disabled variant="secondary">
             <CreditCard className="h-5 w-5" aria-hidden="true" />
-            Cobro FE-3
+            Cobro con terminal
           </Button>
         </div>
 
@@ -245,7 +245,7 @@ export function SalePage() {
           searchTerm={searchTerm}
         />
         <div className="mt-4">
-          <PosErrorAlert error={cancelDraftMutation.isError ? "No se pudo cancelar el ticket." : null} />
+          <PosErrorAlert error={cancelDraftMutation.isError ? "No se pudo cancelar la venta." : null} />
         </div>
       </div>
 

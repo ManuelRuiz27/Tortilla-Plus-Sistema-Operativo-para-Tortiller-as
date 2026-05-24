@@ -6,6 +6,7 @@ import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { labelSaleMode, labelStatus } from "../../../shared/utils/labels";
 import type { ManagerPrice } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
 
@@ -50,8 +51,8 @@ export function PricesPage() {
     <section>
       <div className="mb-6">
         <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Precios</p>
-        <h1 className="mt-3 text-2xl font-semibold">Precios por sucursal</h1>
-        <p className="mt-2 text-sm text-tp-muted">Crear un precio nuevo cierra la vigencia anterior del mismo producto y modo.</p>
+        <h1 className="mt-3 text-2xl font-semibold">Precios de venta</h1>
+        <p className="mt-2 text-sm text-tp-muted">Guarda el precio que se usara en la sucursal seleccionada.</p>
       </div>
 
       <div className="mb-5 grid gap-3 rounded-md border border-tp-border bg-white p-4 md:grid-cols-[1fr_170px_160px_auto]">
@@ -60,7 +61,7 @@ export function PricesPage() {
           {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
         </select>
         <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSaleMode(event.target.value as ManagerPrice["saleMode"])} value={saleMode}>
-          {saleModes.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+          {saleModes.map((mode) => <option key={mode} value={mode}>{labelSaleMode(mode)}</option>)}
         </select>
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setPrice(event.target.value)} placeholder="Precio" value={price} />
         <PermissionButton disabled={!branchId || !productId || !price.trim() || priceMutation.isPending} onClick={submitPrice} permission="prices.manage">
@@ -74,9 +75,9 @@ export function PricesPage() {
           <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
             <tr>
               <th className="px-4 py-3">Producto</th>
-              <th className="px-4 py-3">Modo</th>
+              <th className="px-4 py-3">Se vende</th>
               <th className="px-4 py-3">Precio</th>
-              <th className="px-4 py-3">Vigencia</th>
+              <th className="px-4 py-3">Desde</th>
               <th className="px-4 py-3">Estado</th>
             </tr>
           </thead>
@@ -87,13 +88,13 @@ export function PricesPage() {
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center gap-2">
                     <BadgeDollarSign className="h-4 w-4 text-tp-secondary" aria-hidden="true" />
-                    {item.saleMode}
+                    {labelSaleMode(item.saleMode)}
                   </span>
                 </td>
                 <td className="px-4 py-3">{formatManagerMoney(item.price)}</td>
                 <td className="px-4 py-3">{item.effectiveFrom}</td>
                 <td className="px-4 py-3">
-                  <StatusBadge tone={item.status === "active" ? "success" : "warning"}>{item.status}</StatusBadge>
+                  <StatusBadge tone={item.status === "active" ? "success" : "warning"}>{labelStatus(item.status)}</StatusBadge>
                 </td>
               </tr>
             ))}

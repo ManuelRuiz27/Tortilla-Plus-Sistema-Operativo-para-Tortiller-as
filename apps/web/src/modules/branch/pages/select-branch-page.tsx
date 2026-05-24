@@ -5,6 +5,7 @@ import { StatusBadge } from "../../../shared/components/status-badge";
 import { useAuthStore } from "../../../shared/stores/auth.store";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { useCashStore } from "../../../shared/stores/cash.store";
+import { labelRole } from "../../../shared/utils/labels";
 import { getPrimaryDestination } from "../../../shared/utils/role";
 
 export function SelectBranchPage() {
@@ -31,7 +32,8 @@ export function SelectBranchPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">
           Tortilla Plus
         </p>
-        <h1 className="mt-3 text-3xl font-semibold">Selecciona sucursal</h1>
+        <h1 className="mt-3 text-3xl font-semibold">Elige donde vas a trabajar</h1>
+        <p className="mt-2 text-sm text-tp-muted">Selecciona la sucursal para abrir ventas, caja y reportes.</p>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {branches.map((branch) => (
             <article className="rounded-md border border-tp-border bg-white p-5" key={branch.branchId}>
@@ -42,7 +44,7 @@ export function SelectBranchPage() {
                 </StatusBadge>
               </div>
               <h2 className="mt-5 text-xl font-semibold">{branch.branchName}</h2>
-              <p className="mt-1 text-sm text-tp-muted">Rol operativo: {branch.role}</p>
+              <p className="mt-1 text-sm text-tp-muted">Perfil: {labelRole(branch.role)}</p>
               <Button
                 className="mt-5 w-full"
                 disabled={branch.status !== "active"}

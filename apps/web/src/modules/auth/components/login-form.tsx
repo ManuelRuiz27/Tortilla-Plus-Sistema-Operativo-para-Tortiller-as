@@ -24,7 +24,7 @@ export function LoginForm() {
   const clearActiveBranch = useBranchStore((state) => state.clearActiveBranch);
   const clearCashSession = useCashStore((state) => state.clearCashSession);
   const setSubscription = useSubscriptionStore((state) => state.setSubscription);
-  const [email, setEmail] = useState("demo@tortillaplus.mx");
+  const [email, setEmail] = useState("owner.demo@tortillaplus.mx");
   const [password, setPassword] = useState("Demo1234!");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +69,11 @@ export function LoginForm() {
   }
 
   return (
-    <form className="space-y-5 rounded-md border border-tp-border bg-white p-6" onSubmit={handleSubmit}>
+    <form className="space-y-5 rounded-md border border-tp-border bg-white p-6 shadow-sm" onSubmit={handleSubmit}>
+      <div>
+        <h2 className="text-xl font-semibold">Iniciar sesion</h2>
+        <p className="mt-1 text-sm text-tp-muted">Usa el correo y contrasena de tu negocio.</p>
+      </div>
       <div>
         <label className="text-sm font-semibold" htmlFor="email">
           Correo
@@ -98,7 +102,7 @@ export function LoginForm() {
       </div>
       {error ? <p className="rounded-md bg-red-50 p-3 text-sm text-tp-danger">{error}</p> : null}
       <Button className="w-full" disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Entrando..." : "Entrar"}
+        {isSubmitting ? "Entrando..." : "Entrar a mi sucursal"}
       </Button>
     </form>
   );

@@ -86,6 +86,7 @@ export async function login(input: unknown) {
     refreshToken,
     tokenType: "Bearer",
     expiresIn: env.ACCESS_TOKEN_TTL_SECONDS,
+    user: await buildCurrentUserResponse(user.id),
   };
 }
 
@@ -170,19 +171,7 @@ export async function validatePin(currentUser: AuthenticatedUser, input: unknown
 }
 
 export async function getMe(currentUser: AuthenticatedUser) {
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: currentUser.id },
-  });
-  return {
-    id: user.id,
-    organizationId: user.organizationId,
-    name: user.name,
-    email: user.email,
-    status: user.status,
-    roles: await getRoleCodes(currentUser.id),
-    permissions: await getPermissionCodes(currentUser.id),
-    branches: await getBranchAssignments(currentUser.id),
-  };
+  return buildCurrentUserResponse(currentUser.id);
 }
 
 export async function authenticate(request: IncomingMessage): Promise<AuthenticatedUser> {
@@ -247,4 +236,27 @@ async function audit(
       entityId,
     },
   });
+}
+
+async function buildCurrentUserResponse(userId: string) {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+  });
+  const roles = await getRoleCodes(userId);
+  const primaryRole = roles[0] ?? "cashier";
+
+  return {
+    id: user.id,
+    organizationId: user.organizationId,
+    email: user.email,
+    fullName: user.name,
+    roles,
+    permissions: await getPermissionCodes(userId),
+    branches: (await getBranchAssignments(userId)).map((branch) => ({
+      branchId: branch.id,
+      branchName: branch.name,
+      role: primaryRole,
+      status: "active",
+    })),
+  };
 }

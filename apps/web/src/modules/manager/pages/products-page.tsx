@@ -6,6 +6,7 @@ import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
+import { labelProductType, labelStatus, labelUnit } from "../../../shared/utils/labels";
 import type { ManagerProduct } from "../types/manager.types";
 
 const productTypes: Array<ManagerProduct["productType"]> = ["tortilla", "masa", "package", "retail", "service"];
@@ -120,13 +121,13 @@ export function ProductsPage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Productos</p>
-          <h1 className="mt-3 text-2xl font-semibold">Catalogo vendible</h1>
-          <p className="mt-2 text-sm text-tp-muted">Alta y edicion del catalogo usado por POS, precios e inventario.</p>
+          <h1 className="mt-3 text-2xl font-semibold">Productos de venta</h1>
+          <p className="mt-2 text-sm text-tp-muted">Agrega y edita lo que se vende, produce o controla en inventario.</p>
         </div>
         {form.id ? (
           <Button onClick={() => setForm(emptyForm)} variant="secondary">
             <X className="h-4 w-4" aria-hidden="true" />
-            Cancelar edicion
+            Dejar de editar
           </Button>
         ) : null}
       </div>
@@ -134,24 +135,24 @@ export function ProductsPage() {
       <div className="mb-5 rounded-md border border-tp-border bg-white p-4">
         <div className="grid gap-3 lg:grid-cols-[1.4fr_140px_140px_130px_130px]">
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ name: event.target.value })} placeholder="Nombre" value={form.name} />
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ sku: event.target.value })} placeholder="SKU" value={form.sku} />
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ barcode: event.target.value })} placeholder="Codigo" value={form.barcode} />
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ sku: event.target.value })} placeholder="Clave interna" value={form.sku} />
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ barcode: event.target.value })} placeholder="Codigo de barras" value={form.barcode} />
           <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ productType: event.target.value as ManagerProduct["productType"] })} value={form.productType}>
-            {productTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+            {productTypes.map((type) => <option key={type} value={type}>{labelProductType(type)}</option>)}
           </select>
           <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => updateForm({ unit: event.target.value as ManagerProduct["unit"] })} value={form.unit}>
-            {productUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+            {productUnits.map((unit) => <option key={unit} value={unit}>{labelUnit(unit)}</option>)}
           </select>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-4 text-sm text-tp-muted">
-            <label className="flex items-center gap-2"><input checked={form.isSellable} onChange={(event) => updateForm({ isSellable: event.target.checked })} type="checkbox" /> Vendible</label>
-            <label className="flex items-center gap-2"><input checked={form.isStockTracked} onChange={(event) => updateForm({ isStockTracked: event.target.checked })} type="checkbox" /> Inventario</label>
-            <label className="flex items-center gap-2"><input checked={form.requiresProduction} onChange={(event) => updateForm({ requiresProduction: event.target.checked })} type="checkbox" /> Produccion</label>
+            <label className="flex items-center gap-2"><input checked={form.isSellable} onChange={(event) => updateForm({ isSellable: event.target.checked })} type="checkbox" /> Se vende</label>
+            <label className="flex items-center gap-2"><input checked={form.isStockTracked} onChange={(event) => updateForm({ isStockTracked: event.target.checked })} type="checkbox" /> Lleva inventario</label>
+            <label className="flex items-center gap-2"><input checked={form.requiresProduction} onChange={(event) => updateForm({ requiresProduction: event.target.checked })} type="checkbox" /> Se produce</label>
             {form.id ? (
               <select className="h-9 rounded-md border border-tp-border px-2 text-sm" onChange={(event) => updateForm({ status: event.target.value as ManagerProduct["status"] })} value={form.status}>
-                <option value="active">active</option>
-                <option value="inactive">inactive</option>
+                <option value="active">Activo</option>
+                <option value="inactive">Inactivo</option>
               </select>
             ) : null}
           </div>
@@ -167,10 +168,10 @@ export function ProductsPage() {
           <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
             <tr>
               <th className="px-4 py-3">Nombre</th>
-              <th className="px-4 py-3">SKU</th>
+              <th className="px-4 py-3">Clave</th>
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3">Unidad</th>
-              <th className="px-4 py-3">Flags</th>
+              <th className="px-4 py-3">Uso</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -180,13 +181,13 @@ export function ProductsPage() {
               <tr className="border-t border-tp-border" key={product.id}>
                 <td className="px-4 py-3 font-semibold">{product.name}</td>
                 <td className="px-4 py-3">{product.sku ?? "-"}</td>
-                <td className="px-4 py-3">{product.productType}</td>
-                <td className="px-4 py-3">{product.unit}</td>
+                <td className="px-4 py-3">{labelProductType(product.productType)}</td>
+                <td className="px-4 py-3">{labelUnit(product.unit)}</td>
                 <td className="px-4 py-3 text-xs text-tp-muted">
-                  {[product.isSellable ? "vendible" : null, product.isStockTracked ? "stock" : null, product.requiresProduction ? "prod" : null].filter(Boolean).join(" / ") || "-"}
+                  {[product.isSellable ? "se vende" : null, product.isStockTracked ? "inventario" : null, product.requiresProduction ? "produccion" : null].filter(Boolean).join(" / ") || "-"}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusBadge tone={product.status === "active" ? "success" : "warning"}>{product.status}</StatusBadge>
+                  <StatusBadge tone={product.status === "active" ? "success" : "warning"}>{labelStatus(product.status)}</StatusBadge>
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Button onClick={() => setForm(formFromProduct(product))} variant="ghost">
