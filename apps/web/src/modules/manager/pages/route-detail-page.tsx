@@ -3,6 +3,7 @@ import { ArrowLeft, CheckCircle2, CreditCard, PackageCheck, Truck } from "lucide
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  assignCustomerToRouteRequest,
   closeDeliverySettlementRequest,
   createDeliveryOrderRequest,
   createDeliverySettlementRequest,
@@ -10,9 +11,12 @@ import {
   deliveryOrderActionRequest,
   deliveryOrdersRequest,
   deliveryRoutesRequest,
+  deliverySettlementsRequest,
   depositDeliverySettlementRequest,
   managerCustomersRequest,
   managerProductsRequest,
+  removeCustomerFromRouteRequest,
+  reorderRouteCustomersRequest,
   recordDeliveryPaymentRequest
 } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
@@ -30,9 +34,16 @@ export function RouteDetailPage() {
   const [customerId, setCustomerId] = useState("");
   const [productId, setProductId] = useState("");
   const [quantity, setQuantity] = useState("1.000");
+  const [orderItems, setOrderItems] = useState<Array<{ productId: string; quantity: string }>>([]);
+  const [routeOrderValues, setRouteOrderValues] = useState<Record<string, string>>({});
+  const [deliveryQuantities, setDeliveryQuantities] = useState<Record<string, string>>({});
   const [paymentOrderId, setPaymentOrderId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer" | "credit">("cash");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [authorizationPin, setAuthorizationPin] = useState("");
+  const [routeCustomerId, setRouteCustomerId] = useState("");
+  const [routeSortOrder, setRouteSortOrder] = useState("0");
   const [settlementId, setSettlementId] = useState("");
   const [deliveredCashAmount, setDeliveredCashAmount] = useState("");
 
@@ -52,7 +63,32 @@ export function RouteDetailPage() {
 
   const createOrderMutation = useMutation({
     mutationFn: createDeliveryOrderRequest,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-orders", routeId, branchId] })
+    onSuccess: () => {
+      setOrderItems([]);
+      setCustomerId("");
+      void queryClient.invalidateQueries({ queryKey: ["delivery-orders", routeId, branchId] });
+    }
+  });
+  const settlementsQuery = useQuery({
+    enabled: Boolean(branchId && routeId),
+    queryFn: () => deliverySettlementsRequest({ branchId: branchId ?? "", routeId }),
+    queryKey: ["delivery-settlements", routeId, branchId]
+  });
+  const assignCustomerMutation = useMutation({
+    mutationFn: assignCustomerToRouteRequest,
+    onSuccess: () => {
+      setRouteCustomerId("");
+      setRouteSortOrder("0");
+      void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] });
+    }
+  });
+  const removeCustomerMutation = useMutation({
+    mutationFn: removeCustomerFromRouteRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] })
+  });
+  const reorderCustomersMutation = useMutation({
+    mutationFn: reorderRouteCustomersRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] })
   });
   const actionMutation = useMutation({
     mutationFn: deliveryOrderActionRequest,
@@ -66,37 +102,66 @@ export function RouteDetailPage() {
     mutationFn: recordDeliveryPaymentRequest,
     onSuccess: () => {
       setPaymentAmount("");
+      setPaymentReference("");
+      setAuthorizationPin("");
       void queryClient.invalidateQueries({ queryKey: ["delivery-orders", routeId, branchId] });
     }
   });
   const createSettlementMutation = useMutation({
     mutationFn: createDeliverySettlementRequest,
-    onSuccess: (settlement) => setSettlementId(settlement.id)
+    onSuccess: (settlement) => {
+      setSettlementId(settlement.id);
+      void queryClient.invalidateQueries({ queryKey: ["delivery-settlements", routeId, branchId] });
+    }
   });
-  const closeSettlementMutation = useMutation({ mutationFn: closeDeliverySettlementRequest });
-  const depositMutation = useMutation({ mutationFn: depositDeliverySettlementRequest });
+  const closeSettlementMutation = useMutation({
+    mutationFn: closeDeliverySettlementRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-settlements", routeId, branchId] })
+  });
+  const depositMutation = useMutation({
+    mutationFn: depositDeliverySettlementRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-settlements", routeId, branchId] })
+  });
 
-  if (routesQuery.isLoading || ordersQuery.isLoading || customersQuery.isLoading || productsQuery.isLoading) {
+  if (routesQuery.isLoading || ordersQuery.isLoading || customersQuery.isLoading || productsQuery.isLoading || settlementsQuery.isLoading) {
     return <LoadingState message="Cargando ruta..." />;
   }
 
-  if (routesQuery.isError || ordersQuery.isError || customersQuery.isError || productsQuery.isError || !route) {
+  if (routesQuery.isError || ordersQuery.isError || customersQuery.isError || productsQuery.isError || settlementsQuery.isError || !route) {
     return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar la ruta.</p>;
   }
 
   const orders = ordersQuery.data ?? [];
+  const settlements = settlementsQuery.data ?? [];
   const products = (productsQuery.data ?? []).filter((product) => product.isSellable && product.status === "active");
   const customers = (customersQuery.data ?? []).filter((customer) => customer.status === "active");
+  const routeCustomers = route.customers
+    .filter((assignment) => assignment.customer?.status === "active")
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  const availableCustomers = customers.filter(
+    (customer) => !route.customers.some((assignment) => assignment.customerId === customer.id)
+  );
 
   function createOrder() {
-    if (!branchId || !route || !customerId || !productId || Number(quantity) <= 0) return;
+    if (!branchId || !route || !customerId || orderItems.length === 0) return;
     createOrderMutation.mutate({
       branchId,
       routeId,
       driverId: route.driverId ?? undefined,
       customerId,
-      items: [{ productId, quantity }]
+      items: orderItems
     });
+  }
+
+  function addOrderItem() {
+    if (!productId || Number(quantity) <= 0) return;
+    setOrderItems((items) => [...items, { productId, quantity }]);
+    setProductId("");
+    setQuantity("1.000");
+  }
+
+  function removeOrderItem(index: number) {
+    setOrderItems((items) => items.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function act(orderId: string, action: "prepare" | "load" | "in-route") {
@@ -104,12 +169,39 @@ export function RouteDetailPage() {
   }
 
   function deliver(order: DeliveryOrder) {
-    deliverMutation.mutate({ order });
+    deliverMutation.mutate({
+      order,
+      items: order.items.map((item) => ({
+        deliveryOrderItemId: item.id,
+        quantity: (deliveryQuantities[item.id] || item.quantityLoaded.toFixed(3)).trim()
+      }))
+    });
   }
 
   function recordPayment() {
     if (!paymentOrderId || !paymentAmount.trim()) return;
-    paymentMutation.mutate({ orderId: paymentOrderId, amount: paymentAmount, paymentMethod });
+    paymentMutation.mutate({
+      orderId: paymentOrderId,
+      amount: paymentAmount,
+      paymentMethod,
+      reference: paymentReference.trim() || undefined,
+      authorizationPin: authorizationPin.trim() || undefined
+    });
+  }
+
+  function assignCustomer() {
+    if (!routeCustomerId) return;
+    assignCustomerMutation.mutate({ routeId, customerId: routeCustomerId, sortOrder: Number(routeSortOrder || 0) });
+  }
+
+  function saveRouteOrder() {
+    reorderCustomersMutation.mutate({
+      routeId,
+      customers: routeCustomers.map((assignment, index) => ({
+        customerId: assignment.customerId,
+        sortOrder: Number(routeOrderValues[assignment.customerId] ?? assignment.sortOrder ?? index + 1)
+      }))
+    });
   }
 
   function createSettlement() {
@@ -132,19 +224,89 @@ export function RouteDetailPage() {
       </div>
 
       <div className="mb-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <article className="rounded-md border border-tp-border bg-white p-5 xl:col-span-2">
+          <h2 className="mb-4 text-sm font-semibold">Clientes de la ruta</h2>
+          <div className="mb-4 grid gap-3 md:grid-cols-[1fr_120px_auto]">
+            <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setRouteCustomerId(event.target.value)} value={routeCustomerId}>
+              <option value="">Agregar cliente</option>
+              {availableCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+            </select>
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="numeric" onChange={(event) => setRouteSortOrder(event.target.value)} value={routeSortOrder} />
+            <PermissionButton disabled={!routeCustomerId || assignCustomerMutation.isPending} onClick={assignCustomer} permission="routes.manage">
+              Agregar
+            </PermissionButton>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
+                <tr>
+                  <th className="px-4 py-3">Orden</th>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Saldo</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {routeCustomers.map((assignment) => (
+                  <tr className="border-t border-tp-border" key={assignment.customerId}>
+                    <td className="px-4 py-3">
+                      <input
+                        className="h-9 w-20 rounded-md border border-tp-border px-2 text-sm"
+                        inputMode="numeric"
+                        onChange={(event) => setRouteOrderValues((values) => ({ ...values, [assignment.customerId]: event.target.value }))}
+                        value={routeOrderValues[assignment.customerId] ?? String(assignment.sortOrder)}
+                      />
+                    </td>
+                    <td className="px-4 py-3 font-semibold">{assignment.customer?.name ?? assignment.customerId}</td>
+                    <td className="px-4 py-3">{formatManagerMoney(assignment.customer?.currentBalance ?? 0)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <PermissionButton disabled={removeCustomerMutation.isPending} onClick={() => removeCustomerMutation.mutate({ routeId, customerId: assignment.customerId })} permission="routes.manage" variant="secondary">
+                        Quitar
+                      </PermissionButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <PermissionButton disabled={routeCustomers.length === 0 || reorderCustomersMutation.isPending} onClick={saveRouteOrder} permission="routes.manage" variant="secondary">
+              Guardar orden
+            </PermissionButton>
+          </div>
+        </article>
+
         <article className="rounded-md border border-tp-border bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold">Nuevo pedido</h2>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_140px_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setCustomerId(event.target.value)} value={customerId}>
               <option value="">Cliente</option>
-              {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+              {routeCustomers.map((assignment) => <option key={assignment.customerId} value={assignment.customerId}>{assignment.customer?.name ?? assignment.customerId}</option>)}
             </select>
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setProductId(event.target.value)} value={productId}>
               <option value="">Producto</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setQuantity(event.target.value)} value={quantity} />
-            <PermissionButton disabled={!customerId || !productId || createOrderMutation.isPending} onClick={createOrder} permission="routes.manage">
+            <PermissionButton disabled={!productId || Number(quantity) <= 0} onClick={addOrderItem} permission="routes.manage" variant="secondary">
+              Agregar
+            </PermissionButton>
+          </div>
+          <div className="mt-4 space-y-2">
+            {orderItems.map((item, index) => {
+              const product = products.find((candidate) => candidate.id === item.productId);
+              return (
+                <div className="flex items-center justify-between rounded-md border border-tp-border px-3 py-2 text-sm" key={`${item.productId}-${index}`}>
+                  <span>{product?.name ?? item.productId} - {item.quantity}</span>
+                  <button className="font-semibold text-tp-danger" onClick={() => removeOrderItem(index)} type="button">
+                    Quitar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <PermissionButton disabled={!customerId || orderItems.length === 0 || createOrderMutation.isPending} onClick={createOrder} permission="routes.manage">
               <Truck className="h-4 w-4" aria-hidden="true" />
               Crear
             </PermissionButton>
@@ -153,7 +315,7 @@ export function RouteDetailPage() {
 
         <article className="rounded-md border border-tp-border bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold">Cobro en ruta</h2>
-          <div className="grid gap-3 md:grid-cols-[1fr_120px_130px_auto]">
+          <div className="grid gap-3 md:grid-cols-[1fr_120px_130px_1fr_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentOrderId(event.target.value)} value={paymentOrderId}>
               <option value="">Pedido</option>
               {orders.map((order) => <option key={order.id} value={order.id}>{order.customerName ?? order.customerId} - {formatManagerMoney(order.amountPending)}</option>)}
@@ -165,11 +327,15 @@ export function RouteDetailPage() {
               <option value="transfer">Transferencia</option>
               <option value="credit">Credito</option>
             </select>
-            <PermissionButton disabled={!paymentOrderId || !paymentAmount.trim() || paymentMutation.isPending} onClick={recordPayment} permission="routes.manage">
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" disabled={paymentMethod === "cash" || paymentMethod === "credit"} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Referencia" value={paymentReference} />
+            <PermissionButton disabled={!paymentOrderId || !paymentAmount.trim() || ((paymentMethod === "card" || paymentMethod === "transfer") && !paymentReference.trim()) || paymentMutation.isPending} onClick={recordPayment} permission="routes.manage">
               <CreditCard className="h-4 w-4" aria-hidden="true" />
               Cobrar
             </PermissionButton>
           </div>
+          {paymentMethod === "credit" ? (
+            <input className="mt-3 h-11 w-full rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setAuthorizationPin(event.target.value)} placeholder="PIN si excede limite" type="password" value={authorizationPin} />
+          ) : null}
         </article>
       </div>
 
@@ -198,6 +364,21 @@ export function RouteDetailPage() {
                     <PermissionButton disabled={order.status !== "pending" || actionMutation.isPending} onClick={() => act(order.id, "prepare")} permission="routes.manage" variant="secondary">Preparar</PermissionButton>
                     <PermissionButton disabled={order.status !== "prepared" || actionMutation.isPending} onClick={() => act(order.id, "load")} permission="routes.manage" variant="secondary">Cargar</PermissionButton>
                     <PermissionButton disabled={order.status !== "loaded" || actionMutation.isPending} onClick={() => act(order.id, "in-route")} permission="routes.manage" variant="secondary">En ruta</PermissionButton>
+                    {order.status === "in_route" ? (
+                      <div className="basis-full space-y-2">
+                        {order.items.map((item) => (
+                          <label className="grid gap-1 text-xs text-tp-muted md:grid-cols-[1fr_100px]" key={item.id}>
+                            <span>{item.productName}: cargado {item.quantityLoaded}</span>
+                            <input
+                              className="h-9 rounded-md border border-tp-border px-2 text-sm text-tp-text"
+                              inputMode="decimal"
+                              onChange={(event) => setDeliveryQuantities((values) => ({ ...values, [item.id]: event.target.value }))}
+                              value={deliveryQuantities[item.id] ?? item.quantityLoaded.toFixed(3)}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
                     <PermissionButton disabled={order.status !== "in_route" || deliverMutation.isPending} onClick={() => deliver(order)} permission="routes.manage" variant="secondary">Entregar</PermissionButton>
                   </div>
                 </td>
@@ -214,13 +395,46 @@ export function RouteDetailPage() {
             <PackageCheck className="h-4 w-4" aria-hidden="true" />
             Crear
           </PermissionButton>
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSettlementId(event.target.value)} placeholder="Folio de cierre" value={settlementId} />
+          <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setSettlementId(event.target.value)} value={settlementId}>
+            <option value="">Liquidacion</option>
+            {settlements.map((settlement) => (
+              <option key={settlement.id} value={settlement.id}>
+                {settlement.status} - esperado {formatManagerMoney(settlement.expectedCashAmount)}
+              </option>
+            ))}
+          </select>
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setDeliveredCashAmount(event.target.value)} placeholder="Efectivo" value={deliveredCashAmount} />
           <PermissionButton disabled={!settlementId || !deliveredCashAmount || closeSettlementMutation.isPending} onClick={() => closeSettlementMutation.mutate({ settlementId, deliveredCashAmount })} permission="routes.manage" variant="secondary">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Cerrar
           </PermissionButton>
           <PermissionButton disabled={!settlementId || depositMutation.isPending} onClick={() => depositMutation.mutate(settlementId)} permission="routes.manage">Depositar</PermissionButton>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
+              <tr>
+                <th className="px-4 py-3">Liquidacion</th>
+                <th className="px-4 py-3">Esperado</th>
+                <th className="px-4 py-3">Entregado</th>
+                <th className="px-4 py-3">Diferencia</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Caja</th>
+              </tr>
+            </thead>
+            <tbody>
+              {settlements.map((settlement) => (
+                <tr className="border-t border-tp-border" key={settlement.id}>
+                  <td className="px-4 py-3 font-semibold">{settlement.id}</td>
+                  <td className="px-4 py-3">{formatManagerMoney(settlement.expectedCashAmount)}</td>
+                  <td className="px-4 py-3">{formatManagerMoney(settlement.deliveredCashAmount)}</td>
+                  <td className="px-4 py-3">{formatManagerMoney(settlement.differenceAmount)}</td>
+                  <td className="px-4 py-3"><StatusBadge tone={settlement.status === "closed" ? "success" : "warning"}>{labelStatus(settlement.status)}</StatusBadge></td>
+                  <td className="px-4 py-3">{settlement.cashSessionId ? "Depositada" : "Pendiente"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </article>
     </section>

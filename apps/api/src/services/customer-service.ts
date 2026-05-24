@@ -206,6 +206,115 @@ export async function setCustomerPrice(currentUser: AuthenticatedUser, customerI
   });
 }
 
+export async function listCustomerPrices(currentUser: AuthenticatedUser, customerId: string) {
+  await assertPermission(currentUser.id, "customers.view");
+  await getCustomerOrThrow(currentUser.organizationId, customerId);
+
+  const prices = await prisma.customerProductPrice.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      customerId,
+      status: "active",
+      activeTo: null,
+    },
+    include: {
+      product: true,
+      branch: true,
+    },
+    orderBy: [{ branchId: "desc" }, { activeFrom: "desc" }],
+  });
+
+  return {
+    data: prices.map((price) => ({
+      ...serializeCustomerPrice(price),
+      product: { id: price.product.id, name: price.product.name },
+      branch: price.branch ? { id: price.branch.id, name: price.branch.name } : null,
+    })),
+  };
+}
+
+export async function recordCustomerPayment(currentUser: AuthenticatedUser, customerId: string, input: unknown) {
+  await assertPermission(currentUser.id, "payments.create");
+  const body = asRecord(input);
+  const branchId = asString(body.branchId, "branchId");
+  const amount = asMoney(body.amount, "amount");
+  const paymentMethod = asEnum(body.paymentMethod ?? "cash", "paymentMethod", ["cash", "card", "transfer"] as const);
+  const reference = optionalString(body.reference);
+
+  await assertBranchAccess(currentUser, branchId);
+  const customer = await getCustomerOrThrow(currentUser.organizationId, customerId);
+  if (Number(amount) > Number(customer.currentBalance)) {
+    throw new DomainError(400, "PAYMENT_EXCEEDS_BALANCE", "El pago excede el saldo del cliente.");
+  }
+  if ((paymentMethod === "card" || paymentMethod === "transfer") && !reference) {
+    throw new DomainError(
+      400,
+      paymentMethod === "card" ? "CARD_REFERENCE_REQUIRED" : "TRANSFER_REFERENCE_REQUIRED",
+      paymentMethod === "card" ? "Pago con tarjeta requiere referencia." : "Pago por transferencia requiere referencia.",
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let cashMovementId: string | null = null;
+
+    if (paymentMethod === "cash") {
+      const cashSession = await tx.cashSession.findFirst({
+        where: {
+          organizationId: currentUser.organizationId,
+          branchId,
+          status: "open",
+        },
+        orderBy: { openedAt: "desc" },
+      });
+      if (!cashSession) {
+        throw new DomainError(409, "NO_OPEN_CASH_SESSION", "No hay caja abierta para registrar el pago.");
+      }
+
+      const movement = await tx.cashMovement.create({
+        data: {
+          organizationId: currentUser.organizationId,
+          branchId,
+          cashSessionId: cashSession.id,
+          movementType: "cash_in",
+          amount,
+          description: `Pago de saldo de ${customer.name}`,
+          status: "recorded",
+          requestedByUserId: currentUser.id,
+        },
+      });
+      cashMovementId = movement.id;
+    }
+
+    const movement = await tx.customerBalanceMovement.create({
+      data: {
+        organizationId: currentUser.organizationId,
+        customerId,
+        movementType: "payment",
+        amount,
+        referenceType: paymentMethod,
+        referenceId: null,
+        createdByUserId: currentUser.id,
+      },
+    });
+
+    const updated = await tx.customer.update({
+      where: { id: customerId },
+      data: {
+        currentBalance: subtractMoney(customer.currentBalance, amount),
+        updatedAt: new Date(),
+      },
+    });
+
+    return {
+      data: {
+        customer: serializeCustomer(updated),
+        movement: serializeCustomerBalanceMovement(movement),
+        cashMovementId,
+      },
+    };
+  });
+}
+
 export async function getCustomerBalance(currentUser: AuthenticatedUser, customerId: string) {
   await assertPermission(currentUser.id, "customers.view");
   const customer = await getCustomerOrThrow(currentUser.organizationId, customerId);
@@ -342,6 +451,10 @@ function optionalMoney(value: unknown): string | null {
 
 function normalizeMoney(value: Prisma.Decimal | string | number) {
   return Number(value).toFixed(2);
+}
+
+function subtractMoney(left: Prisma.Decimal | string | number, right: Prisma.Decimal | string | number) {
+  return ((Math.round(Number(left) * 100) - Math.round(Number(right) * 100)) / 100).toFixed(2);
 }
 
 function serializeCustomer(customer: {

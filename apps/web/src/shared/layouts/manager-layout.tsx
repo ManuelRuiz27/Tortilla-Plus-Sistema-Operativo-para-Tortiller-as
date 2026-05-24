@@ -1,15 +1,11 @@
 import {
-  AlertTriangle,
-  BadgeDollarSign,
   BarChart3,
   Boxes,
   CreditCard,
-  FileText,
   LogOut,
-  Package,
   Route,
   Settings,
-  ShoppingBag,
+  ShoppingCart,
   Store,
   Users
 } from "lucide-react";
@@ -25,17 +21,13 @@ import { labelStatus } from "../utils/labels";
 
 const navItems = [
   { to: "/app/manager/dashboard", label: "Inicio", icon: BarChart3 },
-  { to: "/app/manager/cash", label: "Caja", icon: CreditCard },
-  { to: "/app/manager/withdrawals", label: "Retiros", icon: AlertTriangle },
-  { to: "/app/manager/inventory", label: "Inventario", icon: Boxes },
-  { to: "/app/manager/production", label: "Produccion", icon: Package },
-  { to: "/app/manager/products", label: "Productos", icon: ShoppingBag },
-  { to: "/app/manager/prices", label: "Precios", icon: BadgeDollarSign },
+  { to: "/app/pos/sale", label: "Ventas", icon: ShoppingCart },
   { to: "/app/manager/customers", label: "Clientes", icon: Users },
-  { to: "/app/manager/routes", label: "Rutas", icon: Route },
-  { to: "/app/manager/billing", label: "Facturas", icon: FileText },
+  { to: "/app/manager/routes", label: "Reparto", icon: Route },
+  { to: "/app/manager/inventory", label: "Inventario", icon: Boxes },
+  { to: "/app/manager/cash", label: "Caja", icon: CreditCard },
   { to: "/app/manager/reports", label: "Reportes", icon: BarChart3 },
-  { to: "/app/manager/settings", label: "Ajustes", icon: Settings }
+  { to: "/app/manager/settings", label: "Configuracion", icon: Settings }
 ];
 
 export function ManagerLayout() {

@@ -1,24 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../../shared/components/button";
 import type { PosPayment } from "../types/payment.types";
+import type { PosSelectedCustomer } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
-type PaymentMode = "cash" | "card" | "mixed";
+type PaymentMode = "cash" | "card" | "transfer" | "mixed" | "credit";
 
 type PaymentModalProps = {
   open: boolean;
   total: number;
   isSubmitting: boolean;
   error?: string | null;
+  selectedCustomer: PosSelectedCustomer | null;
   onClose: () => void;
-  onSubmit: (payload: { payments: PosPayment[]; changeAmount?: number }) => void;
+  onSubmit: (payload: { payments: PosPayment[]; changeAmount?: number; authorizationPin?: string }) => void;
 };
 
-export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubmit }: PaymentModalProps) {
+export function PaymentModal({ open, total, isSubmitting, error, selectedCustomer, onClose, onSubmit }: PaymentModalProps) {
   const [mode, setMode] = useState<PaymentMode>("cash");
   const [cashAmount, setCashAmount] = useState(String(total));
   const [cardAmount, setCardAmount] = useState(String(total));
+  const [transferAmount, setTransferAmount] = useState("0.00");
+  const [creditAmount, setCreditAmount] = useState("0.00");
   const [reference, setReference] = useState("");
+  const [transferReference, setTransferReference] = useState("");
+  const [authorizationPin, setAuthorizationPin] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setMode("cash");
+    setCashAmount(total.toFixed(2));
+    setCardAmount(total.toFixed(2));
+    setTransferAmount("0.00");
+    setCreditAmount("0.00");
+    setReference("");
+    setTransferReference("");
+    setAuthorizationPin("");
+  }, [open, total]);
 
   if (!open) {
     return null;
@@ -26,8 +47,13 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
 
   const cash = Number(cashAmount || 0);
   const card = Number(cardAmount || 0);
+  const transfer = Number(transferAmount || 0);
+  const credit = Number(creditAmount || 0);
   const cashChange = mode === "cash" ? Math.max(0, cash - total) : 0;
-  const mixedDifference = cash + card - total;
+  const mixedDifference = cash + card + transfer + credit - total;
+  const availableCredit = selectedCustomer ? selectedCustomer.creditLimit - selectedCustomer.currentBalance : 0;
+  const canUseCredit = Boolean(selectedCustomer?.creditEnabled);
+  const creditExceedsLimit = credit > Math.max(0, availableCredit);
 
   function submitCash() {
     if (cash < total) {
@@ -57,8 +83,41 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
     });
   }
 
+  function submitTransfer() {
+    if (!transferReference.trim()) {
+      return;
+    }
+
+    onSubmit({
+      payments: [
+        {
+          paymentMethod: "transfer",
+          amount: total.toFixed(2),
+          reference: transferReference.trim(),
+          provider: "transferencia"
+        }
+      ]
+    });
+  }
+
+  function submitCredit() {
+    if (!canUseCredit) {
+      return;
+    }
+
+    onSubmit({
+      payments: [{ paymentMethod: "credit", amount: total.toFixed(2) }],
+      authorizationPin: total > availableCredit ? authorizationPin.trim() || undefined : undefined
+    });
+  }
+
   function submitMixed() {
-    if (Math.abs(mixedDifference) > 0.009 || card > 0 && !reference.trim()) {
+    if (
+      Math.abs(mixedDifference) > 0.009 ||
+      card > 0 && !reference.trim() ||
+      transfer > 0 && !transferReference.trim() ||
+      credit > 0 && (!canUseCredit || creditExceedsLimit && !authorizationPin.trim())
+    ) {
       return;
     }
 
@@ -74,8 +133,19 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
         provider: "terminal-demo"
       });
     }
+    if (transfer > 0) {
+      payments.push({
+        paymentMethod: "transfer",
+        amount: transfer.toFixed(2),
+        reference: transferReference.trim(),
+        provider: "transferencia"
+      });
+    }
+    if (credit > 0) {
+      payments.push({ paymentMethod: "credit", amount: credit.toFixed(2) });
+    }
 
-    onSubmit({ payments });
+    onSubmit({ payments, authorizationPin: credit > availableCredit ? authorizationPin.trim() || undefined : undefined });
   }
 
   return (
@@ -91,15 +161,15 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
           </Button>
         </div>
 
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          {(["cash", "card", "mixed"] as PaymentMode[]).map((item) => (
+        <div className="mt-5 grid grid-cols-5 gap-2">
+          {(["cash", "card", "transfer", "mixed", "credit"] as PaymentMode[]).map((item) => (
             <Button
-              disabled={isSubmitting}
+              disabled={isSubmitting || item === "credit" && !canUseCredit}
               key={item}
               onClick={() => setMode(item)}
               variant={mode === item ? "primary" : "secondary"}
             >
-              {item === "cash" ? "Efectivo" : item === "card" ? "Tarjeta" : "Mixto"}
+              {item === "cash" ? "Efectivo" : item === "card" ? "Tarjeta" : item === "transfer" ? "Transfer." : item === "credit" ? "Fiado" : "Mixto"}
             </Button>
           ))}
         </div>
@@ -143,6 +213,50 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
             </>
           ) : null}
 
+          {mode === "transfer" ? (
+            <>
+              <label className="block text-sm font-semibold" htmlFor="transfer-reference">
+                Referencia de transferencia
+              </label>
+              <input
+                className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                disabled={isSubmitting}
+                id="transfer-reference"
+                onChange={(event) => setTransferReference(event.target.value)}
+                value={transferReference}
+              />
+              <Button className="w-full" disabled={!transferReference.trim() || isSubmitting} onClick={submitTransfer}>
+                Completar venta
+              </Button>
+            </>
+          ) : null}
+
+          {mode === "credit" ? (
+            <>
+              <div className="rounded-md bg-tp-soft p-3 text-sm">
+                <p className="font-semibold">{selectedCustomer?.name ?? "Sin cliente"}</p>
+                <p className="mt-1 text-tp-muted">Disponible: {formatMoney(Math.max(0, availableCredit))}</p>
+              </div>
+              {total > availableCredit ? (
+                <input
+                  className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                  disabled={isSubmitting}
+                  onChange={(event) => setAuthorizationPin(event.target.value)}
+                  placeholder="PIN de autorizacion"
+                  type="password"
+                  value={authorizationPin}
+                />
+              ) : null}
+              <Button
+                className="w-full"
+                disabled={!canUseCredit || total > availableCredit && !authorizationPin.trim() || isSubmitting}
+                onClick={submitCredit}
+              >
+                Completar venta
+              </Button>
+            </>
+          ) : null}
+
           {mode === "mixed" ? (
             <>
               <div className="grid grid-cols-2 gap-3">
@@ -172,6 +286,32 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
                     value={cardAmount}
                   />
                 </div>
+                <div>
+                  <label className="text-sm font-semibold" htmlFor="mixed-transfer">
+                    Transferencia
+                  </label>
+                  <input
+                    className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                    disabled={isSubmitting}
+                    id="mixed-transfer"
+                    inputMode="decimal"
+                    onChange={(event) => setTransferAmount(event.target.value)}
+                    value={transferAmount}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold" htmlFor="mixed-credit">
+                    Fiado
+                  </label>
+                  <input
+                    className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                    disabled={isSubmitting || !canUseCredit}
+                    id="mixed-credit"
+                    inputMode="decimal"
+                    onChange={(event) => setCreditAmount(event.target.value)}
+                    value={creditAmount}
+                  />
+                </div>
               </div>
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
@@ -180,6 +320,23 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
                 placeholder="Folio de tarjeta"
                 value={reference}
               />
+              <input
+                className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                disabled={isSubmitting || transfer <= 0}
+                onChange={(event) => setTransferReference(event.target.value)}
+                placeholder="Referencia de transferencia"
+                value={transferReference}
+              />
+              {credit > availableCredit ? (
+                <input
+                  className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                  disabled={isSubmitting}
+                  onChange={(event) => setAuthorizationPin(event.target.value)}
+                  placeholder="PIN de autorizacion para credito"
+                  type="password"
+                  value={authorizationPin}
+                />
+              ) : null}
               <p className="text-sm text-tp-muted">
                 {Math.abs(mixedDifference) < 0.009
                   ? "Pago completo"
@@ -189,7 +346,13 @@ export function PaymentModal({ open, total, isSubmitting, error, onClose, onSubm
               </p>
               <Button
                 className="w-full"
-                disabled={Math.abs(mixedDifference) > 0.009 || (card > 0 && !reference.trim()) || isSubmitting}
+                disabled={
+                  Math.abs(mixedDifference) > 0.009 ||
+                  card > 0 && !reference.trim() ||
+                  transfer > 0 && !transferReference.trim() ||
+                  credit > 0 && (!canUseCredit || creditExceedsLimit && !authorizationPin.trim()) ||
+                  isSubmitting
+                }
                 onClick={submitMixed}
               >
                 Completar venta

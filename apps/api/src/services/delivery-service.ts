@@ -1,13 +1,16 @@
 import { Prisma } from "@prisma/client";
 
 import { DomainError } from "../lib/domain-error.js";
+import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { runIdempotent } from "./idempotency-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
 const paymentMethods = ["cash", "card", "transfer", "credit"] as const;
 const inventoryConditions = ["sellable", "waste", "review_required"] as const;
+const deliveryOrderStatuses = ["pending", "prepared", "loaded", "in_route", "delivered", "partially_paid", "paid", "returned", "cancelled"] as const;
 
 export async function listDeliveryDrivers(currentUser: AuthenticatedUser) {
   await assertPermission(currentUser.id, "routes.manage");
@@ -62,7 +65,10 @@ export async function listDeliveryRoutes(currentUser: AuthenticatedUser, branchI
     },
     include: {
       driver: true,
-      deliveryRouteCustomerRoute: true,
+      deliveryRouteCustomerRoute: {
+        include: { customer: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
     orderBy: { name: "asc" },
   });
@@ -103,7 +109,10 @@ export async function createDeliveryRoute(currentUser: AuthenticatedUser, input:
     },
     include: {
       driver: true,
-      deliveryRouteCustomerRoute: true,
+      deliveryRouteCustomerRoute: {
+        include: { customer: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
   });
 
@@ -142,7 +151,115 @@ export async function assignCustomerToRoute(
   return { data: assignment };
 }
 
-export async function createDeliveryOrder(currentUser: AuthenticatedUser, input: unknown) {
+export async function removeCustomerFromRoute(
+  currentUser: AuthenticatedUser,
+  routeId: string,
+  customerId: string,
+) {
+  await assertFeatureAvailable(currentUser, "delivery_routes");
+  await assertPermission(currentUser.id, "routes.manage");
+  const route = await getRouteOrThrow(currentUser.organizationId, routeId);
+  await assertBranchAccess(currentUser, route.branchId);
+
+  await prisma.deliveryRouteCustomer.deleteMany({
+    where: {
+      routeId,
+      customerId,
+      route: { organizationId: currentUser.organizationId },
+    },
+  });
+
+  return { data: { routeId, customerId } };
+}
+
+export async function reorderRouteCustomers(
+  currentUser: AuthenticatedUser,
+  routeId: string,
+  input: unknown,
+) {
+  await assertFeatureAvailable(currentUser, "delivery_routes");
+  await assertPermission(currentUser.id, "routes.manage");
+  const route = await getRouteOrThrow(currentUser.organizationId, routeId);
+  await assertBranchAccess(currentUser, route.branchId);
+  const assignments = asRouteCustomerOrder(asRecord(input).customers);
+
+  await prisma.$transaction(async (tx) => {
+    for (const assignment of assignments) {
+      await tx.deliveryRouteCustomer.updateMany({
+        where: {
+          routeId,
+          customerId: assignment.customerId,
+        },
+        data: { sortOrder: assignment.sortOrder },
+      });
+    }
+  });
+
+  return { data: { routeId, customers: assignments } };
+}
+
+export async function listDeliveryOrders(currentUser: AuthenticatedUser, filters: {
+  branchId: string | null;
+  routeId: string | null;
+  driverId: string | null;
+  customerId: string | null;
+  status: string | null;
+  date: string | null;
+}) {
+  await assertFeatureAvailable(currentUser, "delivery_routes");
+  await assertPermission(currentUser.id, "routes.manage");
+  const branchId = filters.branchId ? filters.branchId.trim() : "";
+  if (!branchId) {
+    throw new DomainError(400, "INVALID_REQUEST", "Query requerido: branchId.");
+  }
+  await assertBranchAccess(currentUser, branchId);
+
+  const createdAt = filters.date
+    ? {
+        gte: new Date(`${filters.date}T00:00:00.000Z`),
+        lt: new Date(`${filters.date}T23:59:59.999Z`),
+      }
+    : undefined;
+
+  const status = filters.status
+    ? asEnum(filters.status, "status", deliveryOrderStatuses)
+    : undefined;
+
+  const orders = await prisma.deliveryOrder.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId,
+      routeId: filters.routeId ?? undefined,
+      driverId: filters.driverId ?? undefined,
+      customerId: filters.customerId ?? undefined,
+      status,
+      createdAt,
+    },
+    include: {
+      customer: true,
+      deliveryOrderItemDeliveryOrder: { include: { product: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { data: orders.map(serializeOrder) };
+}
+
+export async function createDeliveryOrder(
+  currentUser: AuthenticatedUser,
+  input: unknown,
+  idempotencyKey?: string | null,
+) {
+  return runIdempotent(
+    currentUser.organizationId,
+    "delivery_orders.create",
+    idempotencyKey,
+    input,
+    () => createDeliveryOrderOnce(currentUser, input),
+  );
+}
+
+async function createDeliveryOrderOnce(currentUser: AuthenticatedUser, input: unknown) {
   await assertFeatureAvailable(currentUser, "delivery_routes");
   await assertPermission(currentUser.id, "routes.manage");
   const body = asRecord(input);
@@ -158,6 +275,17 @@ export async function createDeliveryOrder(currentUser: AuthenticatedUser, input:
     const route = await getRouteOrThrow(currentUser.organizationId, routeId);
     if (route.branchId !== branchId) {
       throw new DomainError(400, "INVALID_TENANT_REFERENCE", "Ruta invalida para la sucursal.");
+    }
+    const assignment = await prisma.deliveryRouteCustomer.findUnique({
+      where: {
+        routeId_customerId: {
+          routeId,
+          customerId,
+        },
+      },
+    });
+    if (!assignment) {
+      throw new DomainError(400, "CUSTOMER_NOT_ASSIGNED_TO_ROUTE", "Cliente no asignado a la ruta.");
     }
   }
   if (driverId) {
@@ -179,15 +307,15 @@ export async function createDeliveryOrder(currentUser: AuthenticatedUser, input:
 
     let totalCents = 0;
     for (const item of items) {
-      const price = await resolveBranchPrice(tx, currentUser.organizationId, branchId, item.productId);
-      const itemTotal = multiplyMoney(price, item.quantity);
+      const price = await resolveDeliveryPrice(tx, currentUser.organizationId, branchId, customerId, item.productId);
+      const itemTotal = multiplyMoney(price.price, item.quantity);
       totalCents += toCents(itemTotal);
       await tx.deliveryOrderItem.create({
         data: {
           deliveryOrderId: order.id,
           productId: item.productId,
           quantityLoaded: item.quantity,
-          unitPrice: price,
+          unitPrice: price.price,
           total: itemTotal,
         },
       });
@@ -200,6 +328,7 @@ export async function createDeliveryOrder(currentUser: AuthenticatedUser, input:
         amountPending: centsToMoney(totalCents),
       },
       include: {
+        customer: true,
         deliveryOrderItemDeliveryOrder: { include: { product: true } },
       },
     });
@@ -235,7 +364,7 @@ export async function loadDeliveryOrder(currentUser: AuthenticatedUser, orderId:
     const loaded = await tx.deliveryOrder.update({
       where: { id: order.id },
       data: { status: "loaded", loadedAt: new Date(), updatedAt: new Date() },
-      include: { deliveryOrderItemDeliveryOrder: { include: { product: true } } },
+      include: { customer: true, deliveryOrderItemDeliveryOrder: { include: { product: true } } },
     });
 
     await audit(tx, currentUser, order.branchId, "delivery_order_loaded", "delivery_order", order.id, {
@@ -301,7 +430,7 @@ export async function deliverDeliveryOrder(currentUser: AuthenticatedUser, order
     const deliveredOrder = await tx.deliveryOrder.update({
       where: { id: fullOrder.id },
       data: { status: "delivered", deliveredAt: new Date(), closedAt: new Date(), updatedAt: new Date() },
-      include: { deliveryOrderItemDeliveryOrder: { include: { product: true } } },
+      include: { customer: true, deliveryOrderItemDeliveryOrder: { include: { product: true } } },
     });
 
     await audit(tx, currentUser, order.branchId, "delivery_order_delivered", "delivery_order", order.id, serializeOrder(deliveredOrder));
@@ -309,7 +438,22 @@ export async function deliverDeliveryOrder(currentUser: AuthenticatedUser, order
   });
 }
 
-export async function recordDeliveryPayment(currentUser: AuthenticatedUser, orderId: string, input: unknown) {
+export async function recordDeliveryPayment(
+  currentUser: AuthenticatedUser,
+  orderId: string,
+  input: unknown,
+  idempotencyKey?: string | null,
+) {
+  return runIdempotent(
+    currentUser.organizationId,
+    `delivery_orders.payment.${orderId}`,
+    idempotencyKey,
+    { orderId, input },
+    () => recordDeliveryPaymentOnce(currentUser, orderId, input),
+  );
+}
+
+async function recordDeliveryPaymentOnce(currentUser: AuthenticatedUser, orderId: string, input: unknown) {
   await assertFeatureAvailable(currentUser, "delivery_routes");
   await assertPermission(currentUser.id, "routes.manage");
   const body = asRecord(input);
@@ -317,8 +461,26 @@ export async function recordDeliveryPayment(currentUser: AuthenticatedUser, orde
   await assertBranchAccess(currentUser, order.branchId);
   const amount = asMoney(body.amount, "amount");
   const paymentMethod = asEnum(body.paymentMethod ?? "cash", "paymentMethod", paymentMethods);
+  const reference = optionalString(body.reference);
+  const provider = optionalString(body.provider);
+
+  if ((paymentMethod === "card" || paymentMethod === "transfer") && !reference) {
+    throw new DomainError(
+      400,
+      paymentMethod === "card" ? "CARD_REFERENCE_REQUIRED" : "TRANSFER_REFERENCE_REQUIRED",
+      paymentMethod === "card" ? "Pago con tarjeta requiere referencia." : "Pago por transferencia requiere referencia.",
+    );
+  }
+
+  if (toCents(amount) > toCents(order.amountPending)) {
+    throw new DomainError(400, "PAYMENT_EXCEEDS_PENDING", "El pago excede el saldo pendiente.");
+  }
 
   return prisma.$transaction(async (tx) => {
+    if (paymentMethod === "credit") {
+      await assertDeliveryCreditPayment(tx, currentUser, order, amount, body);
+    }
+
     const payment = await tx.deliveryPayment.create({
       data: {
         organizationId: currentUser.organizationId,
@@ -328,10 +490,34 @@ export async function recordDeliveryPayment(currentUser: AuthenticatedUser, orde
         customerId: order.customerId,
         amount,
         paymentMethod,
+        reference,
+        provider,
         status: "completed",
         collectedAt: new Date(),
       },
     });
+
+    if (paymentMethod === "credit") {
+      await tx.customerBalanceMovement.create({
+        data: {
+          organizationId: currentUser.organizationId,
+          customerId: order.customerId,
+          movementType: "charge",
+          amount,
+          referenceType: "delivery_order",
+          referenceId: order.id,
+          createdByUserId: currentUser.id,
+        },
+      });
+      await tx.customer.update({
+        where: { id: order.customerId },
+        data: {
+          currentBalance: addMoney((await tx.customer.findUniqueOrThrow({ where: { id: order.customerId } })).currentBalance, amount),
+          updatedAt: new Date(),
+        },
+      });
+    }
+
     const collected = addMoney(order.amountCollected, amount);
     const pending = subtractMoney(order.total, collected);
     const status = toCents(pending) <= 0 ? "paid" : "partially_paid";
@@ -343,7 +529,7 @@ export async function recordDeliveryPayment(currentUser: AuthenticatedUser, orde
         status,
         updatedAt: new Date(),
       },
-      include: { deliveryOrderItemDeliveryOrder: { include: { product: true } } },
+      include: { customer: true, deliveryOrderItemDeliveryOrder: { include: { product: true } } },
     });
 
     await audit(tx, currentUser, order.branchId, "delivery_payment_recorded", "delivery_payment", payment.id, serializeDeliveryPayment(payment));
@@ -463,6 +649,38 @@ export async function createDeliverySettlement(currentUser: AuthenticatedUser, i
   return { data: serializeSettlement(settlement) };
 }
 
+export async function listDeliverySettlements(currentUser: AuthenticatedUser, filters: {
+  branchId: string | null;
+  routeId: string | null;
+  driverId: string | null;
+  status: string | null;
+}) {
+  await assertFeatureAvailable(currentUser, "delivery_routes");
+  await assertPermission(currentUser.id, "routes.manage");
+  const branchId = filters.branchId ? filters.branchId.trim() : "";
+  if (!branchId) {
+    throw new DomainError(400, "INVALID_REQUEST", "Query requerido: branchId.");
+  }
+
+  await assertBranchAccess(currentUser, branchId);
+  const status = filters.status
+    ? asEnum(filters.status, "status", ["open", "closed", "cancelled"] as const)
+    : undefined;
+  const settlements = await prisma.deliverySettlement.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId,
+      routeId: filters.routeId ?? undefined,
+      driverId: filters.driverId ?? undefined,
+      status,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  return { data: settlements.map(serializeSettlement) };
+}
+
 export async function closeDeliverySettlement(currentUser: AuthenticatedUser, settlementId: string, input: unknown) {
   await assertFeatureAvailable(currentUser, "delivery_routes");
   await assertPermission(currentUser.id, "routes.manage");
@@ -475,21 +693,64 @@ export async function closeDeliverySettlement(currentUser: AuthenticatedUser, se
     throw new DomainError(409, "INVALID_DELIVERY_STATUS", "Liquidacion no abierta.");
   }
 
-  const closed = await prisma.deliverySettlement.update({
-    where: { id: settlement.id },
-    data: {
-      status: "closed",
-      deliveredCashAmount,
-      differenceAmount: subtractMoney(deliveredCashAmount, settlement.expectedCashAmount),
-      receivedByUserId: currentUser.id,
-      closedAt: new Date(),
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const payments = await tx.deliveryPayment.findMany({
+      where: {
+        organizationId: currentUser.organizationId,
+        branchId: settlement.branchId,
+        driverId: settlement.driverId ?? undefined,
+        paymentMethod: "cash",
+        status: "completed",
+        deliverySettlementId: null,
+        deliveryOrder: {
+          routeId: settlement.routeId ?? undefined,
+        },
+      },
+    });
+    const expectedCashAmount = centsToMoney(payments.reduce((sum, payment) => sum + toCents(payment.amount), 0));
 
-  return { data: serializeSettlement(closed) };
+    const closed = await tx.deliverySettlement.update({
+      where: { id: settlement.id },
+      data: {
+        status: "closed",
+        expectedCashAmount,
+        deliveredCashAmount,
+        differenceAmount: subtractMoney(deliveredCashAmount, expectedCashAmount),
+        receivedByUserId: currentUser.id,
+        closedAt: new Date(),
+      },
+    });
+
+    await tx.deliveryPayment.updateMany({
+      where: {
+        id: { in: payments.map((payment) => payment.id) },
+        deliverySettlementId: null,
+      },
+      data: {
+        deliverySettlementId: settlement.id,
+        settledAt: new Date(),
+      },
+    });
+
+    return { data: serializeSettlement(closed) };
+  });
 }
 
-export async function depositSettlementToCash(currentUser: AuthenticatedUser, settlementId: string) {
+export async function depositSettlementToCash(
+  currentUser: AuthenticatedUser,
+  settlementId: string,
+  idempotencyKey?: string | null,
+) {
+  return runIdempotent(
+    currentUser.organizationId,
+    `delivery_settlements.deposit.${settlementId}`,
+    idempotencyKey,
+    { settlementId },
+    () => depositSettlementToCashOnce(currentUser, settlementId),
+  );
+}
+
+async function depositSettlementToCashOnce(currentUser: AuthenticatedUser, settlementId: string) {
   await assertFeatureAvailable(currentUser, "delivery_routes");
   await assertPermission(currentUser.id, "routes.manage");
   const settlement = await getSettlementOrThrow(currentUser.organizationId, settlementId);
@@ -497,6 +758,10 @@ export async function depositSettlementToCash(currentUser: AuthenticatedUser, se
 
   if (settlement.status !== "closed") {
     throw new DomainError(409, "INVALID_DELIVERY_STATUS", "Liquidacion debe estar cerrada.");
+  }
+
+  if (settlement.cashMovementId) {
+    throw new DomainError(409, "SETTLEMENT_ALREADY_DEPOSITED", "Liquidacion ya depositada.");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -528,7 +793,7 @@ export async function depositSettlementToCash(currentUser: AuthenticatedUser, se
 
     const updated = await tx.deliverySettlement.update({
       where: { id: settlement.id },
-      data: { cashSessionId: cashSession.id },
+      data: { cashSessionId: cashSession.id, cashMovementId: movement.id },
     });
 
     await audit(tx, currentUser, settlement.branchId, "delivery_settlement_deposited_to_cash", "delivery_settlement", settlement.id, {
@@ -559,6 +824,51 @@ async function assertDeliveryOrderAction(
   return order;
 }
 
+async function assertDeliveryCreditPayment(
+  tx: Prisma.TransactionClient,
+  currentUser: AuthenticatedUser,
+  order: {
+    customerId: string;
+    organizationId: string;
+  },
+  amount: string,
+  body: Record<string, unknown>,
+) {
+  await assertFeatureAvailable(currentUser, "customer_credit");
+  const customer = await tx.customer.findFirstOrThrow({
+    where: {
+      id: order.customerId,
+      organizationId: order.organizationId,
+    },
+  });
+
+  if (!customer.creditEnabled) {
+    throw new DomainError(400, "CUSTOMER_CREDIT_DISABLED", "Cliente sin credito habilitado.");
+  }
+
+  const nextBalance = toCents(customer.currentBalance) + toCents(amount);
+  const limit = toCents(customer.creditLimit);
+
+  if (nextBalance > limit) {
+    await assertPermission(currentUser.id, "customers.manage");
+    const authorizationPin = optionalString(body.authorizationPin);
+    if (!authorizationPin) {
+      throw new DomainError(403, "CUSTOMER_CREDIT_LIMIT_EXCEEDED", "Credito excede limite.");
+    }
+    await assertValidPin(currentUser.id, authorizationPin);
+  }
+}
+
+async function assertValidPin(userId: string, pin: string) {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+  });
+
+  if (!(await verifySecret(pin, user.pinHash))) {
+    throw new DomainError(401, "INVALID_PIN", "PIN invalido.");
+  }
+}
+
 async function updateOrderStatus(
   currentUser: AuthenticatedUser,
   orderId: string,
@@ -568,7 +878,7 @@ async function updateOrderStatus(
   const updated = await prisma.deliveryOrder.update({
     where: { id: orderId },
     data: { status, ...data },
-    include: { deliveryOrderItemDeliveryOrder: { include: { product: true } } },
+    include: { customer: true, deliveryOrderItemDeliveryOrder: { include: { product: true } } },
   });
   return { data: serializeOrder(updated) };
 }
@@ -703,18 +1013,6 @@ async function calculateExpectedCash(
   driverId: string | null,
   routeId: string | null,
 ) {
-  const lastClosedSettlement = await prisma.deliverySettlement.findFirst({
-    where: {
-      organizationId,
-      branchId,
-      driverId: driverId ?? undefined,
-      routeId: routeId ?? undefined,
-      status: "closed",
-      closedAt: { not: null },
-    },
-    orderBy: { closedAt: "desc" },
-  });
-
   const payments = await prisma.deliveryPayment.findMany({
     where: {
       organizationId,
@@ -722,7 +1020,7 @@ async function calculateExpectedCash(
       driverId: driverId ?? undefined,
       paymentMethod: "cash",
       status: "completed",
-      collectedAt: lastClosedSettlement?.closedAt ? { gt: lastClosedSettlement.closedAt } : undefined,
+      deliverySettlementId: null,
       deliveryOrder: {
         routeId: routeId ?? undefined,
       },
@@ -732,16 +1030,52 @@ async function calculateExpectedCash(
   return centsToMoney(total);
 }
 
-async function resolveBranchPrice(
+async function resolveDeliveryPrice(
   tx: Prisma.TransactionClient,
   organizationId: string,
   branchId: string,
+  customerId: string,
   productId: string,
 ) {
   const product = await tx.product.findFirstOrThrow({
     where: { id: productId, organizationId },
   });
   const saleMode = product.productType === "package" ? "by_package" : product.unit === "piece" ? "by_unit" : "by_kg";
+
+  const customerPrice = await tx.customerProductPrice.findFirst({
+    where: {
+      organizationId,
+      branchId,
+      customerId,
+      productId,
+      saleMode,
+      status: "active",
+      activeTo: null,
+    },
+    orderBy: { activeFrom: "desc" },
+  });
+
+  if (customerPrice) {
+    return { price: normalizeMoney(customerPrice.price), priceSource: "customer" as const };
+  }
+
+  const globalCustomerPrice = await tx.customerProductPrice.findFirst({
+    where: {
+      organizationId,
+      branchId: null,
+      customerId,
+      productId,
+      saleMode,
+      status: "active",
+      activeTo: null,
+    },
+    orderBy: { activeFrom: "desc" },
+  });
+
+  if (globalCustomerPrice) {
+    return { price: normalizeMoney(globalCustomerPrice.price), priceSource: "customer" as const };
+  }
+
   const price = await tx.branchProductPrice.findFirst({
     where: { organizationId, branchId, productId, saleMode, status: "active", activeTo: null },
     orderBy: { activeFrom: "desc" },
@@ -749,7 +1083,7 @@ async function resolveBranchPrice(
   if (!price) {
     throw new DomainError(400, "PRICE_NOT_FOUND", "Precio no configurado.");
   }
-  return normalizeMoney(price.price);
+  return { price: normalizeMoney(price.price), priceSource: "branch" as const };
 }
 
 async function getOrderOrThrow(organizationId: string, orderId: string) {
@@ -874,6 +1208,20 @@ function asOrderItems(value: unknown) {
   });
 }
 
+function asRouteCustomerOrder(value: unknown) {
+  if (!Array.isArray(value)) {
+    throw new DomainError(400, "INVALID_REQUEST", "Clientes requeridos.");
+  }
+
+  return value.map((item) => {
+    const body = asRecord(item);
+    return {
+      customerId: asString(body.customerId, "customers.customerId"),
+      sortOrder: optionalNumber(body.sortOrder) ?? 0,
+    };
+  });
+}
+
 function asDeliveredItems(value: unknown) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new DomainError(400, "INVALID_REQUEST", "Items invalidos.");
@@ -950,7 +1298,21 @@ function serializeRoute(route: {
   name: string;
   status: string;
   driver?: { id: string; name: string } | null;
-  deliveryRouteCustomerRoute?: Array<{ customerId: string; sortOrder: number }>;
+  deliveryRouteCustomerRoute?: Array<{
+    id?: string;
+    customerId: string;
+    sortOrder: number;
+    customer?: {
+      id: string;
+      name: string;
+      customerType: string;
+      phone: string | null;
+      creditEnabled: boolean;
+      creditLimit: Prisma.Decimal;
+      currentBalance: Prisma.Decimal;
+      status: string;
+    };
+  }>;
 }) {
   return {
     id: route.id,
@@ -960,7 +1322,23 @@ function serializeRoute(route: {
     driver: route.driver ? { id: route.driver.id, name: route.driver.name } : null,
     name: route.name,
     status: route.status,
-    customers: route.deliveryRouteCustomerRoute ?? [],
+    customers: (route.deliveryRouteCustomerRoute ?? []).map((assignment) => ({
+      id: assignment.id,
+      customerId: assignment.customerId,
+      sortOrder: assignment.sortOrder,
+      customer: assignment.customer
+        ? {
+            id: assignment.customer.id,
+            name: assignment.customer.name,
+            customerType: assignment.customer.customerType,
+            phone: assignment.customer.phone,
+            creditEnabled: assignment.customer.creditEnabled,
+            creditLimit: normalizeMoney(assignment.customer.creditLimit),
+            currentBalance: normalizeMoney(assignment.customer.currentBalance),
+            status: assignment.customer.status,
+          }
+        : null,
+    })),
   };
 }
 
@@ -975,6 +1353,7 @@ function serializeOrder(order: {
   total: Prisma.Decimal;
   amountCollected: Prisma.Decimal;
   amountPending: Prisma.Decimal;
+  customer?: { id: string; name: string } | null;
   deliveryOrderItemDeliveryOrder?: Array<{
     id: string;
     productId: string;
@@ -993,6 +1372,7 @@ function serializeOrder(order: {
     routeId: order.routeId,
     driverId: order.driverId,
     customerId: order.customerId,
+    customer: order.customer ? { id: order.customer.id, name: order.customer.name } : null,
     status: order.status,
     total: normalizeMoney(order.total),
     amountCollected: normalizeMoney(order.amountCollected),
@@ -1017,9 +1397,13 @@ function serializeDeliveryPayment(payment: {
   deliveryOrderId: string;
   driverId: string | null;
   customerId: string;
+  deliverySettlementId?: string | null;
   amount: Prisma.Decimal;
+  reference?: string | null;
+  provider?: string | null;
   paymentMethod: string;
   status: string;
+  settledAt?: Date | null;
 }) {
   return {
     id: payment.id,
@@ -1028,9 +1412,13 @@ function serializeDeliveryPayment(payment: {
     deliveryOrderId: payment.deliveryOrderId,
     driverId: payment.driverId,
     customerId: payment.customerId,
+    deliverySettlementId: payment.deliverySettlementId ?? null,
     amount: normalizeMoney(payment.amount),
+    reference: payment.reference ?? null,
+    provider: payment.provider ?? null,
     paymentMethod: payment.paymentMethod,
     status: payment.status,
+    settledAt: payment.settledAt ?? null,
   };
 }
 
@@ -1082,6 +1470,7 @@ function serializeSettlement(settlement: {
   differenceAmount: Prisma.Decimal;
   receivedByUserId: string | null;
   cashSessionId: string | null;
+  cashMovementId?: string | null;
 }) {
   return {
     id: settlement.id,
@@ -1095,6 +1484,7 @@ function serializeSettlement(settlement: {
     differenceAmount: normalizeMoney(settlement.differenceAmount),
     receivedByUserId: settlement.receivedByUserId,
     cashSessionId: settlement.cashSessionId,
+    cashMovementId: settlement.cashMovementId ?? null,
   };
 }
 

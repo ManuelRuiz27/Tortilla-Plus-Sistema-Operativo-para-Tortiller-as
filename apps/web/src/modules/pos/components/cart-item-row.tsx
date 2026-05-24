@@ -16,8 +16,11 @@ export function CartItemRow({ item, onRemove }: CartItemRowProps) {
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold">{item.productName}</p>
         <p className="mt-1 text-xs text-tp-muted">
-          {quantityLabel} · {formatMoney(item.unitPrice)}
+          {quantityLabel} - {formatMoney(item.unitPrice)}
         </p>
+        {item.priceSourceLabel ? (
+          <p className="mt-1 text-xs font-semibold text-tp-secondary">{item.priceSourceLabel}</p>
+        ) : null}
       </div>
       <div className="text-right">
         <p className="text-sm font-semibold">{formatMoney(item.total)}</p>

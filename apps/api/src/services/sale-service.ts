@@ -4,6 +4,7 @@ import { DomainError } from "../lib/domain-error.js";
 import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { runIdempotent } from "./idempotency-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
@@ -59,6 +60,75 @@ export async function createSale(currentUser: AuthenticatedUser, input: unknown)
 
     return { data: await getSalePayload(tx, currentUser.organizationId, sale.id) };
   });
+}
+
+export async function quoteSale(currentUser: AuthenticatedUser, input: unknown) {
+  await assertFeatureAvailable(currentUser, "pos_basic");
+  await assertPermission(currentUser.id, "sales.create");
+  const body = asRecord(input);
+  const branchId = asString(body.branchId, "branchId");
+  const customerId = optionalString(body.customerId);
+  const items = asQuoteItems(body.items);
+
+  await assertBranchAccess(currentUser, branchId);
+  if (customerId) {
+    await assertCustomer(prisma, currentUser.organizationId, customerId);
+  }
+
+  const quotedItems = [];
+  let subtotalCents = 0;
+
+  for (const item of items) {
+    const product = await prisma.product.findFirst({
+      where: {
+        id: item.productId,
+        organizationId: currentUser.organizationId,
+        status: "active",
+        isSellable: true,
+      },
+    });
+
+    if (!product) {
+      throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
+    }
+
+    const price = await resolveBranchPrice(
+      prisma,
+      currentUser.organizationId,
+      branchId,
+      product.id,
+      item.saleMode,
+      customerId,
+    );
+    const calculation = calculateSaleItem({
+      saleMode: item.saleMode,
+      inputQuantityOrAmount: item.quantity,
+      unitPrice: price.price,
+    });
+
+    subtotalCents += toCents(calculation.total);
+    quotedItems.push({
+      productId: product.id,
+      productName: product.name,
+      productType: product.productType,
+      saleMode: item.saleMode,
+      quantity: calculation.quantity,
+      unit: product.unit,
+      unitPrice: calculation.unitPrice,
+      priceSource: price.priceSource,
+      total: calculation.total,
+    });
+  }
+
+  return {
+    data: {
+      branchId,
+      customerId,
+      items: quotedItems,
+      subtotal: (subtotalCents / 100).toFixed(2),
+      total: (subtotalCents / 100).toFixed(2),
+    },
+  };
 }
 
 export async function addSaleItem(currentUser: AuthenticatedUser, saleId: string, input: unknown) {
@@ -138,7 +208,22 @@ export async function addSaleItem(currentUser: AuthenticatedUser, saleId: string
   });
 }
 
-export async function completeSale(currentUser: AuthenticatedUser, saleId: string, input: unknown) {
+export async function completeSale(
+  currentUser: AuthenticatedUser,
+  saleId: string,
+  input: unknown,
+  idempotencyKey?: string | null,
+) {
+  return runIdempotent(
+    currentUser.organizationId,
+    `sales.complete.${saleId}`,
+    idempotencyKey,
+    { saleId, input },
+    () => completeSaleOnce(currentUser, saleId, input),
+  );
+}
+
+async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, input: unknown) {
   await assertFeatureAvailable(currentUser, "pos_basic");
   await assertPermission(currentUser.id, "payments.create");
   const body = asRecord(input);
@@ -856,7 +941,7 @@ async function nextSaleNumber(tx: Prisma.TransactionClient, branchId: string) {
 }
 
 async function assertCustomer(
-  tx: Prisma.TransactionClient,
+  tx: typeof prisma | Prisma.TransactionClient,
   organizationId: string,
   customerId: string,
 ) {
@@ -874,7 +959,7 @@ async function assertCustomer(
 }
 
 async function resolveBranchPrice(
-  tx: Prisma.TransactionClient,
+  tx: typeof prisma | Prisma.TransactionClient,
   organizationId: string,
   branchId: string,
   productId: string,
@@ -897,7 +982,7 @@ async function resolveBranchPrice(
     });
 
     if (customerPrice) {
-      return customerPrice;
+      return { price: normalizeMoney(customerPrice.price), priceSource: "customer" as const };
     }
   }
 
@@ -919,7 +1004,7 @@ async function resolveBranchPrice(
     throw new DomainError(400, "PRICE_NOT_FOUND", "Precio no configurado.");
   }
 
-  return price;
+  return { price: normalizeMoney(price.price), priceSource: "branch" as const };
 }
 
 async function assertCreditPayments(
@@ -1082,11 +1167,31 @@ function asPayments(value: unknown) {
       throw new DomainError(400, "CARD_REFERENCE_REQUIRED", "Pago con tarjeta requiere referencia.");
     }
 
+    if (paymentMethod === "transfer" && !reference) {
+      throw new DomainError(400, "TRANSFER_REFERENCE_REQUIRED", "Pago por transferencia requiere referencia.");
+    }
+
     return {
       paymentMethod,
       amount,
       reference,
       provider,
+    };
+  });
+}
+
+function asQuoteItems(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new DomainError(400, "INVALID_REQUEST", "Items requeridos.");
+  }
+
+  return value.map((item) => {
+    const body = asRecord(item);
+    const saleMode = asEnum(body.saleMode, "items.saleMode", saleModes);
+    return {
+      productId: asString(body.productId, "items.productId"),
+      saleMode,
+      quantity: asQuantity(body.quantity ?? body.amount, saleMode === "by_amount" ? "items.amount" : "items.quantity"),
     };
   });
 }

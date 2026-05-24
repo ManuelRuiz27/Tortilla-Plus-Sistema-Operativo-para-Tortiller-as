@@ -70,13 +70,23 @@ export function AppRouter() {
       >
         <Route index element={<Navigate replace to="/app/manager/dashboard" />} />
         <Route element={<DashboardPage />} path="dashboard" />
+        <Route element={<Navigate replace to="/app/pos/sale" />} path="sales" />
+        <Route element={<Navigate replace to="/app/manager/reports" />} path="sales/history" />
+        <Route element={<Navigate replace to="/app/manager/reports" />} path="sales/returns" />
         <Route element={<CashPage />} path="cash" />
+        <Route element={<Navigate replace to="/app/manager/withdrawals" />} path="cash/withdrawals" />
+        <Route element={<Navigate replace to="/app/manager/cash" />} path="cash/closing" />
         <Route element={<WithdrawalsPage />} path="withdrawals" />
         <Route element={<InventoryPage />} path="inventory" />
+        <Route element={<ProductsPage />} path="inventory/products" />
+        <Route element={<PricesPage />} path="inventory/prices" />
+        <Route element={<ProductionPage />} path="inventory/production" />
+        <Route element={<InventoryPage />} path="inventory/waste" />
         <Route element={<ProductionPage />} path="production" />
         <Route element={<ProductsPage />} path="products" />
         <Route element={<PricesPage />} path="prices" />
         <Route element={<CustomersPage />} path="customers" />
+        <Route element={<Navigate replace to="/app/manager/customers" />} path="customers/balances" />
         <Route element={<CustomerDetailPage />} path="customers/:customerId" />
         <Route
           element={
@@ -89,11 +99,29 @@ export function AppRouter() {
         <Route
           element={
             <FeatureGuard feature="delivery_routes" label="Rutas de reparto">
+              <RoutesPage />
+            </FeatureGuard>
+          }
+          path="delivery/routes"
+        />
+        <Route
+          element={
+            <FeatureGuard feature="delivery_routes" label="Rutas de reparto">
               <RouteDetailPage />
             </FeatureGuard>
           }
           path="routes/:routeId"
         />
+        <Route
+          element={
+            <FeatureGuard feature="delivery_routes" label="Rutas de reparto">
+              <RouteDetailPage />
+            </FeatureGuard>
+          }
+          path="delivery/routes/:routeId"
+        />
+        <Route element={<Navigate replace to="/app/manager/routes" />} path="delivery/orders" />
+        <Route element={<Navigate replace to="/app/manager/routes" />} path="delivery/settlements" />
         <Route
           element={
             <FeatureGuard feature="billing_cfdi" label="Facturación CFDI">

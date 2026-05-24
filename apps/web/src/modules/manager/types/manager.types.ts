@@ -108,7 +108,14 @@ export type DeliveryRoute = {
   driverId?: string | null;
   driverName?: string | null;
   customerCount: number;
+  customers: DeliveryRouteCustomer[];
   status: "active" | "inactive";
+};
+
+export type DeliveryRouteCustomer = {
+  customerId: string;
+  sortOrder: number;
+  customer: ManagerCustomer | null;
 };
 
 export type DeliveryOrderItem = {

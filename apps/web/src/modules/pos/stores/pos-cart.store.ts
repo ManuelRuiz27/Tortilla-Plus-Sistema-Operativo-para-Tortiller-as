@@ -1,16 +1,20 @@
 import { create } from "zustand";
-import type { PosCartItem } from "../types/pos.types";
+import type { PosCartItem, PosSelectedCustomer } from "../types/pos.types";
 
 type PosCartStore = {
   items: PosCartItem[];
   subtotal: number;
   total: number;
   saleDraftId: string | null;
+  selectedCustomer: PosSelectedCustomer | null;
   addItem: (item: PosCartItem) => void;
   removeItem: (localId: string) => void;
+  setItems: (items: PosCartItem[]) => void;
   clearCart: () => void;
   setSaleDraftId: (saleId: string) => void;
   clearSaleDraftId: () => void;
+  setSelectedCustomer: (customer: PosSelectedCustomer | null) => void;
+  clearSelectedCustomer: () => void;
 };
 
 function calculateTotal(items: PosCartItem[]): number {
@@ -22,6 +26,7 @@ export const usePosCartStore = create<PosCartStore>()((set) => ({
   subtotal: 0,
   total: 0,
   saleDraftId: null,
+  selectedCustomer: null,
   addItem: (item) =>
     set((state) => {
       const items = [...state.items, item];
@@ -34,7 +39,13 @@ export const usePosCartStore = create<PosCartStore>()((set) => ({
       const total = calculateTotal(items);
       return { items, subtotal: total, total };
     }),
+  setItems: (items) => {
+    const total = calculateTotal(items);
+    set({ items, subtotal: total, total });
+  },
   clearCart: () => set({ items: [], subtotal: 0, total: 0, saleDraftId: null }),
   setSaleDraftId: (saleDraftId) => set({ saleDraftId }),
-  clearSaleDraftId: () => set({ saleDraftId: null })
+  clearSaleDraftId: () => set({ saleDraftId: null }),
+  setSelectedCustomer: (selectedCustomer) => set({ selectedCustomer }),
+  clearSelectedCustomer: () => set({ selectedCustomer: null })
 }));

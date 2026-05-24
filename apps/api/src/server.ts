@@ -47,12 +47,15 @@ import {
   createSaleReturn,
   getSale,
   listSales,
+  quoteSale,
 } from "./services/sale-service.js";
 import {
   configureCustomerCredit,
   createCustomer,
   getCustomerBalance,
+  listCustomerPrices,
   listCustomers,
+  recordCustomerPayment,
   setCustomerPrice,
   updateCustomer,
 } from "./services/customer-service.js";
@@ -67,11 +70,15 @@ import {
   deliverDeliveryOrder,
   depositSettlementToCash,
   listDeliveryDrivers,
+  listDeliveryOrders,
   listDeliveryRoutes,
+  listDeliverySettlements,
   loadDeliveryOrder,
   markDeliveryOrderInRoute,
   prepareDeliveryOrder,
   recordDeliveryPayment,
+  removeCustomerFromRoute,
+  reorderRouteCustomers,
   reviewDeliveryReturn,
 } from "./services/delivery-service.js";
 
@@ -151,6 +158,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "POST" && path === "/api/v1/sales/quote") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await quoteSale(currentUser, await readJson(request)));
+    return;
+  }
+
   if (method === "GET" && path === "/api/v1/sales") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await listSales(currentUser, url.searchParams.get("branchId")));
@@ -174,7 +187,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const saleCompleteMatch = path.match(/^\/api\/v1\/sales\/([^/]+)\/complete$/);
   if (method === "POST" && saleCompleteMatch) {
     const currentUser = await authenticate(request);
-    sendJson(response, 200, await completeSale(currentUser, saleCompleteMatch[1], await readJson(request)));
+    sendJson(response, 200, await completeSale(currentUser, saleCompleteMatch[1], await readJson(request), getIdempotencyKey(request)));
     return;
   }
 
@@ -229,6 +242,19 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && customerPricesMatch) {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await setCustomerPrice(currentUser, customerPricesMatch[1], await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && customerPricesMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listCustomerPrices(currentUser, customerPricesMatch[1]));
+    return;
+  }
+
+  const customerPaymentMatch = path.match(/^\/api\/v1\/customers\/([^/]+)\/payments$/);
+  if (method === "POST" && customerPaymentMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await recordCustomerPayment(currentUser, customerPaymentMatch[1], await readJson(request)));
     return;
   }
 
@@ -334,9 +360,36 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  const deliveryRouteCustomerDeleteMatch = path.match(/^\/api\/v1\/delivery-routes\/([^/]+)\/customers\/([^/]+)$/);
+  if (method === "DELETE" && deliveryRouteCustomerDeleteMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await removeCustomerFromRoute(currentUser, deliveryRouteCustomerDeleteMatch[1], deliveryRouteCustomerDeleteMatch[2]));
+    return;
+  }
+
+  const deliveryRouteCustomerReorderMatch = path.match(/^\/api\/v1\/delivery-routes\/([^/]+)\/customers\/reorder$/);
+  if (method === "PATCH" && deliveryRouteCustomerReorderMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await reorderRouteCustomers(currentUser, deliveryRouteCustomerReorderMatch[1], await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/delivery-orders") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listDeliveryOrders(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      routeId: url.searchParams.get("routeId"),
+      driverId: url.searchParams.get("driverId"),
+      customerId: url.searchParams.get("customerId"),
+      status: url.searchParams.get("status"),
+      date: url.searchParams.get("date"),
+    }));
+    return;
+  }
+
   if (method === "POST" && path === "/api/v1/delivery-orders") {
     const currentUser = await authenticate(request);
-    sendJson(response, 201, await createDeliveryOrder(currentUser, await readJson(request)));
+    sendJson(response, 201, await createDeliveryOrder(currentUser, await readJson(request), getIdempotencyKey(request)));
     return;
   }
 
@@ -367,7 +420,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const deliveryOrderPaymentsMatch = path.match(/^\/api\/v1\/delivery-orders\/([^/]+)\/payments$/);
   if (method === "POST" && deliveryOrderPaymentsMatch) {
     const currentUser = await authenticate(request);
-    sendJson(response, 201, await recordDeliveryPayment(currentUser, deliveryOrderPaymentsMatch[1], await readJson(request)));
+    sendJson(response, 201, await recordDeliveryPayment(currentUser, deliveryOrderPaymentsMatch[1], await readJson(request), getIdempotencyKey(request)));
     return;
   }
 
@@ -391,6 +444,17 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/delivery-settlements") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listDeliverySettlements(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      routeId: url.searchParams.get("routeId"),
+      driverId: url.searchParams.get("driverId"),
+      status: url.searchParams.get("status"),
+    }));
+    return;
+  }
+
   const deliverySettlementCloseMatch = path.match(/^\/api\/v1\/delivery-settlements\/([^/]+)\/close$/);
   if (method === "POST" && deliverySettlementCloseMatch) {
     const currentUser = await authenticate(request);
@@ -401,7 +465,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const deliverySettlementDepositMatch = path.match(/^\/api\/v1\/delivery-settlements\/([^/]+)\/deposit-to-cash$/);
   if (method === "POST" && deliverySettlementDepositMatch) {
     const currentUser = await authenticate(request);
-    sendJson(response, 200, await depositSettlementToCash(currentUser, deliverySettlementDepositMatch[1]));
+    sendJson(response, 200, await depositSettlementToCash(currentUser, deliverySettlementDepositMatch[1], getIdempotencyKey(request)));
     return;
   }
 
@@ -532,10 +596,10 @@ function applyCorsHeaders(request: IncomingMessage, response: ServerResponse) {
     origin && allowedOrigins.has(origin) ? origin : "*",
   );
   response.setHeader("vary", "Origin");
-  response.setHeader("access-control-allow-methods", "GET,POST,PATCH,OPTIONS");
+  response.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
   response.setHeader(
     "access-control-allow-headers",
-    "Content-Type, Authorization",
+    "Content-Type, Authorization, Idempotency-Key",
   );
   response.setHeader("access-control-max-age", "86400");
 }
@@ -564,4 +628,9 @@ async function readJson(request: IncomingMessage) {
   } catch {
     throw new DomainError(400, "INVALID_REQUEST", "JSON invalido.");
   }
+}
+
+function getIdempotencyKey(request: IncomingMessage): string | null {
+  const value = request.headers["idempotency-key"];
+  return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }

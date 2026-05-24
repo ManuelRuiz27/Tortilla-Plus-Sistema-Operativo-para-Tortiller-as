@@ -381,6 +381,7 @@ export function buildDemoRoutes(branchId = "branch-principal"): DeliveryRoute[] 
       driverId: "driver-juan",
       driverName: "Juan Martinez",
       customerCount: 12,
+      customers: [],
       status: "active"
     },
     {
@@ -390,6 +391,7 @@ export function buildDemoRoutes(branchId = "branch-principal"): DeliveryRoute[] 
       driverId: "driver-luis",
       driverName: "Luis Herrera",
       customerCount: 8,
+      customers: [],
       status: "active"
     }
   ];

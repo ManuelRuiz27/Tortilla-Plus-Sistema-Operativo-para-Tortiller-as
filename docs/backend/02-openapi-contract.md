@@ -113,6 +113,7 @@ Notas transaccionales:
 | Método | Endpoint | Uso |
 |---|---|---|
 | POST | `/sales` | Crear venta draft con items. |
+| POST | `/sales/quote` | Cotizar venta sin crear draft ni mover inventario. |
 | POST | `/sales/{id}/items` | Agregar item. |
 | POST | `/sales/{id}/complete` | Completar/cobrar venta. |
 | POST | `/sales/{id}/cancel-draft` | Cancelar ticket sin cobrar. |
@@ -130,6 +131,8 @@ Notas transaccionales:
 | PATCH | `/customers/{id}` | Editar cliente. |
 | POST | `/customers/{id}/credit` | Configurar crédito. |
 | POST | `/customers/{id}/prices` | Precio especial. |
+| GET | `/customers/{id}/prices` | Listar precios especiales activos. |
+| POST | `/customers/{id}/payments` | Cobrar saldo de cliente. |
 | GET | `/customers/{id}/balance` | Saldo del cliente. |
 
 ## Delivery
@@ -141,6 +144,9 @@ Notas transaccionales:
 | GET | `/delivery-routes` | Listar rutas. |
 | POST | `/delivery-routes` | Crear ruta. |
 | POST | `/delivery-routes/{id}/customers` | Asignar cliente a ruta. |
+| PATCH | `/delivery-routes/{id}/customers/reorder` | Reordenar clientes de ruta. |
+| DELETE | `/delivery-routes/{id}/customers/{customerId}` | Quitar cliente de ruta. |
+| GET | `/delivery-orders` | Listar pedidos reales de reparto. |
 | POST | `/delivery-orders` | Crear pedido. |
 | POST | `/delivery-orders/{id}/prepare` | Preparar pedido. |
 | POST | `/delivery-orders/{id}/load` | Cargar pedido y descontar inventario. |
@@ -150,6 +156,7 @@ Notas transaccionales:
 | POST | `/delivery-orders/{id}/returns` | Devolución de ruta. |
 | POST | `/delivery-returns/{id}/review` | Revisar devolución. |
 | POST | `/delivery-settlements` | Crear liquidación. |
+| GET | `/delivery-settlements` | Listar liquidaciones por sucursal/ruta/repartidor. |
 | POST | `/delivery-settlements/{id}/close` | Cerrar liquidación. |
 | POST | `/delivery-settlements/{id}/deposit-to-cash` | Depositar efectivo a caja. |
 
@@ -176,12 +183,16 @@ Notas transaccionales:
 ## Reglas contractuales críticas
 
 - Tarjeta sin referencia: `CARD_REFERENCE_REQUIRED`.
+- Transferencia sin referencia: `TRANSFER_REFERENCE_REQUIRED`.
+- Operacion critica sin `Idempotency-Key`: `IDEMPOTENCY_KEY_REQUIRED`.
+- Misma `Idempotency-Key` con payload distinto: `IDEMPOTENCY_PAYLOAD_MISMATCH`.
 - Venta sin caja abierta: `NO_OPEN_CASH_SESSION`.
 - Cierre con retiro pendiente: `PENDING_CASH_MOVEMENTS`.
 - Crédito sin cliente: `CUSTOMER_REQUIRED_FOR_CREDIT`.
 - Plan sin feature: `FEATURE_NOT_AVAILABLE`.
 - Acceso a sucursal inválido: `BRANCH_ACCESS_DENIED`.
 - Venta facturada no cancela directo: `INVOICED_SALE_CANNOT_BE_CANCELLED_DIRECTLY`.
+- Liquidacion ya depositada: `SETTLEMENT_ALREADY_DEPOSITED`.
 
 ## Detalle implementado Sprint 1
 
@@ -647,6 +658,7 @@ Todos los endpoints requieren `Authorization: Bearer <accessToken>`, feature `de
 | POST | `/delivery-orders/{id}/returns` | Crear devolucion manual pendiente de revision. |
 | POST | `/delivery-returns/{id}/review` | Revisar devolucion como vendible o merma. |
 | POST | `/delivery-settlements` | Crear liquidacion de ruta. |
+| GET | `/delivery-settlements?branchId=&routeId=` | Listar liquidaciones de ruta. |
 | POST | `/delivery-settlements/{id}/close` | Cerrar liquidacion con efectivo entregado. |
 | POST | `/delivery-settlements/{id}/deposit-to-cash` | Depositar efectivo liquidado en caja abierta. |
 

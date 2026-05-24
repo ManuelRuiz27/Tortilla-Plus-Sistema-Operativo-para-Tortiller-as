@@ -8,6 +8,16 @@ export type PosPayment =
       amount: string;
       reference: string;
       provider?: string;
+    }
+  | {
+      paymentMethod: "transfer";
+      amount: string;
+      reference: string;
+      provider?: string;
+    }
+  | {
+      paymentMethod: "credit";
+      amount: string;
     };
 
 export type CompletedSale = {

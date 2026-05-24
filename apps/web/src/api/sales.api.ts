@@ -1,10 +1,11 @@
 import { httpClient } from "./http-client";
 import { useMocks } from "./mock-data";
-import type { PosCartItem } from "../modules/pos/types/pos.types";
+import type { PosCartItem, SaleQuote } from "../modules/pos/types/pos.types";
 import type { CompletedSale, PosPayment } from "../modules/pos/types/payment.types";
 
 type CreateSalePayload = {
   branchId: string;
+  customerId?: string;
 };
 
 type AddSaleItemPayload = {
@@ -17,6 +18,14 @@ type CompleteSalePayload = {
   total: number;
   payments: PosPayment[];
   changeAmount?: number;
+  authorizationPin?: string;
+  idempotencyKey: string;
+};
+
+type QuoteSalePayload = {
+  branchId: string;
+  customerId?: string;
+  items: PosCartItem[];
 };
 
 export function createSaleRequest(payload: CreateSalePayload): Promise<{ id: string }> {
@@ -68,8 +77,50 @@ export function completeSaleRequest(payload: CompleteSalePayload): Promise<Compl
 
   return httpClient<CompletedSale>(`/sales/${payload.saleId}/complete`, {
     method: "POST",
+    headers: {
+      "Idempotency-Key": payload.idempotencyKey
+    },
     body: {
-      payments: payload.payments
+      payments: payload.payments,
+      authorizationPin: payload.authorizationPin
+    }
+  });
+}
+
+export function quoteSaleRequest(payload: QuoteSalePayload): Promise<SaleQuote> {
+  if (useMocks) {
+    const items = payload.items.map((item) => ({
+      ...item,
+      priceSource: "branch" as const
+    }));
+    const total = items.reduce((sum, item) => sum + item.total, 0).toFixed(2);
+    return Promise.resolve({
+      branchId: payload.branchId,
+      customerId: payload.customerId,
+      items,
+      subtotal: total,
+      total
+    });
+  }
+
+  return httpClient<SaleQuote>("/sales/quote", {
+    method: "POST",
+    body: {
+      branchId: payload.branchId,
+      customerId: payload.customerId,
+      items: payload.items.map((item) =>
+        item.saleMode === "by_amount"
+          ? {
+              productId: item.productId,
+              saleMode: item.saleMode,
+              amount: item.total.toFixed(2)
+            }
+          : {
+              productId: item.productId,
+              saleMode: item.saleMode,
+              quantity: item.quantity.toFixed(3)
+            }
+      )
     }
   });
 }

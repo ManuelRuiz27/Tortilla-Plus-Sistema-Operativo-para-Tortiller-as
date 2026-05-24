@@ -1,18 +1,22 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { CreditCard, Scale } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
+import { managerCustomersRequest } from "../../../api/manager.api";
 import {
   addSaleItemRequest,
   cancelDraftSaleRequest,
   completeSaleRequest,
-  createSaleRequest
+  createSaleRequest,
+  quoteSaleRequest
 } from "../../../api/sales.api";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { AmountSaleInput } from "../components/amount-sale-input";
 import { CartPanel } from "../components/cart-panel";
+import { CustomerSelector } from "../components/customer-selector";
 import { PackageQuickButton } from "../components/package-quick-button";
 import { PaymentModal } from "../components/payment-modal";
 import { PosErrorAlert } from "../components/pos-error-alert";
@@ -25,6 +29,7 @@ import type { CompletedSale, PosPayment } from "../types/payment.types";
 import type { PosCartItem } from "../types/pos.types";
 
 export function SalePage() {
+  const [searchParams] = useSearchParams();
   const branchId = useBranchStore((state) => state.activeBranchId);
   const {
     isError,
@@ -37,30 +42,45 @@ export function SalePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [isQuoting, setIsQuoting] = useState(false);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const items = usePosCartStore((state) => state.items);
   const subtotal = usePosCartStore((state) => state.subtotal);
   const total = usePosCartStore((state) => state.total);
   const addItem = usePosCartStore((state) => state.addItem);
   const removeItem = usePosCartStore((state) => state.removeItem);
+  const setItems = usePosCartStore((state) => state.setItems);
   const clearCart = usePosCartStore((state) => state.clearCart);
   const setSaleDraftId = usePosCartStore((state) => state.setSaleDraftId);
   const saleDraftId = usePosCartStore((state) => state.saleDraftId);
   const clearSaleDraftId = usePosCartStore((state) => state.clearSaleDraftId);
+  const selectedCustomer = usePosCartStore((state) => state.selectedCustomer);
+  const setSelectedCustomer = usePosCartStore((state) => state.setSelectedCustomer);
+  const clearSelectedCustomer = usePosCartStore((state) => state.clearSelectedCustomer);
+  const queryCustomerId = searchParams.get("customerId");
+  const customersQuery = useQuery({
+    enabled: Boolean(queryCustomerId),
+    queryFn: managerCustomersRequest,
+    queryKey: ["manager-customers"]
+  });
   const checkoutMutation = useMutation({
-    mutationFn: async (payload: { payments: PosPayment[]; changeAmount?: number }) => {
+    mutationFn: async (payload: { payments: PosPayment[]; changeAmount?: number; authorizationPin?: string }) => {
       if (!branchId) {
         throw new Error("Sucursal no seleccionada.");
       }
 
-      const draft = await createSaleRequest({ branchId });
+      await applyQuote(items);
+      const draft = await createSaleRequest({ branchId, customerId: selectedCustomer?.id });
       setSaleDraftId(draft.id);
       await Promise.all(items.map((item) => addSaleItemRequest({ saleId: draft.id, item })));
       return completeSaleRequest({
         saleId: draft.id,
         total,
         payments: payload.payments,
-        changeAmount: payload.changeAmount
+        changeAmount: payload.changeAmount,
+        authorizationPin: payload.authorizationPin,
+        idempotencyKey: crypto.randomUUID()
       });
     },
     onError: (error) => {
@@ -74,6 +94,7 @@ export function SalePage() {
     onSuccess: (sale) => {
       clearCart();
       clearSaleDraftId();
+      clearSelectedCustomer();
       setPaymentError(null);
       setIsPaymentOpen(false);
       setCompletedSale(sale);
@@ -88,23 +109,69 @@ export function SalePage() {
     onSuccess: () => {
       clearCart();
       clearSaleDraftId();
+      clearSelectedCustomer();
       setIsPaymentOpen(false);
       setPaymentError(null);
     }
   });
 
-  function handleAddItem(item: PosCartItem) {
-    addItem(item);
+  async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer) {
+    if (!branchId || nextItems.length === 0) {
+      setItems(nextItems);
+      return;
+    }
+
+    setIsQuoting(true);
+    setQuoteError(null);
+    try {
+      const quote = await quoteSaleRequest({
+        branchId,
+        customerId: customer?.id,
+        items: nextItems
+      });
+      setItems(
+        quote.items.map((item, index) => ({
+          ...nextItems[index],
+          productName: item.productName,
+          productType: item.productType,
+          quantity: Number(item.quantity),
+          unit: item.unit,
+          unitPrice: Number(item.unitPrice),
+          total: Number(item.total),
+          priceSource: item.priceSource,
+          priceSourceLabel: item.priceSource === "customer" ? "Precio cliente" : "Precio sucursal"
+        }))
+      );
+    } catch (error) {
+      setItems(nextItems);
+      setQuoteError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo cotizar la venta.");
+    } finally {
+      setIsQuoting(false);
+    }
   }
 
-  function handleCheckout() {
-    if (items.length > 0 && total > 0 && !checkoutMutation.isPending) {
+  function handleAddItem(item: PosCartItem) {
+    const nextItems = [...items, item];
+    addItem(item);
+    void applyQuote(nextItems);
+  }
+
+  function handleRemoveItem(localId: string) {
+    const nextItems = items.filter((item) => item.localId !== localId);
+    removeItem(localId);
+    void applyQuote(nextItems);
+  }
+
+  async function handleCheckout() {
+    if (items.length > 0 && total > 0 && !checkoutMutation.isPending && !isQuoting) {
+      await applyQuote(items);
       setIsPaymentOpen(true);
     }
   }
 
   function handleNewSale() {
     setCompletedSale(null);
+    clearSelectedCustomer();
     document.getElementById("tortilla-kg-input")?.focus();
   }
 
@@ -116,9 +183,44 @@ export function SalePage() {
     cancelDraftMutation.mutate();
   }
 
+  function handleClearCart() {
+    clearCart();
+    clearSelectedCustomer();
+    setQuoteError(null);
+  }
+
   function focusInput(id: string) {
     document.getElementById(id)?.focus();
   }
+
+  function handleSelectCustomer(customer: NonNullable<typeof selectedCustomer>) {
+    setSelectedCustomer(customer);
+    if (items.length > 0) {
+      void applyQuote(items, customer);
+    }
+  }
+
+  function handleClearCustomer() {
+    clearSelectedCustomer();
+    if (items.length > 0) {
+      void applyQuote(items, null);
+    }
+  }
+
+  useEffect(() => {
+    if (!queryCustomerId || !customersQuery.data || selectedCustomer?.id === queryCustomerId) {
+      return;
+    }
+
+    const customer = customersQuery.data.find((item) => item.id === queryCustomerId);
+    if (customer?.status === "active") {
+      setSelectedCustomer(customer);
+      return;
+    }
+
+    clearSelectedCustomer();
+    setQuoteError("Cliente no encontrado o inactivo. La venta continua como publico general.");
+  }, [clearSelectedCustomer, customersQuery.data, queryCustomerId, selectedCustomer?.id, setSelectedCustomer]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -142,7 +244,7 @@ export function SalePage() {
         F3: () => focusInput("masa-kg-input"),
         F4: () => focusInput("masa-amount-input"),
         F5: () => document.getElementById("package-800-button")?.click(),
-        F8: handleCheckout,
+        F8: () => void handleCheckout(),
         F9: handleCancelTicket
       };
 
@@ -184,6 +286,14 @@ export function SalePage() {
               <p className="mt-1 text-sm text-tp-muted">Agrega tortillas, masa, paquetes o productos de mostrador.</p>
             </div>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <CustomerSelector
+            onClear={handleClearCustomer}
+            onSelect={handleSelectCustomer}
+            selectedCustomer={selectedCustomer}
+          />
         </div>
 
         <div className="mt-5 grid gap-3 xl:grid-cols-2">
@@ -245,26 +355,27 @@ export function SalePage() {
           searchTerm={searchTerm}
         />
         <div className="mt-4">
-          <PosErrorAlert error={cancelDraftMutation.isError ? "No se pudo cancelar la venta." : null} />
+          <PosErrorAlert error={quoteError ?? (cancelDraftMutation.isError ? "No se pudo cancelar la venta." : null)} />
         </div>
       </div>
 
       <CartPanel
         items={items}
         onCancelTicket={handleCancelTicket}
-        onCheckout={handleCheckout}
-        onClearCart={clearCart}
-        onRemoveItem={removeItem}
+        onCheckout={() => void handleCheckout()}
+        onClearCart={handleClearCart}
+        onRemoveItem={handleRemoveItem}
         subtotal={subtotal}
         total={total}
       />
 
       <PaymentModal
         error={paymentError}
-        isSubmitting={checkoutMutation.isPending}
+        isSubmitting={checkoutMutation.isPending || isQuoting}
         onClose={() => setIsPaymentOpen(false)}
         onSubmit={(payload) => checkoutMutation.mutate(payload)}
         open={isPaymentOpen}
+        selectedCustomer={selectedCustomer}
         total={total}
       />
       <SaleSuccessModal onNewSale={handleNewSale} sale={completedSale} />

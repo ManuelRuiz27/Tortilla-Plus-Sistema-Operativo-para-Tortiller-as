@@ -2,10 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { createCustomerRequest, managerCustomersRequest } from "../../../api/manager.api";
+import { assignCustomerToRouteRequest, createCustomerRequest, deliveryRoutesRequest, managerCustomersRequest } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
+import { useBranchStore } from "../../../shared/stores/branch.store";
 import { labelStatus } from "../../../shared/utils/labels";
 import type { ManagerCustomer } from "../types/manager.types";
 import { formatManagerMoney } from "../utils/money";
@@ -22,14 +23,22 @@ const customerTypeLabels: Record<ManagerCustomer["customerType"], string> = {
 
 export function CustomersPage() {
   const queryClient = useQueryClient();
+  const branchId = useBranchStore((state) => state.activeBranchId);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [customerType, setCustomerType] = useState<ManagerCustomer["customerType"]>("cliente_frecuente");
   const [creditEnabled, setCreditEnabled] = useState(false);
   const [creditLimit, setCreditLimit] = useState("0.00");
+  const [routeByCustomer, setRouteByCustomer] = useState<Record<string, string>>({});
+  const [sortByCustomer, setSortByCustomer] = useState<Record<string, string>>({});
   const { data = [], isError, isLoading } = useQuery({
     queryFn: managerCustomersRequest,
     queryKey: ["manager-customers"]
+  });
+  const routesQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => deliveryRoutesRequest(branchId ?? ""),
+    queryKey: ["delivery-routes", branchId]
   });
   const createMutation = useMutation({
     mutationFn: createCustomerRequest,
@@ -40,6 +49,10 @@ export function CustomersPage() {
       setCreditLimit("0.00");
       void queryClient.invalidateQueries({ queryKey: ["manager-customers"] });
     }
+  });
+  const assignRouteMutation = useMutation({
+    mutationFn: assignCustomerToRouteRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] })
   });
 
   function submitCustomer() {
@@ -54,10 +67,21 @@ export function CustomersPage() {
     });
   }
 
-  if (isLoading) return <LoadingState message="Cargando clientes..." />;
-  if (isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar clientes.</p>;
+  if (isLoading || routesQuery.isLoading) return <LoadingState message="Cargando clientes..." />;
+  if (isError || routesQuery.isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar clientes.</p>;
 
   const creditTotal = data.reduce((sum, customer) => sum + customer.currentBalance, 0);
+  const routes = routesQuery.data ?? [];
+
+  function assignToRoute(customerId: string) {
+    const routeId = routeByCustomer[customerId];
+    if (!routeId) return;
+    assignRouteMutation.mutate({
+      routeId,
+      customerId,
+      sortOrder: Number(sortByCustomer[customerId] || 0)
+    });
+  }
 
   return (
     <section>
@@ -101,6 +125,7 @@ export function CustomersPage() {
               <th className="px-4 py-3">Contacto</th>
               <th className="px-4 py-3">Credito</th>
               <th className="px-4 py-3">Saldo</th>
+              <th className="px-4 py-3">Ruta</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -117,12 +142,29 @@ export function CustomersPage() {
                 <td className="px-4 py-3">{customer.creditEnabled ? formatManagerMoney(customer.creditLimit) : "Sin credito"}</td>
                 <td className="px-4 py-3 font-semibold">{formatManagerMoney(customer.currentBalance)}</td>
                 <td className="px-4 py-3">
+                  <div className="grid min-w-72 grid-cols-[1fr_70px_auto] gap-2">
+                    <select className="h-10 rounded-md border border-tp-border px-2 text-sm" onChange={(event) => setRouteByCustomer((values) => ({ ...values, [customer.id]: event.target.value }))} value={routeByCustomer[customer.id] ?? ""}>
+                      <option value="">Ruta</option>
+                      {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
+                    </select>
+                    <input className="h-10 rounded-md border border-tp-border px-2 text-sm" inputMode="numeric" onChange={(event) => setSortByCustomer((values) => ({ ...values, [customer.id]: event.target.value }))} placeholder="#" value={sortByCustomer[customer.id] ?? ""} />
+                    <PermissionButton disabled={!routeByCustomer[customer.id] || assignRouteMutation.isPending} onClick={() => assignToRoute(customer.id)} permission="routes.manage" variant="secondary">
+                      Asignar
+                    </PermissionButton>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
                   <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{labelStatus(customer.status)}</StatusBadge>
                 </td>
                 <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-3">
+                  <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/pos/sale?customerId=${customer.id}`}>
+                    Vender
+                  </Link>
                   <Link className="text-sm font-semibold text-tp-primary hover:underline" to={`/app/manager/customers/${customer.id}`}>
                     Ver detalle
                   </Link>
+                  </div>
                 </td>
               </tr>
             ))}

@@ -94,6 +94,19 @@ type ApiCustomerBalance = {
   movements: ApiCustomerBalanceMovement[];
 };
 
+type ApiCustomerPrice = {
+  id: string;
+  customerId: string;
+  productId: string;
+  branchId?: string | null;
+  saleMode: string;
+  price: string | number;
+  product?: { id: string; name: string } | null;
+  branch?: { id: string; name: string } | null;
+  activeFrom: string;
+  status: string;
+};
+
 type ApiDeliveryDriver = {
   id: string;
   name: string;
@@ -108,7 +121,11 @@ type ApiDeliveryRoute = {
   name: string;
   driverId?: string | null;
   driver?: { id: string; name: string } | null;
-  customers?: Array<unknown>;
+  customers?: Array<{
+    customerId: string;
+    sortOrder: number;
+    customer?: ApiCustomer | null;
+  }>;
   status?: string;
 };
 
@@ -118,6 +135,7 @@ type ApiDeliveryOrder = {
   routeId?: string | null;
   driverId?: string | null;
   customerId: string;
+  customer?: { id: string; name: string } | null;
   status: string;
   total: string | number;
   amountCollected: string | number;
@@ -263,13 +281,19 @@ function mapDriver(driver: ApiDeliveryDriver): DeliveryDriver {
 }
 
 function mapRoute(route: ApiDeliveryRoute): DeliveryRoute {
+  const customers = route.customers ?? [];
   return {
     id: route.id,
     branchId: route.branchId,
     name: route.name,
     driverId: route.driverId,
     driverName: route.driver?.name ?? null,
-    customerCount: route.customers?.length ?? 0,
+    customerCount: customers.length,
+    customers: customers.map((assignment) => ({
+      customerId: assignment.customerId,
+      sortOrder: assignment.sortOrder,
+      customer: assignment.customer ? mapCustomer(assignment.customer) : null
+    })),
     status: route.status === "inactive" ? "inactive" : "active"
   };
 }
@@ -281,6 +305,7 @@ function mapDeliveryOrder(order: ApiDeliveryOrder): DeliveryOrder {
     routeId: order.routeId,
     driverId: order.driverId,
     customerId: order.customerId,
+    customerName: order.customer?.name,
     status: order.status,
     total: Number(order.total),
     amountCollected: Number(order.amountCollected),
@@ -638,6 +663,50 @@ export function setCustomerPriceRequest(payload: {
   });
 }
 
+export function customerPricesRequest(customerId: string): Promise<Array<{
+  id: string;
+  productName: string;
+  branchName: string;
+  saleMode: ManagerPrice["saleMode"];
+  price: number;
+}>> {
+  if (useMocks) {
+    return Promise.resolve([]);
+  }
+
+  return httpClient<ApiCustomerPrice[]>(`/customers/${customerId}/prices`).then((prices) =>
+    prices.map((price) => ({
+      id: price.id,
+      productName: price.product?.name ?? "Producto",
+      branchName: price.branch?.name ?? "Todas",
+      saleMode: saleMode(price.saleMode),
+      price: Number(price.price)
+    }))
+  );
+}
+
+export function recordCustomerPaymentRequest(payload: {
+  customerId: string;
+  branchId: string;
+  amount: string;
+  paymentMethod: "cash" | "card" | "transfer";
+  reference?: string;
+}): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/customers/${payload.customerId}/payments`, {
+    method: "POST",
+    body: {
+      branchId: payload.branchId,
+      amount: payload.amount,
+      paymentMethod: payload.paymentMethod,
+      reference: payload.reference
+    }
+  });
+}
+
 export async function deliveryDriversRequest(): Promise<DeliveryDriver[]> {
   if (useMocks) {
     return Promise.resolve(buildDemoDrivers());
@@ -676,6 +745,7 @@ export function createDeliveryRouteRequest(payload: { branchId: string; name: st
       driverId: payload.driverId,
       driverName: null,
       customerCount: 0,
+      customers: [],
       status: "active"
     });
   }
@@ -686,8 +756,61 @@ export function createDeliveryRouteRequest(payload: { branchId: string; name: st
   }).then(mapRoute);
 }
 
-export function deliveryOrdersRequest(routeId: string, branchId: string): Promise<DeliveryOrder[]> {
-  return Promise.resolve(buildDemoDeliveryOrders(routeId, branchId));
+export function assignCustomerToRouteRequest(payload: {
+  routeId: string;
+  customerId: string;
+  sortOrder?: number;
+}): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/delivery-routes/${payload.routeId}/customers`, {
+    method: "POST",
+    body: {
+      customerId: payload.customerId,
+      sortOrder: payload.sortOrder ?? 0
+    }
+  });
+}
+
+export function removeCustomerFromRouteRequest(payload: {
+  routeId: string;
+  customerId: string;
+}): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/delivery-routes/${payload.routeId}/customers/${payload.customerId}`, {
+    method: "DELETE"
+  });
+}
+
+export function reorderRouteCustomersRequest(payload: {
+  routeId: string;
+  customers: Array<{ customerId: string; sortOrder: number }>;
+}): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/delivery-routes/${payload.routeId}/customers/reorder`, {
+    method: "PATCH",
+    body: { customers: payload.customers }
+  });
+}
+
+export async function deliveryOrdersRequest(routeId: string, branchId: string): Promise<DeliveryOrder[]> {
+  if (useMocks) {
+    return Promise.resolve(buildDemoDeliveryOrders(routeId, branchId));
+  }
+
+  const params = new URLSearchParams();
+  params.set("branchId", branchId);
+  params.set("routeId", routeId);
+  const orders = await httpClient<ApiDeliveryOrder[]>(`/delivery-orders?${params.toString()}`);
+  return orders.map(mapDeliveryOrder);
 }
 
 export function createDeliveryOrderRequest(payload: {
@@ -703,6 +826,9 @@ export function createDeliveryOrderRequest(payload: {
 
   return httpClient<ApiDeliveryOrder>("/delivery-orders", {
     method: "POST",
+    headers: {
+      "Idempotency-Key": crypto.randomUUID()
+    },
     body: payload
   }).then(mapDeliveryOrder);
 }
@@ -721,7 +847,10 @@ export function deliveryOrderActionRequest(payload: {
   }).then(mapDeliveryOrder);
 }
 
-export function deliverDeliveryOrderRequest(payload: { order: DeliveryOrder }): Promise<DeliveryOrder> {
+export function deliverDeliveryOrderRequest(payload: {
+  order: DeliveryOrder;
+  items?: Array<{ deliveryOrderItemId: string; quantity: string }>;
+}): Promise<DeliveryOrder> {
   if (useMocks) {
     return Promise.resolve({ ...payload.order, status: "delivered" });
   }
@@ -729,7 +858,7 @@ export function deliverDeliveryOrderRequest(payload: { order: DeliveryOrder }): 
   return httpClient<ApiDeliveryOrder>(`/delivery-orders/${payload.order.id}/deliver`, {
     method: "POST",
     body: {
-      items: payload.order.items.map((item) => ({
+      items: payload.items ?? payload.order.items.map((item) => ({
         deliveryOrderItemId: item.id,
         quantity: item.quantityLoaded.toFixed(3)
       }))
@@ -741,6 +870,8 @@ export function recordDeliveryPaymentRequest(payload: {
   orderId: string;
   amount: string;
   paymentMethod: "cash" | "card" | "transfer" | "credit";
+  reference?: string;
+  authorizationPin?: string;
 }): Promise<void> {
   if (useMocks) {
     return Promise.resolve();
@@ -748,9 +879,14 @@ export function recordDeliveryPaymentRequest(payload: {
 
   return httpClient<void>(`/delivery-orders/${payload.orderId}/payments`, {
     method: "POST",
+    headers: {
+      "Idempotency-Key": crypto.randomUUID()
+    },
     body: {
       amount: payload.amount,
-      paymentMethod: payload.paymentMethod
+      paymentMethod: payload.paymentMethod,
+      reference: payload.reference,
+      authorizationPin: payload.authorizationPin
     }
   });
 }
@@ -768,6 +904,25 @@ export function createDeliverySettlementRequest(payload: {
     method: "POST",
     body: payload
   }).then(mapDeliverySettlement);
+}
+
+export async function deliverySettlementsRequest(filters: {
+  branchId: string;
+  routeId?: string;
+  driverId?: string;
+  status?: string;
+}): Promise<DeliverySettlement[]> {
+  if (useMocks) {
+    return Promise.resolve([buildDemoDeliverySettlement(filters.routeId, filters.branchId)]);
+  }
+
+  const params = new URLSearchParams();
+  params.set("branchId", filters.branchId);
+  if (filters.routeId) params.set("routeId", filters.routeId);
+  if (filters.driverId) params.set("driverId", filters.driverId);
+  if (filters.status) params.set("status", filters.status);
+  const settlements = await httpClient<ApiDeliverySettlement[]>(`/delivery-settlements?${params.toString()}`);
+  return settlements.map(mapDeliverySettlement);
 }
 
 export function closeDeliverySettlementRequest(payload: {
@@ -791,6 +946,9 @@ export function depositDeliverySettlementRequest(settlementId: string): Promise<
 
   return httpClient<void>(`/delivery-settlements/${settlementId}/deposit-to-cash`, {
     method: "POST",
+    headers: {
+      "Idempotency-Key": crypto.randomUUID()
+    },
     body: {}
   });
 }

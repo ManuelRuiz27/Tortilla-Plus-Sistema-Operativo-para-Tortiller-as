@@ -3,10 +3,14 @@ import { ArrowLeft, BadgeDollarSign, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  assignCustomerToRouteRequest,
   configureCustomerCreditRequest,
   customerBalanceRequest,
+  customerPricesRequest,
+  deliveryRoutesRequest,
   managerCustomersRequest,
   managerProductsRequest,
+  recordCustomerPaymentRequest,
   setCustomerPriceRequest,
   updateCustomerRequest
 } from "../../../api/manager.api";
@@ -34,9 +38,19 @@ export function CustomerDetailPage() {
     queryFn: () => customerBalanceRequest(customerId),
     queryKey: ["customer-balance", customerId]
   });
+  const pricesQuery = useQuery({
+    enabled: Boolean(customerId),
+    queryFn: () => customerPricesRequest(customerId),
+    queryKey: ["customer-prices", customerId]
+  });
   const productsQuery = useQuery({
     queryFn: managerProductsRequest,
     queryKey: ["manager-products"]
+  });
+  const routesQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => deliveryRoutesRequest(branchId ?? ""),
+    queryKey: ["delivery-routes", branchId]
   });
   const customer = useMemo(
     () => customersQuery.data?.find((item) => item.id === customerId) ?? null,
@@ -54,6 +68,11 @@ export function CustomerDetailPage() {
   const [productId, setProductId] = useState("");
   const [saleMode, setSaleMode] = useState<ManagerPrice["saleMode"]>("by_unit");
   const [price, setPrice] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [routeId, setRouteId] = useState("");
+  const [routeSortOrder, setRouteSortOrder] = useState("0");
 
   useEffect(() => {
     if (!customer) return;
@@ -78,7 +97,23 @@ export function CustomerDetailPage() {
   });
   const priceMutation = useMutation({
     mutationFn: setCustomerPriceRequest,
-    onSuccess: () => setPrice("")
+    onSuccess: () => {
+      setPrice("");
+      void queryClient.invalidateQueries({ queryKey: ["customer-prices", customerId] });
+    }
+  });
+  const paymentMutation = useMutation({
+    mutationFn: recordCustomerPaymentRequest,
+    onSuccess: () => {
+      setPaymentAmount("");
+      setPaymentReference("");
+      void queryClient.invalidateQueries({ queryKey: ["customer-balance", customerId] });
+      void queryClient.invalidateQueries({ queryKey: ["manager-customers"] });
+    }
+  });
+  const routeMutation = useMutation({
+    mutationFn: assignCustomerToRouteRequest,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["delivery-routes", branchId] })
   });
 
   function saveCustomer() {
@@ -105,16 +140,33 @@ export function CustomerDetailPage() {
     priceMutation.mutate({ customerId, branchId: branchId ?? undefined, productId, saleMode, price: price.trim() });
   }
 
-  if (customersQuery.isLoading || balanceQuery.isLoading || productsQuery.isLoading) {
+  function recordPayment() {
+    if (!customerId || !branchId || !paymentAmount.trim()) return;
+    paymentMutation.mutate({
+      customerId,
+      branchId,
+      amount: paymentAmount,
+      paymentMethod,
+      reference: paymentReference.trim() || undefined
+    });
+  }
+
+  function assignRoute() {
+    if (!customerId || !routeId) return;
+    routeMutation.mutate({ routeId, customerId, sortOrder: Number(routeSortOrder || 0) });
+  }
+
+  if (customersQuery.isLoading || balanceQuery.isLoading || productsQuery.isLoading || pricesQuery.isLoading || routesQuery.isLoading) {
     return <LoadingState message="Cargando cliente..." />;
   }
 
-  if (customersQuery.isError || balanceQuery.isError || productsQuery.isError || !customer) {
+  if (customersQuery.isError || balanceQuery.isError || productsQuery.isError || pricesQuery.isError || routesQuery.isError || !customer) {
     return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar el cliente.</p>;
   }
 
   const balance = balanceQuery.data;
   const products = (productsQuery.data ?? []).filter((product) => product.isSellable && product.status === "active");
+  const routes = routesQuery.data ?? [];
 
   return (
     <section>
@@ -127,7 +179,12 @@ export function CustomerDetailPage() {
           <h1 className="mt-3 text-2xl font-semibold">{customer.name}</h1>
           <p className="mt-2 text-sm text-tp-muted">Datos, credito, saldo y precios especiales.</p>
         </div>
-        <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{labelStatus(customer.status)}</StatusBadge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link className="inline-flex min-h-11 items-center rounded-md bg-tp-primary px-4 py-2 text-sm font-semibold text-white" to={`/app/pos/sale?customerId=${customer.id}`}>
+            Vender en POS
+          </Link>
+          <StatusBadge tone={customer.status === "active" ? "success" : "warning"}>{labelStatus(customer.status)}</StatusBadge>
+        </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -152,6 +209,36 @@ export function CustomerDetailPage() {
             <PermissionButton disabled={!name.trim() || updateMutation.isPending} onClick={saveCustomer} permission="customers.manage">
               <Save className="h-4 w-4" aria-hidden="true" />
               Guardar cliente
+            </PermissionButton>
+          </div>
+        </article>
+
+        <article className="rounded-md border border-tp-border bg-white p-5">
+          <h2 className="mb-4 text-sm font-semibold">Cobrar saldo</h2>
+          <div className="grid gap-3 md:grid-cols-[1fr_150px_1fr_auto]">
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Monto" value={paymentAmount} />
+            <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)} value={paymentMethod}>
+              <option value="cash">Efectivo</option>
+              <option value="card">Tarjeta</option>
+              <option value="transfer">Transferencia</option>
+            </select>
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" disabled={paymentMethod === "cash"} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Referencia" value={paymentReference} />
+            <PermissionButton disabled={!paymentAmount.trim() || ((paymentMethod === "card" || paymentMethod === "transfer") && !paymentReference.trim()) || paymentMutation.isPending} onClick={recordPayment} permission="payments.create">
+              Cobrar
+            </PermissionButton>
+          </div>
+        </article>
+
+        <article className="rounded-md border border-tp-border bg-white p-5">
+          <h2 className="mb-4 text-sm font-semibold">Asignar a ruta</h2>
+          <div className="grid gap-3 md:grid-cols-[1fr_120px_auto]">
+            <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setRouteId(event.target.value)} value={routeId}>
+              <option value="">Ruta</option>
+              {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
+            </select>
+            <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="numeric" onChange={(event) => setRouteSortOrder(event.target.value)} value={routeSortOrder} />
+            <PermissionButton disabled={!routeId || routeMutation.isPending} onClick={assignRoute} permission="routes.manage">
+              Asignar
             </PermissionButton>
           </div>
         </article>
@@ -193,6 +280,14 @@ export function CustomerDetailPage() {
               <BadgeDollarSign className="h-4 w-4" aria-hidden="true" />
               Guardar
             </PermissionButton>
+          </div>
+          <div className="mt-4 space-y-2">
+            {(pricesQuery.data ?? []).map((item) => (
+              <div className="flex items-center justify-between border-t border-tp-border pt-2 text-sm first:border-t-0 first:pt-0" key={item.id}>
+                <span>{item.productName} - {labelSaleMode(item.saleMode)} - {item.branchName}</span>
+                <span className="font-semibold">{formatManagerMoney(item.price)}</span>
+              </div>
+            ))}
           </div>
         </article>
 

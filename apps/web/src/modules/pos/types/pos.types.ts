@@ -35,4 +35,29 @@ export type PosCartItem = {
   unit: PosUnit;
   unitPrice: number;
   total: number;
+  priceSource?: "branch" | "customer";
+  priceSourceLabel?: string;
+};
+
+export type PosSelectedCustomer = {
+  id: string;
+  name: string;
+  customerType: string;
+  phone?: string | null;
+  creditEnabled: boolean;
+  creditLimit: number;
+  currentBalance: number;
+  status: "active" | "inactive" | "deleted";
+};
+
+export type SaleQuoteItem = Omit<PosCartItem, "localId" | "priceSourceLabel"> & {
+  priceSource: "branch" | "customer";
+};
+
+export type SaleQuote = {
+  branchId: string;
+  customerId?: string | null;
+  items: SaleQuoteItem[];
+  subtotal: string;
+  total: string;
 };

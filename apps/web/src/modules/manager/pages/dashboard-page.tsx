@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Boxes, CreditCard, ReceiptText, Route } from "lucide-react";
+import { AlertTriangle, Boxes, CreditCard, ReceiptText, Route, ShoppingCart, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { managerDashboardRequest } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
@@ -33,6 +33,22 @@ export function DashboardPage() {
       <div className="mb-6">
         <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Inicio</p>
         <h1 className="mt-3 text-2xl font-semibold">Resumen de hoy</h1>
+      </div>
+
+      <div className="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {[
+          { label: "Vender en POS", to: "/app/pos/sale", icon: ShoppingCart },
+          { label: "Preparar ruta", to: "/app/manager/routes", icon: Route },
+          { label: "Cobrar saldos", to: "/app/manager/customers", icon: Users },
+          { label: "Revisar stock", to: "/app/manager/inventory", icon: Boxes },
+          { label: "Autorizar retiros", to: "/app/manager/withdrawals", icon: AlertTriangle },
+          { label: "Cerrar caja", to: "/app/manager/cash", icon: CreditCard }
+        ].map((item) => (
+          <Link className="flex min-h-16 items-center gap-3 rounded-md border border-tp-border bg-white p-3 text-sm font-semibold hover:bg-tp-soft" key={item.label} to={item.to}>
+            <item.icon className="h-4 w-4 text-tp-secondary" aria-hidden="true" />
+            {item.label}
+          </Link>
+        ))}
       </div>
 
       <div className="mb-5 grid gap-3">
