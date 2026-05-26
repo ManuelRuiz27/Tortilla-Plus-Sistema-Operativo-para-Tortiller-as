@@ -19,7 +19,9 @@ model Organization {
   updatedAt                            DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
   analyticsSnapshotOrganization        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_organization")
   auditLogOrganization                 AuditLog[]                 @relation("AuditLog_organization")
+  billingInvoiceRequestOrganization    BillingInvoiceRequest[]    @relation("BillingInvoiceRequest_organization")
   billingProfileOrganization           BillingProfile[]           @relation("BillingProfile_organization")
+  billingReceiptOrganization           BillingReceipt[]           @relation("BillingReceipt_organization")
   branchProductPriceOrganization       BranchProductPrice[]       @relation("BranchProductPrice_organization")
   branchOrganization                   Branch[]                   @relation("Branch_organization")
   businessUnitOrganization             BusinessUnit[]             @relation("BusinessUnit_organization")
@@ -88,6 +90,8 @@ model Branch {
   updatedAt                      DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
   analyticsSnapshotBranch        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_branch")
   auditLogBranch                 AuditLog[]                 @relation("AuditLog_branch")
+  billingInvoiceRequestBranch    BillingInvoiceRequest[]    @relation("BillingInvoiceRequest_branch")
+  billingReceiptBranch           BillingReceipt[]           @relation("BillingReceipt_branch")
   branchProductPriceBranch       BranchProductPrice[]       @relation("BranchProductPrice_branch")
   businessUnit                   BusinessUnit               @relation("Branch_businessUnit", fields: [businessUnitId], references: [id], onUpdate: NoAction)
   organization                   Organization               @relation("Branch_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
@@ -773,6 +777,8 @@ model Sale {
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
   invoiceSaleSale    InvoiceSale[] @relation("InvoiceSale_sale")
+  billingReceiptSale BillingReceipt? @relation("BillingReceipt_sale")
+  billingInvoiceRequestSale BillingInvoiceRequest[] @relation("BillingInvoiceRequest_sale")
   saleItemSale       SaleItem[]    @relation("SaleItem_sale")
   salePaymentSale    SalePayment[] @relation("SalePayment_sale")
   saleReturnSale     SaleReturn[]  @relation("SaleReturn_sale")
@@ -1209,6 +1215,7 @@ model Invoice {
   invoiceDocumentInvoice InvoiceDocument[] @relation("InvoiceDocument_invoice")
   invoiceItemInvoice     InvoiceItem[]     @relation("InvoiceItem_invoice")
   invoiceSaleInvoice     InvoiceSale[]     @relation("InvoiceSale_invoice")
+  billingInvoiceRequestInvoice BillingInvoiceRequest[] @relation("BillingInvoiceRequest_invoice")
   billingProfile         BillingProfile?   @relation("Invoice_billingProfile", fields: [billingProfileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   branch                 Branch?           @relation("Invoice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   customer               Customer?         @relation("Invoice_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1262,6 +1269,62 @@ model InvoiceDocument {
   invoice      Invoice             @relation("InvoiceDocument_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("invoice_documents")
+}
+
+model BillingReceipt {
+  id                                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                         String                  @map("organization_id") @db.Uuid
+  branchId                               String                  @map("branch_id") @db.Uuid
+  saleId                                 String                  @unique(map: "uq_billing_receipts_sale_id") @map("sale_id") @db.Uuid
+  receiptToken                           String                  @unique(map: "uq_billing_receipts_token") @map("receipt_token") @db.VarChar(160)
+  receiptUrl                             String                  @map("receipt_url") @db.VarChar(260)
+  status                                 BillingReceiptStatus    @default(active)
+  expiresAt                              DateTime                @map("expires_at") @db.Timestamptz(6)
+  usedAt                                 DateTime?               @map("used_at") @db.Timestamptz(6)
+  expiredAt                              DateTime?               @map("expired_at") @db.Timestamptz(6)
+  createdAt                              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                              DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch                                 Branch                  @relation("BillingReceipt_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                           Organization            @relation("BillingReceipt_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                                   Sale                    @relation("BillingReceipt_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingInvoiceRequestBillingReceipt    BillingInvoiceRequest[] @relation("BillingInvoiceRequest_billingReceipt")
+
+  @@index([branchId, status], map: "idx_billing_receipts_branch_status")
+  @@index([expiresAt], map: "idx_billing_receipts_expires_at")
+  @@index([status], map: "idx_billing_receipts_status")
+  @@map("billing_receipts")
+}
+
+model BillingInvoiceRequest {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId          String               @map("organization_id") @db.Uuid
+  branchId                String               @map("branch_id") @db.Uuid
+  billingReceiptId        String               @map("billing_receipt_id") @db.Uuid
+  saleId                  String               @map("sale_id") @db.Uuid
+  invoiceId               String?              @map("invoice_id") @db.Uuid
+  status                  InvoiceRequestStatus @default(received)
+  rfc                     String               @db.VarChar(13)
+  legalName               String               @map("legal_name") @db.VarChar(220)
+  taxRegime               String               @map("tax_regime") @db.VarChar(10)
+  zipCode                 String               @map("zip_code") @db.VarChar(10)
+  cfdiUse                 String               @map("cfdi_use") @db.VarChar(10)
+  email                   String               @db.VarChar(180)
+  errorCode               String?              @map("error_code") @db.VarChar(80)
+  errorMessage            String?              @map("error_message")
+  rawRequest              Json?                @map("raw_request")
+  createdAt               DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  billingReceipt          BillingReceipt       @relation("BillingInvoiceRequest_billingReceipt", fields: [billingReceiptId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  branch                  Branch               @relation("BillingInvoiceRequest_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice                 Invoice?             @relation("BillingInvoiceRequest_invoice", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization            Organization         @relation("BillingInvoiceRequest_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                    Sale                 @relation("BillingInvoiceRequest_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([billingReceiptId], map: "idx_invoice_requests_receipt_id")
+  @@index([rfc], map: "idx_invoice_requests_rfc")
+  @@index([saleId], map: "idx_invoice_requests_sale_id")
+  @@index([status], map: "idx_invoice_requests_status")
+  @@map("billing_invoice_requests")
 }
 
 model PacWebhookEvent {
@@ -1668,6 +1731,25 @@ enum InvoiceDocumentType {
   pdf
 
   @@map("invoice_document_type")
+}
+
+enum BillingReceiptStatus {
+  active
+  used
+  expired
+  cancelled
+
+  @@map("billing_receipt_status")
+}
+
+enum InvoiceRequestStatus {
+  received
+  processing
+  stamped
+  failed
+  manual_review
+
+  @@map("invoice_request_status")
 }
 
 enum AnalyticsSnapshotType {

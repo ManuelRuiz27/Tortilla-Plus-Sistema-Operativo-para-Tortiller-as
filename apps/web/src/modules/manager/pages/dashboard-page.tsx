@@ -4,12 +4,14 @@ import { Link } from "react-router-dom";
 import { managerDashboardRequest } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { StatusBadge } from "../../../shared/components/status-badge";
+import { useBranchStore } from "../../../shared/stores/branch.store";
 import { formatManagerMoney } from "../utils/money";
 
 export function DashboardPage() {
+  const branchId = useBranchStore((state) => state.activeBranchId);
   const { data, isError, isLoading } = useQuery({
-    queryFn: managerDashboardRequest,
-    queryKey: ["manager-dashboard"]
+    queryFn: () => managerDashboardRequest({ branchId }),
+    queryKey: ["manager-dashboard", branchId]
   });
 
   if (isLoading) {

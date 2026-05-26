@@ -173,6 +173,37 @@ export type BillingInvoice = {
   status: "draft" | "stamped" | "cancelled" | "error";
 };
 
+export type BillingDocument = {
+  id: string;
+  type: "xml" | "pdf";
+  url: string;
+  createdAt: string;
+};
+
+export type BillingDocuments = {
+  invoiceId: string;
+  cfdiUuid: string | null;
+  documents: BillingDocument[];
+};
+
+export type BillingReceipt = {
+  id: string;
+  saleId: string;
+  saleFolio: string;
+  branchName: string;
+  token: string;
+  receiptUrl: string;
+  qrContent?: string;
+  status: "active" | "used" | "expired" | "cancelled";
+  saleDate: string;
+  expiresAt: string;
+  usedAt: string | null;
+  expiredAt: string | null;
+  total: number;
+  invoiceId: string | null;
+  cfdiUuid: string | null;
+};
+
 export type BillingSummary = {
   billableSales: BillableSale[];
   invoices: BillingInvoice[];
@@ -184,6 +215,29 @@ export type BillingSummary = {
   stampErrors: number;
 };
 
+export type ReconciliationItem = {
+  id: string;
+  salePaymentId: string | null;
+  providerReference: string | null;
+  posAmount: number;
+  providerAmount: number;
+  status: "matched" | "missing_in_provider" | "missing_in_pos" | "amount_mismatch";
+  notes: string | null;
+};
+
+export type ReconciliationBatch = {
+  id: string;
+  branchId: string;
+  branchName: string;
+  status: "draft" | "matched" | "difference" | "reviewed" | "cancelled";
+  posTotal: number;
+  providerReportedTotal: number;
+  differenceTotal: number;
+  reviewedAt: string | null;
+  createdAt: string;
+  items: ReconciliationItem[];
+};
+
 export type ReportPoint = {
   label: string;
   value: number;
@@ -193,6 +247,7 @@ export type ReportsSummary = {
   salesByDay: ReportPoint[];
   salesByProduct: ReportPoint[];
   salesByBranch: ReportPoint[];
+  salesByCustomer: ReportPoint[];
   withdrawalsByReason: ReportPoint[];
   cashDifferences: ReportPoint[];
 };
@@ -201,6 +256,15 @@ export type SettingsSummary = {
   posDevices: Array<{ id: string; name: string; status: "active" | "inactive"; lastSeen: string }>;
   withdrawalReasons: Array<{ id: string; name: string; direction: "in" | "out"; requiresAuthorization: boolean }>;
   packageConfig: Array<{ productName: string; baseProductName: string; packageWeightGrams: number }>;
+  auditLogs: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    branchName: string | null;
+    userName: string | null;
+    createdAt: string;
+  }>;
 };
 
 export type CashMovement = {

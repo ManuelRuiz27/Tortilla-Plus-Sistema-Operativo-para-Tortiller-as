@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { DomainError } from "../lib/domain-error.js";
 import { prisma } from "../lib/prisma.js";
@@ -179,6 +180,194 @@ export async function createGlobalDailyInvoice(currentUser: AuthenticatedUser, i
 
     await audit(tx, currentUser, branchId, "global_daily_invoice_requested", "invoice", invoice.id, serializeInvoice(invoice));
     return { data: serializeInvoice(invoice) };
+  });
+}
+
+export async function stampInvoice(currentUser: AuthenticatedUser, invoiceId: string) {
+  await assertFeatureAvailable(currentUser, "billing_cfdi");
+  await assertPermission(currentUser.id, "billing.manage");
+
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findFirst({
+      where: { id: invoiceId, organizationId: currentUser.organizationId },
+      include: {
+        customer: true,
+        invoiceSaleInvoice: { include: { sale: { include: { customer: true } } } },
+      },
+    });
+
+    if (!invoice) {
+      throw new DomainError(404, "INVOICE_NOT_FOUND", "Factura no encontrada.");
+    }
+    if (invoice.branchId) {
+      await assertBranchAccess(currentUser, invoice.branchId);
+    }
+    if (invoice.status === "cancelled" || invoice.status === "cancel_requested") {
+      throw new DomainError(409, "INVOICE_CANCELLED", "Factura cancelada no se puede timbrar.");
+    }
+    if (invoice.status === "stamped") {
+      return { data: serializeInvoice(invoice) };
+    }
+
+    const cfdiUuid = invoice.cfdiUuid ?? randomUUID();
+    const stamped = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: "stamped",
+        cfdiUuid,
+        pacProvider: "tortilla-plus-pac-mock",
+        pacStatus: "stamped",
+        issuedAt: new Date(),
+        rawResponse: {
+          provider: "tortilla-plus-pac-mock",
+          status: "stamped",
+          cfdiUuid,
+        },
+      },
+      include: {
+        customer: true,
+        invoiceSaleInvoice: { include: { sale: { include: { customer: true } } } },
+      },
+    });
+
+    await ensureInvoiceDocuments(tx, stamped.id, cfdiUuid);
+    await audit(tx, currentUser, stamped.branchId, "invoice_stamped", "invoice", stamped.id, serializeInvoice(stamped));
+    return { data: serializeInvoice(stamped) };
+  });
+}
+
+export async function cancelInvoice(currentUser: AuthenticatedUser, invoiceId: string, input: unknown) {
+  await assertFeatureAvailable(currentUser, "billing_cfdi");
+  await assertPermission(currentUser.id, "billing.manage");
+  const body = asRecord(input);
+  const reason = optionalString(body.reason) ?? "Cancelacion solicitada por usuario.";
+
+  return prisma.$transaction(async (tx) => {
+    const invoice = await tx.invoice.findFirst({
+      where: { id: invoiceId, organizationId: currentUser.organizationId },
+      include: {
+        customer: true,
+        invoiceSaleInvoice: { include: { sale: { include: { customer: true } } } },
+      },
+    });
+
+    if (!invoice) {
+      throw new DomainError(404, "INVOICE_NOT_FOUND", "Factura no encontrada.");
+    }
+    if (invoice.branchId) {
+      await assertBranchAccess(currentUser, invoice.branchId);
+    }
+    if (invoice.status !== "stamped") {
+      throw new DomainError(409, "INVOICE_NOT_STAMPED", "Solo se cancela fiscalmente una factura timbrada.");
+    }
+
+    const cancelled = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: "cancelled",
+        pacStatus: "cancelled",
+        cancelledAt: new Date(),
+        cancellationReason: reason,
+        rawResponse: {
+          provider: "tortilla-plus-pac-mock",
+          status: "cancelled",
+          cfdiUuid: invoice.cfdiUuid,
+          reason,
+        },
+      },
+      include: {
+        customer: true,
+        invoiceSaleInvoice: { include: { sale: { include: { customer: true } } } },
+      },
+    });
+
+    await audit(tx, currentUser, cancelled.branchId, "invoice_cancelled", "invoice", cancelled.id, serializeInvoice(cancelled));
+    return { data: serializeInvoice(cancelled) };
+  });
+}
+
+export async function getInvoiceDocuments(currentUser: AuthenticatedUser, invoiceId: string) {
+  await assertFeatureAvailable(currentUser, "billing_cfdi");
+  await assertPermission(currentUser.id, "billing.manage");
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, organizationId: currentUser.organizationId },
+    include: {
+      invoiceDocumentInvoice: { orderBy: { documentType: "asc" } },
+    },
+  });
+
+  if (!invoice) {
+    throw new DomainError(404, "INVOICE_NOT_FOUND", "Factura no encontrada.");
+  }
+  if (invoice.branchId) {
+    await assertBranchAccess(currentUser, invoice.branchId);
+  }
+  if (invoice.status !== "stamped" && invoice.status !== "cancelled") {
+    throw new DomainError(409, "INVOICE_DOCUMENTS_NOT_READY", "Documentos disponibles despues del timbrado.");
+  }
+
+  return {
+    data: {
+      invoiceId: invoice.id,
+      cfdiUuid: invoice.cfdiUuid,
+      documents: invoice.invoiceDocumentInvoice.map((document) => ({
+        id: document.id,
+        type: document.documentType,
+        url: document.storageUrl,
+        createdAt: document.createdAt,
+      })),
+    },
+  };
+}
+
+export async function processPacWebhook(input: unknown) {
+  const body = asRecord(input);
+  const eventId = asString(body.eventId, "eventId");
+  const invoiceId = optionalString(body.invoiceId);
+  const provider = optionalString(body.provider) ?? "tortilla-plus-pac-mock";
+  const status = optionalString(body.status) ?? "stamped";
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.pacWebhookEvent.findUnique({ where: { eventId } });
+    if (existing) {
+      return { data: { eventId, processed: existing.processed, duplicate: true } };
+    }
+
+    const event = await tx.pacWebhookEvent.create({
+      data: {
+        provider,
+        eventId,
+        invoiceId,
+        rawPayload: body as Prisma.InputJsonValue,
+      },
+    });
+
+    if (invoiceId && status === "stamped") {
+      const invoice = await tx.invoice.findUnique({ where: { id: invoiceId } });
+      if (invoice && invoice.status !== "cancelled") {
+        const cfdiUuid = optionalString(body.cfdiUuid) ?? invoice.cfdiUuid ?? randomUUID();
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: "stamped",
+            cfdiUuid,
+            pacProvider: provider,
+            pacStatus: "stamped",
+            issuedAt: invoice.issuedAt ?? new Date(),
+            rawResponse: body as Prisma.InputJsonValue,
+          },
+        });
+        await ensureInvoiceDocuments(tx, invoice.id, cfdiUuid);
+      }
+    }
+
+    await tx.pacWebhookEvent.update({
+      where: { id: event.id },
+      data: { processed: true, processedAt: new Date() },
+    });
+
+    return { data: { eventId, processed: true, duplicate: false } };
   });
 }
 
@@ -369,5 +558,27 @@ async function audit(
       entityId,
       afterSnapshot: afterSnapshot as Prisma.InputJsonValue,
     },
+  });
+}
+
+async function ensureInvoiceDocuments(tx: Prisma.TransactionClient, invoiceId: string, cfdiUuid: string) {
+  const existing = await tx.invoiceDocument.findMany({
+    where: { invoiceId },
+    select: { documentType: true },
+  });
+  const existingTypes = new Set(existing.map((document) => document.documentType));
+  const documents = [
+    { documentType: "xml" as const, storageUrl: `/api/v1/billing/invoices/${invoiceId}/documents/${cfdiUuid}.xml` },
+    { documentType: "pdf" as const, storageUrl: `/api/v1/billing/invoices/${invoiceId}/documents/${cfdiUuid}.pdf` },
+  ].filter((document) => !existingTypes.has(document.documentType));
+
+  if (documents.length === 0) return;
+
+  await tx.invoiceDocument.createMany({
+    data: documents.map((document) => ({
+      invoiceId,
+      documentType: document.documentType,
+      storageUrl: document.storageUrl,
+    })),
   });
 }

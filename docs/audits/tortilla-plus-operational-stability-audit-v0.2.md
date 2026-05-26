@@ -149,6 +149,208 @@ El flujo operativo central queda validado con backend real, PostgreSQL local,
 datos seed reales y mocks apagados. La PWA tiene smoke E2E minimo contra API real.
 ```
 
+### 2.5 Roadmap fijo posterior a P0/P1
+
+Fecha de actualizacion: 2026-05-24.
+
+Se crea el roadmap fijo de cierre para evitar desviaciones, duplicidad de trabajo y deuda tecnica no registrada:
+
+```txt
+docs/audits/tortilla-plus-fixed-roadmap-v0.1.md
+```
+
+Estado actual:
+
+```txt
+[x] F0 Estabilidad operativa P0/P1
+[x] F1 Billing y autofactura sin huecos
+[x] F2 Conciliacion bancaria
+[x] F3 Dashboard y reportes reales
+[x] F4 Exportaciones
+[x] F5 Integraciones fisicas y terminales
+[x] F6 Permisos avanzados y hardening final
+```
+
+Avance F1 confirmado:
+
+```txt
+[x] Factura individual real minima
+[x] Factura global diaria real minima
+[x] PAC mock para timbrado/cancelacion
+[x] Documentos CFDI registrados
+[x] Webhook PAC idempotente
+[x] Autofactura publica minima
+[x] Playwright E2E especifico de autofactura publica
+[x] Descarga real o respuesta realista PDF/XML
+[x] Rate limit por token/IP
+[x] Expiracion programada de receipts
+[x] Catalogos fiscales para regimen y uso CFDI
+[x] Manager: listado/reimpresion de receipts QR
+```
+
+Pendiente inmediato F1:
+
+```txt
+Sin pendientes en F1.
+```
+
+Avance F2 confirmado:
+
+```txt
+[x] Modelo/servicio ReconciliationService real
+[x] POST /reconciliation/batches
+[x] POST /reconciliation/batches/:id/items
+[x] POST /reconciliation/batches/:id/review
+[x] UI minima de conciliacion
+[x] Tests QA-REC con tenant/sucursal
+```
+
+Validacion F2 ejecutada:
+
+```txt
+npm run audit:stability:e2e
+lint -> OK
+build -> OK
+unit tests -> OK, 20/20
+integration tests backend + DB -> OK, 8/8
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 2/2
+```
+
+Resultado F2:
+
+```txt
+Pagos POS se comparan contra proveedor/import manual.
+Diferencias quedan marcadas por partida y por lote.
+Revision manual queda registrada en audit_logs.
+Listados de conciliacion filtran por tenant y sucursal.
+```
+
+Avance F3 confirmado:
+
+```txt
+[x] Dashboard real sin datos demo
+[x] GET /reports/sales-by-day
+[x] GET /reports/sales-by-branch
+[x] GET /reports/sales-by-product
+[x] GET /reports/sales-by-customer
+[x] GET /reports/cash-withdrawals-by-reason
+[x] GET /reports/cash-differences
+[x] UI de reportes conectada a backend real
+```
+
+Validacion F3 ejecutada:
+
+```txt
+npm run audit:stability:e2e
+lint -> OK
+build -> OK
+unit tests -> OK, 20/20
+integration tests backend + DB -> OK, 9/9
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 2/2
+```
+
+Resultado F3:
+
+```txt
+Dashboard manager consume backend real con VITE_USE_MOCKS=false.
+Reportes operativos agregan ventas por dia, sucursal, producto y cliente.
+Reportes de caja agregan retiros por motivo y diferencias de cierre.
+Todos los reportes aplican tenant, sucursal y rango de fechas.
+```
+
+Avance F4 confirmado:
+
+```txt
+[x] Exportacion facturas emitidas
+[x] Exportacion facturas globales
+[x] Exportacion reportes operativos
+[x] Descarga CSV/XLSX minima
+[x] Tests de generacion/descarga
+```
+
+Validacion F4 ejecutada:
+
+```txt
+npm run audit:stability:e2e
+lint -> OK
+build -> OK
+unit tests -> OK, 20/20
+integration tests backend + DB -> OK, 10/10
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 2/2
+```
+
+Resultado F4:
+
+```txt
+Exportaciones de facturas emitidas disponibles por HTTP.
+Exportaciones de facturas globales disponibles por HTTP.
+Exportaciones de reportes operativos disponibles por HTTP.
+Formatos CSV y XLSX minimo se generan sin dependencias externas.
+Descargas aplican tenant, sucursal y rango de fechas.
+```
+
+Avance F5 confirmado:
+
+```txt
+[x] Terminal Mercado Pago
+[x] Terminal Clip
+[x] Bascula
+[x] Codigo de barras
+```
+
+Validacion F5 ejecutada:
+
+```txt
+npm run audit:stability:e2e
+lint -> OK
+build -> OK
+unit tests -> OK, 20/20
+integration tests backend + DB -> OK, 11/11
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 2/2
+```
+
+Resultado F5:
+
+```txt
+Mercado Pago tiene contrato backend, mock aislado, modo real documentado y fallback manual.
+Clip tiene contrato backend, mock aislado, modo real documentado/bloqueado y fallback manual.
+Bascula tiene contrato de lectura, mock/manual y auditoria.
+Codigo de barras resuelve productos reales por tenant y sucursal.
+Contratos documentados en docs/integrations/physical-integrations-v0.1.md.
+```
+
+Avance F6 confirmado:
+
+```txt
+[x] Matriz de permisos por pantalla/accion
+[x] Tests por rol para billing
+[x] Tests por rol para conciliacion
+[x] Tests por rol para reportes/exportaciones
+[x] Errores operativos claros
+[x] Logs de auditoria visibles para acciones criticas
+```
+
+Validacion F6 ejecutada:
+
+```txt
+npm run audit:stability:e2e
+lint -> OK
+build -> OK
+unit tests -> OK, 20/20
+integration tests backend + DB -> OK, 12/12
+Playwright E2E minimo PWA + API real + VITE_USE_MOCKS=false -> OK, 2/2
+```
+
+Resultado F6:
+
+```txt
+Matriz de permisos documentada en docs/security/permission-matrix-v0.1.md.
+Roles bloquean billing, conciliacion, reportes y exportaciones segun matriz.
+Errores de permiso devuelven mensaje operativo.
+Ajustes muestra auditoria critica reciente desde backend real.
+Roadmap fijo F0-F6 cerrado.
+```
+
 ---
 
 ## 3. Estado real del monorepo
@@ -725,24 +927,29 @@ Factura global diaria por sucursal
 
 ```txt
 UI existente
-Datos demo parciales
-No estable como fuente operativa
+Dashboard y reportes conectados a backend real desde F3
+Settings y produccion siguen fuera de F3
 ```
 
-## Funciones con demo confirmado
+## Funciones ya cerradas
 
 ```txt
 managerDashboardRequest
-pendingWithdrawalsRequest
-productionBatchesRequest
 billingSummaryRequest
 reportsSummaryRequest
+```
+
+## Funciones con demo confirmado fuera de F3
+
+```txt
+pendingWithdrawalsRequest
+productionBatchesRequest
 settingsSummaryRequest
 ```
 
 ## Riesgo
 
-El owner puede ver datos que aparentan ser reales.
+Riesgo resuelto para dashboard/reportes. Sigue vigente solo para secciones fuera del alcance F3 que aun usan demo o bloqueo explicito.
 
 ## Acción
 
@@ -761,12 +968,6 @@ o bloquearse temporalmente
 Estos requerimientos no están confirmados como flujo real estable en el repo auditado:
 
 ```txt
-Facturación global diaria real desde backend
-Facturación individual real desde backend
-Portal público de autofactura
-Conciliación bancaria
-Reportes reales consolidados
-Dashboard owner con métricas reales
 Integración con báscula
 Integración con terminal Mercado Pago
 Integración con Clip
@@ -1080,18 +1281,6 @@ El menú actual ya está cerca. El pendiente es que las acciones internas sean f
 # P2 — Después de estabilidad
 
 ```txt
-Facturación global real
-Facturación individual real
-Autofactura pública
-Conciliación bancaria
-Dashboard real
-Reportes reales
-Exportaciones
-Terminal Mercado Pago
-Terminal Clip
-Báscula
-Código de barras
-Permisos avanzados
 ```
 
 ---
@@ -1146,11 +1335,7 @@ Build obligatorio
 ```txt
 Facturación
 Autofactura
-Reportes reales
 Conciliación
-Terminales
-Báscula
-Código de barras
 ```
 
 ---
@@ -1263,9 +1448,9 @@ Código de barras
 
 ```txt
 [ ] QA no usa VITE_USE_MOCKS=true.
-[ ] Dashboard demo etiquetado.
-[ ] Reportes demo etiquetados.
-[ ] Billing demo bloqueado o etiquetado.
+[x] Dashboard sin demo con VITE_USE_MOCKS=false.
+[x] Reportes sin demo con VITE_USE_MOCKS=false.
+[x] Billing sin demo con VITE_USE_MOCKS=false.
 [ ] Producción demo identificada.
 [ ] Settings demo identificado.
 ```
@@ -1359,9 +1544,6 @@ Una vez cerrado este sprint, el proyecto queda listo para decidir entre:
 
 ```txt
 Facturación
-Terminales
-Báscula
-Código de barras
 Reportes avanzados
 ```
 
@@ -1369,8 +1551,3 @@ Orden recomendado:
 
 ```txt
 1. Estabilidad operativa
-2. Reportes reales
-3. Facturación
-4. Terminales
-5. Báscula
-6. Código de barras

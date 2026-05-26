@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from "./auth-service.js";
 import { runIdempotent } from "./idempotency-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
+import { createBillingReceiptForSale } from "./public-autofactura-service.js";
 
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
 const paymentMethods = ["cash", "card", "transfer", "credit"] as const;
@@ -315,6 +316,13 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
         saleItemSale: true,
         salePaymentSale: true,
       },
+    });
+
+    await createBillingReceiptForSale(tx, {
+      organizationId: currentUser.organizationId,
+      branchId: sale.branchId,
+      saleId,
+      payments: createdPayments,
     });
 
     for (const payment of payments.filter((item) => item.paymentMethod === "credit")) {

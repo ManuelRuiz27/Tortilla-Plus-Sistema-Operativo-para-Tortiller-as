@@ -1,8 +1,10 @@
 import { env } from "./config/env.js";
 import { prisma } from "./lib/prisma.js";
 import { buildServer } from "./server.js";
+import { startBillingScheduler } from "./services/billing-scheduler.js";
 
 const server = buildServer();
+const stopBillingScheduler = startBillingScheduler();
 
 try {
   await new Promise<void>((resolve) => {
@@ -26,6 +28,7 @@ const shutdown = async () => {
       resolve();
     });
   });
+  stopBillingScheduler();
   await prisma.$disconnect();
 };
 

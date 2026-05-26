@@ -99,6 +99,10 @@ export function ReportsPage() {
           <Bars items={data.salesByBranch} />
         </article>
         <article className="rounded-md border border-tp-border bg-white p-5">
+          <h2 className="mb-4 text-sm font-semibold">Ventas por cliente</h2>
+          <Bars items={data.salesByCustomer} />
+        </article>
+        <article className="rounded-md border border-tp-border bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold">Caja</h2>
           <div className="mb-5">
             <p className="mb-3 text-xs uppercase text-tp-muted">Retiros por motivo</p>

@@ -46,7 +46,7 @@ export async function assertPermission(userId: string, permissionCode: string) {
   const permissions = await getPermissionCodes(userId);
 
   if (!permissions.includes(permissionCode)) {
-    throw new DomainError(403, "PERMISSION_REQUIRED", "Permiso requerido.", {
+    throw new DomainError(403, "PERMISSION_REQUIRED", "No tienes permiso para realizar esta accion.", {
       permission: permissionCode,
     });
   }
@@ -56,7 +56,7 @@ export async function assertAnyPermission(userId: string, permissionCodes: strin
   const permissions = await getPermissionCodes(userId);
 
   if (!permissionCodes.some((permissionCode) => permissions.includes(permissionCode))) {
-    throw new DomainError(403, "PERMISSION_REQUIRED", "Permiso requerido.", {
+    throw new DomainError(403, "PERMISSION_REQUIRED", "No tienes permiso para realizar esta accion.", {
       permissions: permissionCodes,
     });
   }

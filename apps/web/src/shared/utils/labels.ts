@@ -22,6 +22,8 @@ const statusLabels: Record<string, string> = {
   cancelled: "Cancelada",
   error: "Con error",
   not_created: "Sin crear",
+  used: "Usado",
+  expired: "Vencido",
   free: "Gratis",
   ok: "Bien",
   low: "Bajo",

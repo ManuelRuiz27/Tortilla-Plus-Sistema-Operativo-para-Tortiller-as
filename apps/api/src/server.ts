@@ -3,6 +3,7 @@ import { URL } from "node:url";
 
 import { DomainError, toErrorResponse } from "./lib/domain-error.js";
 import { prisma } from "./lib/prisma.js";
+import { assertRateLimit } from "./lib/rate-limit.js";
 import {
   authenticate,
   getMe,
@@ -82,10 +83,53 @@ import {
   reviewDeliveryReturn,
 } from "./services/delivery-service.js";
 import {
+  cancelInvoice,
   createGlobalDailyInvoice,
   createIndividualInvoice,
   getBillingSummary,
+  getInvoiceDocuments,
+  processPacWebhook,
+  stampInvoice,
 } from "./services/billing-service.js";
+import { getPublicBillingCatalogs } from "./services/billing-catalog-service.js";
+import {
+  expireBillingReceiptsForManager,
+  getBillingReceiptBySale,
+  getPublicInvoiceDocument,
+  getPublicInvoiceStatus,
+  getPublicReceipt,
+  listBillingReceipts,
+  reprintBillingReceipt,
+  submitPublicInvoice,
+} from "./services/public-autofactura-service.js";
+import {
+  addReconciliationItem,
+  createReconciliationBatch,
+  listReconciliationBatches,
+  reviewReconciliationBatch,
+} from "./services/reconciliation-service.js";
+import {
+  getCashDifferences,
+  getCashWithdrawalsByReason,
+  getManagerDashboard,
+  getReportsSummary,
+  getSalesByBranch,
+  getSalesByCustomer,
+  getSalesByDay,
+  getSalesByProduct,
+} from "./services/reports-service.js";
+import {
+  exportGlobalInvoices,
+  exportIssuedInvoices,
+  exportOperationalReports,
+} from "./services/export-service.js";
+import {
+  createTerminalPayment,
+  getTerminalPaymentStatus,
+  lookupBarcode,
+  readScale,
+} from "./services/physical-integration-service.js";
+import { getSettingsSummary } from "./services/settings-service.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -157,6 +201,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/settings/summary") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getSettingsSummary(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+    }));
+    return;
+  }
+
   if (method === "POST" && path === "/api/v1/sales") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createSale(currentUser, await readJson(request)));
@@ -166,6 +218,38 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/sales/quote") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await quoteSale(currentUser, await readJson(request)));
+    return;
+  }
+
+  const terminalPaymentMatch = path.match(/^\/api\/v1\/integrations\/terminals\/(mercadopago|clip)\/payments$/);
+  if (method === "POST" && terminalPaymentMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createTerminalPayment(currentUser, terminalPaymentMatch[1] as "mercadopago" | "clip", await readJson(request)));
+    return;
+  }
+
+  const terminalStatusMatch = path.match(/^\/api\/v1\/integrations\/terminals\/(mercadopago|clip)\/payments\/([^/]+)$/);
+  if (method === "GET" && terminalStatusMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getTerminalPaymentStatus(currentUser, terminalStatusMatch[1] as "mercadopago" | "clip", terminalStatusMatch[2], {
+      branchId: url.searchParams.get("branchId"),
+      externalReference: url.searchParams.get("externalReference"),
+    }));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/integrations/scale/readings") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await readScale(currentUser, await readJson(request)));
+    return;
+  }
+
+  const barcodeMatch = path.match(/^\/api\/v1\/integrations\/barcodes\/([^/]+)$/);
+  if (method === "GET" && barcodeMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await lookupBarcode(currentUser, decodeURIComponent(barcodeMatch[1]), {
+      branchId: url.searchParams.get("branchId"),
+    }));
     return;
   }
 
@@ -483,6 +567,102 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/reconciliation/batches") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listReconciliationBatches(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+    }));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/reconciliation/batches") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createReconciliationBatch(currentUser, await readJson(request)));
+    return;
+  }
+
+  const reconciliationItemMatch = path.match(/^\/api\/v1\/reconciliation\/batches\/([^/]+)\/items$/);
+  if (method === "POST" && reconciliationItemMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await addReconciliationItem(currentUser, reconciliationItemMatch[1], await readJson(request)));
+    return;
+  }
+
+  const reconciliationReviewMatch = path.match(/^\/api\/v1\/reconciliation\/batches\/([^/]+)\/review$/);
+  if (method === "POST" && reconciliationReviewMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await reviewReconciliationBatch(currentUser, reconciliationReviewMatch[1], await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/manager/dashboard") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getManagerDashboard(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+    }));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/summary") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getReportsSummary(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/sales-by-day") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getSalesByDay(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/sales-by-branch") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getSalesByBranch(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/sales-by-product") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getSalesByProduct(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/sales-by-customer") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getSalesByCustomer(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/cash-withdrawals-by-reason") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getCashWithdrawalsByReason(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/reports/cash-differences") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getCashDifferences(currentUser, reportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/exports/billing/invoices") {
+    const currentUser = await authenticate(request);
+    sendDocument(response, 200, await exportIssuedInvoices(currentUser, exportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/exports/billing/global-invoices") {
+    const currentUser = await authenticate(request);
+    sendDocument(response, 200, await exportGlobalInvoices(currentUser, exportQuery(url)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/exports/reports/operational") {
+    const currentUser = await authenticate(request);
+    sendDocument(response, 200, await exportOperationalReports(currentUser, exportQuery(url)));
+    return;
+  }
+
   if (method === "POST" && path === "/api/v1/billing/invoices/individual") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createIndividualInvoice(currentUser, await readJson(request)));
@@ -492,6 +672,96 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/billing/invoices/global-daily") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createGlobalDailyInvoice(currentUser, await readJson(request)));
+    return;
+  }
+
+  const billingInvoiceActionMatch = path.match(/^\/api\/v1\/billing\/invoices\/([^/]+)\/(stamp|cancel|documents)$/);
+  if (billingInvoiceActionMatch) {
+    const currentUser = await authenticate(request);
+    const [, invoiceId, action] = billingInvoiceActionMatch;
+
+    if (method === "POST" && action === "stamp") {
+      sendJson(response, 200, await stampInvoice(currentUser, invoiceId));
+      return;
+    }
+
+    if (method === "POST" && action === "cancel") {
+      sendJson(response, 200, await cancelInvoice(currentUser, invoiceId, await readJson(request)));
+      return;
+    }
+
+    if (method === "GET" && action === "documents") {
+      sendJson(response, 200, await getInvoiceDocuments(currentUser, invoiceId));
+      return;
+    }
+  }
+
+  if (method === "POST" && path === "/api/v1/webhooks/pac") {
+    sendJson(response, 200, await processPacWebhook(await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/public/billing/catalogs") {
+    sendJson(response, 200, getPublicBillingCatalogs());
+    return;
+  }
+
+  const billingReceiptBySaleMatch = path.match(/^\/api\/v1\/billing\/receipts\/by-sale\/([^/]+)$/);
+  if (billingReceiptBySaleMatch && method === "GET") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getBillingReceiptBySale(currentUser, billingReceiptBySaleMatch[1]));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/billing/receipts") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listBillingReceipts(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      date: url.searchParams.get("date"),
+      status: url.searchParams.get("status"),
+    }));
+    return;
+  }
+
+  const billingReceiptReprintMatch = path.match(/^\/api\/v1\/billing\/receipts\/([^/]+)\/reprint$/);
+  if (billingReceiptReprintMatch && method === "POST") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await reprintBillingReceipt(currentUser, billingReceiptReprintMatch[1]));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/billing/receipts/expire") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await expireBillingReceiptsForManager(currentUser));
+    return;
+  }
+
+  const publicReceiptMatch = path.match(/^\/api\/v1\/public\/billing\/receipts\/([^/]+)$/);
+  if (publicReceiptMatch && method === "GET") {
+    assertPublicAutofacturaRateLimit(request, "lookup", publicReceiptMatch[1]);
+    sendJson(response, 200, await getPublicReceipt(publicReceiptMatch[1]));
+    return;
+  }
+
+  const publicInvoiceMatch = path.match(/^\/api\/v1\/public\/billing\/receipts\/([^/]+)\/invoice$/);
+  if (publicInvoiceMatch && method === "POST") {
+    assertPublicAutofacturaRateLimit(request, "submit", publicInvoiceMatch[1]);
+    sendJson(response, 201, await submitPublicInvoice(publicInvoiceMatch[1], await readJson(request)));
+    return;
+  }
+
+  const publicInvoiceStatusMatch = path.match(/^\/api\/v1\/public\/billing\/receipts\/([^/]+)\/invoice-status$/);
+  if (publicInvoiceStatusMatch && method === "GET") {
+    assertPublicAutofacturaRateLimit(request, "lookup", publicInvoiceStatusMatch[1]);
+    sendJson(response, 200, await getPublicInvoiceStatus(publicInvoiceStatusMatch[1]));
+    return;
+  }
+
+  const publicInvoiceDocumentMatch = path.match(/^\/api\/v1\/public\/billing\/invoices\/([^/]+)\/(pdf|xml)$/);
+  if (publicInvoiceDocumentMatch && method === "GET") {
+    const [, invoiceId, documentType] = publicInvoiceDocumentMatch;
+    const document = await getPublicInvoiceDocument(invoiceId, documentType as "pdf" | "xml");
+    sendDocument(response, 200, document);
     return;
   }
 
@@ -603,11 +873,38 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
+function reportQuery(url: URL) {
+  return {
+    branchId: url.searchParams.get("branchId"),
+    from: url.searchParams.get("from"),
+    to: url.searchParams.get("to"),
+  };
+}
+
+function exportQuery(url: URL) {
+  return {
+    ...reportQuery(url),
+    format: url.searchParams.get("format"),
+  };
+}
+
 function sendJson(response: ServerResponse, statusCode: number, body: JsonBody) {
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
   });
   response.end(JSON.stringify(body));
+}
+
+function sendDocument(
+  response: ServerResponse,
+  statusCode: number,
+  document: { filename: string; contentType: string; body: string | Buffer },
+) {
+  response.writeHead(statusCode, {
+    "content-type": document.contentType,
+    "content-disposition": `attachment; filename="${document.filename}"`,
+  });
+  response.end(document.body);
 }
 
 function applyCorsHeaders(request: IncomingMessage, response: ServerResponse) {
@@ -659,4 +956,27 @@ async function readJson(request: IncomingMessage) {
 function getIdempotencyKey(request: IncomingMessage): string | null {
   const value = request.headers["idempotency-key"];
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function assertPublicAutofacturaRateLimit(
+  request: IncomingMessage,
+  action: "lookup" | "submit",
+  token: string,
+) {
+  const ip = getClientIp(request);
+  const limit = action === "submit" ? 5 : 20;
+  assertRateLimit({
+    key: `public-autofactura:${action}:${token}:${ip}`,
+    limit,
+    windowMs: 60 * 60 * 1000,
+    message: action === "submit"
+      ? "Demasiados intentos de autofactura. Intenta mas tarde."
+      : "Demasiadas consultas del ticket. Intenta mas tarde.",
+  });
+}
+
+function getClientIp(request: IncomingMessage) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+  const firstForwarded = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  return firstForwarded?.split(",")[0]?.trim() || request.socket.remoteAddress || "unknown";
 }

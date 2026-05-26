@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MonitorSmartphone, PackageCheck, RefreshCw, ShieldCheck, UserRoundCog } from "lucide-react";
+import { ClipboardList, MonitorSmartphone, PackageCheck, RefreshCw, ShieldCheck, UserRoundCog } from "lucide-react";
 import { settingsSummaryRequest } from "../../../api/manager.api";
 import { subscriptionFeaturesRequest } from "../../../api/subscriptions.api";
 import { Button } from "../../../shared/components/button";
@@ -140,6 +140,26 @@ export function SettingsPage() {
           <div className="flex flex-wrap gap-2">
             {user?.permissions.length === 0 ? <p className="text-sm text-tp-muted">No hay accesos cargados.</p> : null}
             {user?.permissions.map((permission) => <StatusBadge key={permission} tone="info">{labelPermission(permission)}</StatusBadge>)}
+          </div>
+        </article>
+
+        <article className="rounded-md border border-tp-border bg-white p-5 xl:col-span-2">
+          <div className="mb-4 flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-tp-secondary" aria-hidden="true" />
+            <h2 className="text-sm font-semibold">Auditoria critica reciente</h2>
+          </div>
+          <div className="space-y-3">
+            {data.auditLogs.length === 0 ? <p className="text-sm text-tp-muted">Sin eventos criticos recientes.</p> : null}
+            {data.auditLogs.map((log) => (
+              <div className="grid gap-2 border-t border-tp-border pt-3 text-sm first:border-t-0 first:pt-0 md:grid-cols-[1fr_150px_180px]" key={log.id}>
+                <div>
+                  <p className="font-semibold">{log.action}</p>
+                  <p className="text-xs text-tp-muted">{log.entityType} · {log.entityId}</p>
+                </div>
+                <p className="text-tp-muted">{log.branchName ?? "Sin sucursal"}</p>
+                <p className="text-right text-tp-muted">{new Date(log.createdAt).toLocaleString()}</p>
+              </div>
+            ))}
           </div>
         </article>
       </div>

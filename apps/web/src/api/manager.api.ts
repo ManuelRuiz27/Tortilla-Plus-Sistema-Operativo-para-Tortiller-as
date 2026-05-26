@@ -19,6 +19,8 @@ import {
 import { ApiErrorException } from "./api-error";
 import { httpClient } from "./http-client";
 import type {
+  BillingDocuments,
+  BillingReceipt,
   BillingSummary,
   CustomerBalance,
   CustomerBalanceMovement,
@@ -33,6 +35,7 @@ import type {
   ManagerProduct,
   PendingWithdrawal,
   ProductionBatch,
+  ReconciliationBatch,
   ReportsSummary,
   SettingsSummary
 } from "../modules/manager/types/manager.types";
@@ -339,9 +342,12 @@ function mapDeliverySettlement(settlement: ApiDeliverySettlement): DeliverySettl
   };
 }
 
-export function managerDashboardRequest(): Promise<ManagerDashboardSummary> {
+export function managerDashboardRequest(filters: { branchId?: string | null } = {}): Promise<ManagerDashboardSummary> {
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("manager-dashboard"));
+    const params = new URLSearchParams();
+    if (filters.branchId) params.set("branchId", filters.branchId);
+    const query = params.toString();
+    return httpClient<ManagerDashboardSummary>(`/manager/dashboard${query ? `?${query}` : ""}`);
   }
 
   return Promise.resolve(buildDemoManagerSummary());
@@ -1014,10 +1020,125 @@ export function createGlobalDailyInvoiceRequest(payload: { branchId: string; dat
   });
 }
 
+export function stampInvoiceRequest(invoiceId: string): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/billing/invoices/${invoiceId}/stamp`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function cancelInvoiceRequest(payload: { invoiceId: string; reason?: string }): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/billing/invoices/${payload.invoiceId}/cancel`, {
+    method: "POST",
+    body: { reason: payload.reason }
+  });
+}
+
+export function invoiceDocumentsRequest(invoiceId: string): Promise<BillingDocuments> {
+  if (useMocks) {
+    return Promise.resolve({
+      invoiceId,
+      cfdiUuid: "demo-cfdi",
+      documents: [
+        { id: "demo-xml", type: "xml", url: "/demo/factura.xml", createdAt: new Date().toISOString() },
+        { id: "demo-pdf", type: "pdf", url: "/demo/factura.pdf", createdAt: new Date().toISOString() }
+      ]
+    });
+  }
+
+  return httpClient<BillingDocuments>(`/billing/invoices/${invoiceId}/documents`);
+}
+
+export function billingReceiptsRequest(filters: { branchId?: string | null; date: string; status?: string }): Promise<BillingReceipt[]> {
+  if (useMocks) {
+    return Promise.resolve([]);
+  }
+
+  const params = new URLSearchParams();
+  params.set("date", filters.date);
+  if (filters.branchId) params.set("branchId", filters.branchId);
+  if (filters.status) params.set("status", filters.status);
+  return httpClient<BillingReceipt[]>(`/billing/receipts?${params.toString()}`);
+}
+
+export function reprintBillingReceiptRequest(receiptId: string): Promise<BillingReceipt> {
+  if (useMocks) {
+    return Promise.reject(demoModuleUnavailable("billing-receipt-reprint"));
+  }
+
+  return httpClient<BillingReceipt>(`/billing/receipts/${receiptId}/reprint`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function reconciliationBatchesRequest(filters: { branchId?: string | null }): Promise<ReconciliationBatch[]> {
+  if (useMocks) {
+    return Promise.resolve([]);
+  }
+
+  const params = new URLSearchParams();
+  if (filters.branchId) params.set("branchId", filters.branchId);
+  const query = params.toString();
+  return httpClient<ReconciliationBatch[]>(`/reconciliation/batches${query ? `?${query}` : ""}`);
+}
+
+export function createReconciliationBatchRequest(payload: { branchId: string; cashSessionId?: string; providerId?: string }): Promise<ReconciliationBatch> {
+  if (useMocks) {
+    return Promise.reject(demoModuleUnavailable("reconciliation-create"));
+  }
+
+  return httpClient<ReconciliationBatch>("/reconciliation/batches", {
+    method: "POST",
+    body: payload
+  });
+}
+
+export function addReconciliationItemRequest(payload: {
+  batchId: string;
+  salePaymentId?: string;
+  providerReference?: string;
+  posAmount?: string;
+  providerAmount?: string;
+  notes?: string;
+}): Promise<ReconciliationBatch> {
+  if (useMocks) {
+    return Promise.reject(demoModuleUnavailable("reconciliation-item"));
+  }
+
+  const { batchId, ...body } = payload;
+  return httpClient<ReconciliationBatch>(`/reconciliation/batches/${batchId}/items`, {
+    method: "POST",
+    body
+  });
+}
+
+export function reviewReconciliationBatchRequest(payload: { batchId: string; notes?: string }): Promise<ReconciliationBatch> {
+  if (useMocks) {
+    return Promise.reject(demoModuleUnavailable("reconciliation-review"));
+  }
+
+  return httpClient<ReconciliationBatch>(`/reconciliation/batches/${payload.batchId}/review`, {
+    method: "POST",
+    body: { notes: payload.notes }
+  });
+}
+
 export function reportsSummaryRequest(filters: { branchId?: string | null; from: string; to: string }): Promise<ReportsSummary> {
-  void filters;
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("reports-summary"));
+    const params = new URLSearchParams();
+    params.set("from", filters.from);
+    params.set("to", filters.to);
+    if (filters.branchId) params.set("branchId", filters.branchId);
+    return httpClient<ReportsSummary>(`/reports/summary?${params.toString()}`);
   }
 
   return Promise.resolve(buildDemoReportsSummary());
@@ -1025,7 +1146,7 @@ export function reportsSummaryRequest(filters: { branchId?: string | null; from:
 
 export function settingsSummaryRequest(): Promise<SettingsSummary> {
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("settings-summary"));
+    return httpClient<SettingsSummary>("/settings/summary");
   }
 
   return Promise.resolve(buildDemoSettingsSummary());

@@ -4,9 +4,27 @@ import test from "node:test";
 import { prisma } from "../../src/lib/prisma.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import { login } from "../../src/services/auth-service.js";
-import { createGlobalDailyInvoice, createIndividualInvoice, getBillingSummary } from "../../src/services/billing-service.js";
+import { getPublicBillingCatalogs } from "../../src/services/billing-catalog-service.js";
+import {
+  cancelInvoice,
+  createGlobalDailyInvoice,
+  createIndividualInvoice,
+  getBillingSummary,
+  getInvoiceDocuments,
+  processPacWebhook,
+  stampInvoice,
+} from "../../src/services/billing-service.js";
 import { getOpenCashSession, openCashSession } from "../../src/services/cash-service.js";
 import { createCustomer } from "../../src/services/customer-service.js";
+import {
+  expireBillingReceipts,
+  getPublicInvoiceDocument,
+  getPublicInvoiceStatus,
+  getPublicReceipt,
+  listBillingReceipts,
+  reprintBillingReceipt,
+  submitPublicInvoice,
+} from "../../src/services/public-autofactura-service.js";
 import { addSaleItem, completeSale, createSale } from "../../src/services/sale-service.js";
 
 type LoginResult = Awaited<ReturnType<typeof login>>;
@@ -98,13 +116,229 @@ test("billing summary creates individual and global internal invoices from real 
   assert.equal(individual.status, "draft");
   assert.equal(individual.total, 24);
 
+  const stampedIndividual = (await stampInvoice(currentUser, individual.id)).data;
+  assert.equal(stampedIndividual.status, "stamped");
+  assert.match(stampedIndividual.folio, /^[0-9a-f-]{36}$/);
+
+  const documents = (await getInvoiceDocuments(currentUser, individual.id)).data;
+  assert.equal(documents.documents.length, 2);
+  assert.equal(documents.documents.some((document) => document.type === "xml"), true);
+  assert.equal(documents.documents.some((document) => document.type === "pdf"), true);
+
+  const duplicateWebhook = {
+    eventId: `pac-webhook-${individual.id}`,
+    invoiceId: individual.id,
+    provider: "tortilla-plus-pac-mock",
+    status: "stamped",
+    cfdiUuid: stampedIndividual.folio,
+  };
+  assert.equal((await processPacWebhook(duplicateWebhook)).data.duplicate, false);
+  assert.equal((await processPacWebhook(duplicateWebhook)).data.duplicate, true);
+
+  const cancelledIndividual = (await cancelInvoice(currentUser, individual.id, { reason: "Prueba de cancelacion fiscal" })).data;
+  assert.equal(cancelledIndividual.status, "cancelled");
+
   const global = (await createGlobalDailyInvoice(currentUser, { branchId, date })).data;
   assert.equal(global.status, "draft");
   assert.equal(global.total, 24);
+
+  const stampedGlobal = (await stampInvoice(currentUser, global.id)).data;
+  assert.equal(stampedGlobal.status, "stamped");
 
   const after = (await getBillingSummary(currentUser, { branchId, date })).data;
   assert.equal(after.billableSales.some((sale) => sale.id === customerSale.id), false);
   assert.equal(after.billableSales.some((sale) => sale.id === publicSale.id), false);
   assert.equal(after.invoices.length >= 2, true);
-  assert.equal(after.globalDaily.status, "draft");
+  assert.equal(after.globalDaily.status, "stamped");
+});
+
+test("public autofactura creates stamped invoice from card sale receipt token", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  await ensureCashSession(currentUser, branchId);
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: currentUser.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const sale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `autofactura-card-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, sale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, sale.id, {
+    payments: [{ paymentMethod: "card", amount: "24.00", reference: `card-${Date.now()}`, provider: "terminal-demo" }],
+  }, `autofactura-card-complete-${sale.id}`);
+
+  const receipt = await prisma.billingReceipt.findUniqueOrThrow({ where: { saleId: sale.id } });
+  assert.equal(receipt.status, "active");
+  assert.match(receipt.receiptToken, /^[A-Za-z0-9_-]{32,}$/);
+
+  const publicReceipt = (await getPublicReceipt(receipt.receiptToken)).data;
+  assert.equal(publicReceipt.canInvoice, true);
+  assert.equal(publicReceipt.folio, sale.saleNumber);
+  assert.equal(publicReceipt.total, 24);
+
+  const managerReceipts = (await listBillingReceipts(currentUser, { branchId, date: new Date().toISOString().slice(0, 10) })).data;
+  assert.equal(managerReceipts.some((item) => item.id === receipt.id && item.status === "active"), true);
+
+  const reprint = (await reprintBillingReceipt(currentUser, receipt.id)).data;
+  assert.equal(reprint.receiptUrl, `/r/${receipt.receiptToken}`);
+  assert.equal(reprint.qrContent, `/r/${receipt.receiptToken}`);
+
+  const catalogs = getPublicBillingCatalogs().data;
+  assert.equal(catalogs.defaults.taxRegime, "616");
+  assert.equal(catalogs.defaults.cfdiUse, "S01");
+  assert.equal(catalogs.taxRegimes.some((item) => item.code === "616"), true);
+  assert.equal(catalogs.cfdiUses.some((item) => item.code === "S01"), true);
+
+  const invoice = (await submitPublicInvoice(receipt.receiptToken, {
+    rfc: "XAXX010101000",
+    legalName: "PUBLICO EN GENERAL",
+    taxRegime: "616",
+    zipCode: "64000",
+    cfdiUse: "S01",
+    email: "cliente.factura@example.com",
+  })).data;
+  assert.equal(invoice.status, "stamped");
+  assert.equal(invoice.total, 24);
+  assert.match(invoice.cfdiUuid ?? "", /^[0-9a-f-]{36}$/);
+
+  const status = (await getPublicInvoiceStatus(receipt.receiptToken)).data;
+  assert.equal(status.receiptStatus, "used");
+  assert.equal(status.status, "stamped");
+  assert.equal(status.invoiceId, invoice.invoiceId);
+
+  const xml = await getPublicInvoiceDocument(invoice.invoiceId, "xml");
+  assert.equal(xml.contentType, "application/xml; charset=utf-8");
+  assert.match(String(xml.body), /cfdi:Comprobante/);
+  assert.match(String(xml.body), /XAXX010101000/);
+  assert.match(String(xml.body), new RegExp(invoice.cfdiUuid ?? ""));
+
+  const pdf = await getPublicInvoiceDocument(invoice.invoiceId, "pdf");
+  assert.equal(pdf.contentType, "application/pdf");
+  assert.equal(Buffer.isBuffer(pdf.body), true);
+  assert.match(pdf.body.toString("utf8"), /%PDF-1.4/);
+  assert.match(pdf.body.toString("utf8"), /Tortilla Plus CFDI mock/);
+
+  await assert.rejects(
+    () => submitPublicInvoice(receipt.receiptToken, {
+      rfc: "XAXX010101000",
+      legalName: "PUBLICO EN GENERAL",
+      taxRegime: "616",
+      zipCode: "64000",
+      cfdiUse: "S01",
+      email: "cliente.factura@example.com",
+    }),
+    /ticket no esta disponible|ticket ya fue facturado/,
+  );
+});
+
+test("public autofactura rejects fiscal catalog codes outside allowed values", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  await ensureCashSession(currentUser, branchId);
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: currentUser.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const sale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `invalid-catalog-autofactura-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, sale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, sale.id, {
+    payments: [{ paymentMethod: "card", amount: "24.00", reference: `invalid-catalog-${Date.now()}`, provider: "terminal-demo" }],
+  }, `invalid-catalog-complete-${sale.id}`);
+
+  const receipt = await prisma.billingReceipt.findUniqueOrThrow({ where: { saleId: sale.id } });
+
+  await assert.rejects(
+    () => submitPublicInvoice(receipt.receiptToken, {
+      rfc: "XAXX010101000",
+      legalName: "PUBLICO EN GENERAL",
+      taxRegime: "999",
+      zipCode: "64000",
+      cfdiUse: "S01",
+      email: "cliente.catalogo@example.com",
+    }),
+    /Regimen fiscal invalido/,
+  );
+
+  await assert.rejects(
+    () => submitPublicInvoice(receipt.receiptToken, {
+      rfc: "XAXX010101000",
+      legalName: "PUBLICO EN GENERAL",
+      taxRegime: "616",
+      zipCode: "64000",
+      cfdiUse: "ZZZ",
+      email: "cliente.catalogo@example.com",
+    }),
+    /Uso CFDI invalido/,
+  );
+});
+
+test("billing receipt expiration job expires active receipts and blocks autofactura", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  await ensureCashSession(currentUser, branchId);
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: currentUser.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const sale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `expired-autofactura-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, sale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, sale.id, {
+    payments: [{ paymentMethod: "card", amount: "24.00", reference: `expired-card-${Date.now()}`, provider: "terminal-demo" }],
+  }, `expired-autofactura-complete-${sale.id}`);
+
+  const expiredAt = new Date("2026-01-01T00:00:00.000Z");
+  const receipt = await prisma.billingReceipt.update({
+    where: { saleId: sale.id },
+    data: { expiresAt: expiredAt },
+  });
+
+  const result = (await expireBillingReceipts({ now: new Date("2026-01-02T00:00:00.000Z") })).data;
+  assert.equal(result.receiptIds.includes(receipt.id), true);
+  assert.equal(result.expiredCount >= 1, true);
+
+  const expiredReceipt = await prisma.billingReceipt.findUniqueOrThrow({ where: { id: receipt.id } });
+  assert.equal(expiredReceipt.status, "expired");
+  assert.ok(expiredReceipt.expiredAt);
+
+  const publicReceipt = (await getPublicReceipt(receipt.receiptToken)).data;
+  assert.equal(publicReceipt.canInvoice, false);
+  assert.equal(publicReceipt.status, "expired");
+
+  await assert.rejects(
+    () => submitPublicInvoice(receipt.receiptToken, {
+      rfc: "XAXX010101000",
+      legalName: "PUBLICO EN GENERAL",
+      taxRegime: "616",
+      zipCode: "64000",
+      cfdiUse: "S01",
+      email: "cliente.expirado@example.com",
+    }),
+    /ticket ya vencio/,
+  );
 });

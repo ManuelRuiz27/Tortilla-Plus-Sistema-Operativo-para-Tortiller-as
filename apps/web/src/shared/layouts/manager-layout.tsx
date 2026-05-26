@@ -2,6 +2,7 @@ import {
   BarChart3,
   Boxes,
   CreditCard,
+  Landmark,
   LogOut,
   Route,
   Settings,
@@ -27,6 +28,7 @@ const navItems = [
   { to: "/app/manager/inventory", label: "Inventario", icon: Boxes },
   { to: "/app/manager/cash", label: "Caja", icon: CreditCard },
   { to: "/app/manager/reports", label: "Reportes", icon: BarChart3 },
+  { to: "/app/manager/reconciliation", label: "Conciliacion", icon: Landmark },
   { to: "/app/manager/settings", label: "Configuracion", icon: Settings }
 ];
 

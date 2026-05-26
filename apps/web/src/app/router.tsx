@@ -11,6 +11,7 @@ import { InventoryPage } from "../modules/manager/pages/inventory-page";
 import { PricesPage } from "../modules/manager/pages/prices-page";
 import { ProductionPage } from "../modules/manager/pages/production-page";
 import { ProductsPage } from "../modules/manager/pages/products-page";
+import { ReconciliationPage } from "../modules/manager/pages/reconciliation-page";
 import { ReportsPage } from "../modules/manager/pages/reports-page";
 import { RouteDetailPage } from "../modules/manager/pages/route-detail-page";
 import { RoutesPage } from "../modules/manager/pages/routes-page";
@@ -18,6 +19,7 @@ import { SettingsPage } from "../modules/manager/pages/settings-page";
 import { WithdrawalsPage } from "../modules/manager/pages/withdrawals-page";
 import { OpenCashPage } from "../modules/pos/pages/open-cash-page";
 import { PosRouterPage } from "../modules/pos/pages/pos-router-page";
+import { PublicAutofacturaPage } from "../modules/public-billing/pages/public-autofactura-page";
 import { SalePage } from "../modules/pos/pages/sale-page";
 import { AuthGuard } from "../shared/guards/auth-guard";
 import { BranchGuard } from "../shared/guards/branch-guard";
@@ -34,6 +36,7 @@ export function AppRouter() {
         <Route element={<LoginPage />} path="/login" />
       </Route>
       <Route element={<Navigate replace to="/app/manager/dashboard" />} path="/" />
+      <Route element={<PublicAutofacturaPage />} path="/r/:token" />
       <Route
         element={
           <AuthGuard>
@@ -131,6 +134,14 @@ export function AppRouter() {
           path="billing"
         />
         <Route element={<ReportsPage />} path="reports" />
+        <Route
+          element={
+            <FeatureGuard feature="advanced_reports" label="Conciliacion bancaria">
+              <ReconciliationPage />
+            </FeatureGuard>
+          }
+          path="reconciliation"
+        />
         <Route element={<SettingsPage />} path="settings" />
       </Route>
       <Route element={<NotFoundPage />} path="*" />

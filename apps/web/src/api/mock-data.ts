@@ -480,6 +480,11 @@ export function buildDemoReportsSummary(): ReportsSummary {
       { label: "Principal", value: 28420 },
       { label: "Mercado", value: 10950 }
     ],
+    salesByCustomer: [
+      { label: "Mostrador", value: 21420 },
+      { label: "Comedor San Luis", value: 8950 },
+      { label: "Tienda Lupita", value: 5400 }
+    ],
     withdrawalsByReason: [
       { label: "Proveedor", value: 1650 },
       { label: "Compra menor", value: 920 },
@@ -506,6 +511,17 @@ export function buildDemoSettingsSummary(): SettingsSummary {
     packageConfig: [
       { productName: "Paquete tortilla 1kg", baseProductName: "Tortilla", packageWeightGrams: 1000 },
       { productName: "Paquete tortilla 500g", baseProductName: "Tortilla", packageWeightGrams: 500 }
+    ],
+    auditLogs: [
+      {
+        id: "audit-1",
+        action: "sale_completed",
+        entityType: "sale",
+        entityId: "sale-demo",
+        branchName: "Sucursal Principal",
+        userName: "Demo",
+        createdAt: new Date().toISOString()
+      }
     ]
   };
 }
