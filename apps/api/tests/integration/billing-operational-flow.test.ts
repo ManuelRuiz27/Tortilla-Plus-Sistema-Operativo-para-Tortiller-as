@@ -152,6 +152,46 @@ test("billing summary creates individual and global internal invoices from real 
   assert.equal(after.globalDaily.status, "stamped");
 });
 
+test("global daily invoice uses branch fiscal timezone near midnight", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  const fiscalYear = 2200 + Math.floor(Math.random() * 300);
+  const fiscalDate = `${fiscalYear}-05-24`;
+  await ensureCashSession(currentUser, branchId);
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: currentUser.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const sale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `billing-timezone-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, sale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, sale.id, {
+    payments: [{ paymentMethod: "cash", amount: "24.00" }],
+  }, `billing-timezone-complete-${sale.id}`);
+
+  await prisma.sale.update({
+    where: { id: sale.id },
+    data: {
+      customerId: null,
+      createdAt: new Date(`${fiscalYear}-05-25T05:30:00.000Z`),
+    },
+  });
+
+  const summary = (await getBillingSummary(currentUser, { branchId, date: fiscalDate })).data;
+  assert.equal(summary.billableSales.some((item) => item.id === sale.id && item.status === "global_candidate"), true);
+
+  const global = (await createGlobalDailyInvoice(currentUser, { branchId, date: fiscalDate })).data;
+  assert.equal(global.total, 24);
+});
+
 test("public autofactura creates stamped invoice from card sale receipt token", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
@@ -237,6 +277,33 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
     }),
     /ticket no esta disponible|ticket ya fue facturado/,
   );
+});
+
+test("public autofactura receipt is intentionally limited to card payments", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  await ensureCashSession(currentUser, branchId);
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: currentUser.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const sale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `autofactura-cash-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, sale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, sale.id, {
+    payments: [{ paymentMethod: "cash", amount: "24.00" }],
+  }, `autofactura-cash-complete-${sale.id}`);
+
+  const receipt = await prisma.billingReceipt.findUnique({ where: { saleId: sale.id } });
+  assert.equal(receipt, null);
 });
 
 test("public autofactura rejects fiscal catalog codes outside allowed values", async () => {

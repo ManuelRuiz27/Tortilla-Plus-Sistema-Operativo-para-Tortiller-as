@@ -1,253 +1,246 @@
 # Tortilla Plus Fixed Roadmap V0.1
 
 **Fecha base:** 2026-05-24  
-**Fuente:** `docs/audits/tortilla-plus-operational-stability-audit-v0.2.md`  
-**Regla:** este roadmap es fijo. Solo se actualiza el estado de cada item conforme se complete y valide. No se agregan trabajos fuera de orden salvo bloqueo tecnico documentado.
+**Freeze auditado:** 2026-05-25  
+**Regla:** no marcar cerrado real sin evidencia en codigo y prueba ejecutable.
 
-## Estado
+## Leyenda de Estado
 
 ```txt
-[x] F0 Estabilidad operativa P0/P1
-[x] F1 Billing y autofactura sin huecos
-[x] F2 Conciliacion bancaria
-[x] F3 Dashboard y reportes reales
-[x] F4 Exportaciones
-[x] F5 Integraciones fisicas y terminales
-[x] F6 Permisos avanzados y hardening final
+[real] existe implementacion productiva interna y prueba automatizada.
+[mock] existe flujo funcional con mock aislado; no es produccion externa.
+[contrato] existe API/DTO/fallback documentado; integracion real pendiente.
+[runtime] requiere validacion manual o E2E mas profunda.
+[externo] depende de proveedor, dispositivo fisico o credenciales reales.
+[pendiente] no esta listo para construccion encima.
 ```
 
-## F0 - Estabilidad operativa P0/P1
-
-Estado: cerrado.
-
-Alcance cerrado:
+## Estado Ejecutivo
 
 ```txt
-[x] VITE_USE_MOCKS=false
-[x] audit:stability:e2e
-[x] POS real
-[x] cliente real
-[x] credito real
-[x] caja real
-[x] ruta real
-[x] liquidacion real
-[x] inventario real
-[x] P1 UX operativa
+[real] F0 Estabilidad operativa P0/P1 backend
+[mock] F1 Billing/autofactura con PAC mock
+[real] F2 Conciliacion bancaria por import/manual interno
+[real] F3 Dashboard y reportes internos
+[real] F4 Exportaciones internas CSV/XLSX minimo
+[contrato] F5 Integraciones fisicas y terminales
+[real] F6 Permisos backend criticos
+[runtime] E2E navegador sigue siendo smoke, no cobertura profunda de todos los flujos
 ```
 
-Validacion requerida:
+## F0 - Estabilidad Operativa P0/P1
+
+Estado: **cerrado real para backend e integracion con DB; pendiente E2E profundo de navegador**.
+
+Evidencia:
 
 ```txt
+apps/api/tests/integration/pos-operational-flow.test.ts
+apps/web/e2e/audit-smoke.spec.ts
 npm run audit:stability:e2e
 ```
 
-## F1 - Billing y autofactura sin huecos
-
-Estado: cerrado.
-
-Orden fijo:
+Alcance cerrado real:
 
 ```txt
-[x] Factura individual real minima
-[x] Factura global diaria real minima
-[x] PAC mock para timbrado/cancelacion
-[x] Documentos CFDI registrados
-[x] Webhook PAC idempotente
-[x] Autofactura publica minima
-[x] Playwright E2E especifico de autofactura publica
-[x] Descarga real o respuesta realista PDF/XML
-[x] Rate limit por token/IP
-[x] Expiracion programada de receipts
-[x] Catalogos fiscales para regimen y uso CFDI
-[x] Manager: listado/reimpresion de receipts QR
+[real] POS con cliente, precio especial, pago mixto, caja e inventario
+[real] Inventario negativo permitido para tortilla/masa y bloqueado para retail
+[real] Ruta completa: pedido, carga, entrega parcial, devolucion, cobro, liquidacion y deposito
+[real] VITE_USE_MOCKS=false en entorno audit
+[runtime] PWA solo tiene smoke E2E minimo
 ```
 
-Criterio de cierre:
+## F1 - Billing y Autofactura
+
+Estado: **cerrado como implementacion interna minima con PAC mock; facturacion fiscal real pendiente**.
+
+Evidencia:
 
 ```txt
-Venta con tarjeta crea receipt.
-Portal /r/:token consulta ticket sin login.
-Cliente genera autofactura una sola vez.
-Factura queda stamped.
-PDF/XML se pueden descargar.
-Receipt vence automaticamente.
-Intentos excesivos quedan bloqueados.
-Manager puede consultar/reimprimir QR.
-audit:stability:e2e pasa.
+apps/api/src/services/billing-service.ts
+apps/api/src/services/public-autofactura-service.ts
+apps/api/tests/integration/billing-operational-flow.test.ts
+apps/web/e2e/audit-smoke.spec.ts
 ```
 
-## F2 - Conciliacion bancaria
-
-Estado: cerrado.
-
-Orden fijo:
+Alcance:
 
 ```txt
-[x] Modelo/servicio ReconciliationService real
-[x] POST /reconciliation/batches
-[x] POST /reconciliation/batches/:id/items
-[x] POST /reconciliation/batches/:id/review
-[x] UI minima de conciliacion o bloqueo explicito
-[x] Tests QA-REC con tenant/sucursal
+[real] Factura individual interna minima
+[real] Factura global diaria interna minima
+[real] Webhook PAC idempotente
+[mock] Timbrado PAC
+[mock] Cancelacion PAC
+[mock] PDF/XML realistas generados localmente
+[real] Portal publico /r/:token
+[real] Rate limit y expiracion de receipts
+[real] Catalogos fiscales basicos
+[real] Manager lista/reimprime receipts QR
+[real] Factura global diaria usa timezone de sucursal para evitar cortes UTC incorrectos
 ```
 
-Criterio de cierre:
+Decision documentada:
 
 ```txt
-Pagos POS se pueden comparar contra proveedor/import manual.
-Diferencias quedan marcadas.
-Revision manual queda auditada.
-Listados filtran por tenant y sucursal.
-audit:stability:e2e pasa.
+[real] Autofactura publica genera receipt solo para pagos con tarjeta.
+[pendiente] Si negocio requiere autofactura en efectivo, se debe definir politica antes de cambiar codigo.
 ```
 
-Validacion ejecutada:
+No cerrado real:
 
 ```txt
-npm run audit:stability:e2e
-OK: lint, build, unit 20/20, integracion 8/8, Playwright 2/2.
+[externo] PAC real
+[externo] Certificados, CSD, sellado y cancelacion SAT real
 ```
 
-## F3 - Dashboard y reportes reales
+## F2 - Conciliacion Bancaria
 
-Estado: cerrado.
+Estado: **cerrado real para conciliacion interna/manual; integraciones bancarias externas pendientes**.
 
-Orden fijo:
+Evidencia:
 
 ```txt
-[x] Dashboard real sin datos demo
-[x] GET /reports/sales-by-day
-[x] GET /reports/sales-by-branch
-[x] GET /reports/sales-by-product
-[x] GET /reports/sales-by-customer
-[x] GET /reports/cash-withdrawals-by-reason
-[x] GET /reports/cash-differences
-[x] UI de reportes conectada a backend real
+apps/api/src/services/reconciliation-service.ts
+apps/api/tests/integration/reconciliation-operational-flow.test.ts
 ```
 
-Criterio de cierre:
+Alcance:
 
 ```txt
-Con VITE_USE_MOCKS=false no hay dashboard/reportes demo.
-Todos los reportes filtran por tenant, sucursal y fechas.
-audit:stability:e2e pasa.
+[real] POST /reconciliation/batches
+[real] POST /reconciliation/batches/:id/items
+[real] POST /reconciliation/batches/:id/review
+[real] UI minima conectada a backend real
+[real] Auditoria de revision manual
+[externo] Import automatico bancario o proveedor real
 ```
 
-Validacion ejecutada:
+## F3 - Dashboard y Reportes
+
+Estado: **cerrado real para reportes operativos internos**.
+
+Evidencia:
 
 ```txt
-npm run audit:stability:e2e
-OK: lint, build, unit 20/20, integracion 9/9, Playwright 2/2.
+apps/api/src/services/reports-service.ts
+apps/api/tests/integration/reports-operational-flow.test.ts
+apps/web/src/api/manager.api.ts
+```
+
+Alcance:
+
+```txt
+[real] Dashboard sin demo con VITE_USE_MOCKS=false
+[real] Ventas por dia, sucursal, producto y cliente
+[real] Retiros por motivo
+[real] Diferencias de caja
+[real] Filtros por tenant, sucursal y fechas
 ```
 
 ## F4 - Exportaciones
 
-Estado: cerrado.
+Estado: **cerrado real minimo**.
 
-Orden fijo:
+Evidencia:
 
 ```txt
-[x] Exportacion facturas emitidas
-[x] Exportacion facturas globales
-[x] Exportacion reportes operativos
-[x] Descarga CSV/XLSX minima
-[x] Tests de generacion/descarga
+apps/api/src/services/export-service.ts
+apps/api/tests/integration/export-operational-flow.test.ts
 ```
 
-Criterio de cierre:
+Alcance:
 
 ```txt
-Facturas emitidas se descargan en CSV/XLSX.
-Facturas globales se descargan en CSV/XLSX.
-Reportes operativos se descargan en CSV/XLSX.
-Descargas filtran por tenant, sucursal y fechas.
-audit:stability:e2e pasa.
+[real] Exportacion de facturas emitidas
+[real] Exportacion de facturas globales
+[real] Exportacion de reportes operativos
+[real] CSV/XLSX minimo sin dependencia externa
 ```
 
-Validacion ejecutada:
+## F5 - Integraciones Fisicas y Terminales
+
+Estado: **no cerrado real; cerrado solo como contrato/mock/fallback**.
+
+Evidencia:
 
 ```txt
-npm run audit:stability:e2e
-OK: lint, build, unit 20/20, integracion 10/10, Playwright 2/2.
-```
-
-## F5 - Integraciones fisicas y terminales
-
-Estado: cerrado.
-
-Orden fijo:
-
-```txt
-[x] Terminal Mercado Pago
-[x] Terminal Clip
-[x] Bascula
-[x] Codigo de barras
-```
-
-Criterio de cierre:
-
-```txt
-Cada integracion tiene contrato, modo mock de proveedor aislado, modo real documentado y fallback operativo.
-audit:stability:e2e pasa.
-```
-
-Validacion ejecutada:
-
-```txt
-npm run audit:stability:e2e
-OK: lint, build, unit 20/20, integracion 11/11, Playwright 2/2.
-```
-
-Documento de contratos:
-
-```txt
+apps/api/src/services/physical-integration-service.ts
+apps/api/tests/integration/physical-integrations-operational-flow.test.ts
 docs/integrations/physical-integrations-v0.1.md
 ```
 
-## F6 - Permisos avanzados y hardening final
-
-Estado: cerrado.
-
-Orden fijo:
+Alcance cerrado:
 
 ```txt
-[x] Matriz de permisos por pantalla/accion
-[x] Tests por rol para billing
-[x] Tests por rol para conciliacion
-[x] Tests por rol para reportes/exportaciones
-[x] Errores operativos claros
-[x] Logs de auditoria visibles para acciones criticas
+[contrato] Mercado Pago Point
+[mock] Mercado Pago mock aislado
+[contrato] Clip
+[mock] Clip mock aislado
+[contrato] Bascula
+[mock] Lectura de bascula/manual auditada
+[real] Codigo de barras resuelve productos reales por tenant/sucursal
+[real] Fallback manual documentado
 ```
 
-Criterio de cierre:
+Pendiente de produccion:
 
 ```txt
-Permisos criticos documentados por pantalla/accion.
-Roles bloquean billing, conciliacion, reportes y exportaciones segun matriz.
-Errores 403 son operativos.
-Auditoria critica es visible en Ajustes.
-audit:stability:e2e pasa.
+[externo] Credenciales Mercado Pago reales
+[externo] Terminal Mercado Pago real
+[externo] Credenciales Clip reales
+[externo] SDK/PinPad Clip certificado
+[externo] Driver/protocolo de bascula real
+[runtime] Prueba con dispositivos fisicos en sucursal
 ```
 
-Validacion ejecutada:
+## F6 - Permisos Avanzados y Hardening
+
+Estado: **cerrado real para permisos backend criticos; guards frontend son defensa UX, no fuente de verdad**.
+
+Evidencia:
 
 ```txt
-npm run audit:stability:e2e
-OK: lint, build, unit 20/20, integracion 12/12, Playwright 2/2.
-```
-
-Documento de matriz:
-
-```txt
+apps/api/src/services/permission-service.ts
+apps/api/tests/integration/permission-hardening-flow.test.ts
+apps/web/src/shared/guards/permission-guard.tsx
+apps/web/src/shared/guards/role-guard.tsx
 docs/security/permission-matrix-v0.1.md
 ```
 
-## Politica de actualizacion
+Casos cubiertos:
 
 ```txt
-1. No saltar fases salvo bloqueo.
-2. No marcar un item [x] sin prueba ejecutada.
-3. Si un item se cubre de forma minima, usar [~] y registrar el hueco.
-4. Cada avance debe actualizar este archivo y el checkpoint del audit.
-5. No hacer commit salvo solicitud explicita.
+[real] cashier no accede billing
+[real] cashier no accede conciliacion
+[real] cashier no accede reportes/exportaciones
+[real] supervisor puede conciliacion/reportes
+[real] supervisor no puede facturar
+[real] supervisor puede autorizar retiros con PIN
+[real] manager puede facturar
+[real] organization_owner accede billing/reportes/conciliacion
+[real] usuario sin permiso recibe 403 PERMISSION_REQUIRED consistente
+```
+
+## Politica de Mocks
+
+```txt
+apps/web/.env.audit.example debe usar VITE_USE_MOCKS=false.
+apps/web/.env.example puede usar VITE_USE_MOCKS=true solo para demo/desarrollo visual.
+Ningun QA operativo se acepta con VITE_USE_MOCKS=true.
+```
+
+## Checklist de Preparacion
+
+```txt
+Listo para construir facturacion real PAC: SI, sobre contrato interno existente; bloqueado por PAC/CSD/SAT reales.
+Listo para Mercado Pago real: PARCIAL, contrato y fallback listos; bloqueado por credenciales/terminal real.
+Listo para Clip real: PARCIAL, contrato y fallback listos; bloqueado por SDK/PinPad certificado.
+Listo para bascula real: PARCIAL, contrato y fallback listos; bloqueado por driver/protocolo/dispositivo.
+Bloqueantes pendientes: integraciones externas reales, E2E navegador profundo, politica de autofactura para efectivo si negocio la requiere.
+```
+
+## Comando de Aceptacion
+
+```bash
+npm run audit:stability:e2e
 ```

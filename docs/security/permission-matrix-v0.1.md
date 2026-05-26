@@ -54,7 +54,10 @@ cashier no puede conciliacion
 cashier no puede reportes/exportaciones
 supervisor puede reportes/conciliacion
 supervisor no puede billing
+supervisor puede autorizar retiros con PIN
 manager puede billing/reportes/conciliacion/exportaciones
+organization_owner puede billing/reportes/conciliacion
+usuario sin permiso recibe 403 PERMISSION_REQUIRED
 ```
 
 Validacion automatizada:

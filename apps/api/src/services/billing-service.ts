@@ -28,12 +28,9 @@ export async function getBillingSummary(currentUser: AuthenticatedUser, input: u
   const body = asRecord(input);
   const branchId = optionalString(body.branchId);
   const date = asDateOnly(body.date);
-  const range = dateRange(date);
-  const invoiceDate = new Date(`${date}T00:00:00.000Z`);
-
-  if (branchId) {
-    await assertBranchAccess(currentUser, branchId);
-  }
+  const branch = branchId ? await assertBranchAccess(currentUser, branchId) : null;
+  const range = fiscalDateRange(date, branch?.timezone ?? "UTC");
+  const invoiceDate = range.gte;
 
   const [sales, invoices] = await Promise.all([
     prisma.sale.findMany({
@@ -130,9 +127,9 @@ export async function createGlobalDailyInvoice(currentUser: AuthenticatedUser, i
   const body = asRecord(input);
   const branchId = asString(body.branchId, "branchId");
   const date = asDateOnly(body.date);
-  const range = dateRange(date);
-  const invoiceDate = new Date(`${date}T00:00:00.000Z`);
-  await assertBranchAccess(currentUser, branchId);
+  const branch = await assertBranchAccess(currentUser, branchId);
+  const range = fiscalDateRange(date, branch.timezone);
+  const invoiceDate = range.gte;
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.invoice.findFirst({
@@ -175,7 +172,7 @@ export async function createGlobalDailyInvoice(currentUser: AuthenticatedUser, i
       customerId: null,
       invoiceType: "global_public",
       sales,
-      invoiceDate: date,
+      invoiceDate,
     });
 
     await audit(tx, currentUser, branchId, "global_daily_invoice_requested", "invoice", invoice.id, serializeInvoice(invoice));
@@ -379,7 +376,7 @@ async function createInvoiceFromSales(
     customerId: string | null;
     invoiceType: "individual" | "global_public";
     sales: SaleWithRelations[];
-    invoiceDate?: string;
+    invoiceDate?: Date;
   },
 ) {
   const subtotalCents = input.sales.reduce((sum, sale) => sum + toCents(sale.subtotal), 0);
@@ -396,7 +393,7 @@ async function createInvoiceFromSales(
       subtotal: centsToMoney(subtotalCents),
       taxTotal: centsToMoney(taxCents),
       total: centsToMoney(totalCents),
-      invoiceDate: new Date(`${input.invoiceDate ?? dateOnly(input.sales[0]?.createdAt ?? new Date())}T00:00:00.000Z`),
+      invoiceDate: input.invoiceDate ?? new Date(`${dateOnly(input.sales[0]?.createdAt ?? new Date())}T00:00:00.000Z`),
       issuedAt: new Date(),
       rawRequest: {
         mode: "internal_stub",
@@ -480,11 +477,57 @@ function invoiceUiStatus(status: string) {
   return status;
 }
 
-function dateRange(date: string) {
+function fiscalDateRange(date: string, timezone: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  const start = zonedTimeToUtc(year, month, day, 0, 0, 0, timezone);
+  const next = new Date(Date.UTC(year, month - 1, day + 1));
+  const end = zonedTimeToUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), 0, 0, 0, timezone);
+
   return {
-    gte: new Date(`${date}T00:00:00.000Z`),
-    lt: new Date(`${date}T23:59:59.999Z`),
+    gte: start,
+    lt: end,
   };
+}
+
+function zonedTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timezone: string,
+) {
+  let utc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  for (let index = 0; index < 2; index += 1) {
+    const offsetMs = timezoneOffsetMs(utc, timezone);
+    utc = new Date(Date.UTC(year, month - 1, day, hour, minute, second) - offsetMs);
+  }
+  return utc;
+}
+
+function timezoneOffsetMs(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  );
+  return asUtc - date.getTime();
 }
 
 function dateOnly(date: Date) {

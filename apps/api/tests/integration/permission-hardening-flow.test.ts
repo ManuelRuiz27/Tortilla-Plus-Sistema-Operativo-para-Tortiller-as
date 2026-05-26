@@ -5,6 +5,12 @@ import { DomainError } from "../../src/lib/domain-error.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import { login } from "../../src/services/auth-service.js";
 import { createGlobalDailyInvoice, getBillingSummary } from "../../src/services/billing-service.js";
+import {
+  authorizeCashMovement,
+  getOpenCashSession,
+  openCashSession,
+  requestWithdrawal,
+} from "../../src/services/cash-service.js";
 import { exportIssuedInvoices, exportOperationalReports } from "../../src/services/export-service.js";
 import { createReconciliationBatch, listReconciliationBatches } from "../../src/services/reconciliation-service.js";
 import { getReportsSummary } from "../../src/services/reports-service.js";
@@ -40,11 +46,23 @@ async function assertPermissionDenied(action: () => Promise<unknown>, permission
   );
 }
 
-test("F6 role permissions block billing, reconciliation, reports and exports by role", async () => {
+async function ensureCashSession(currentUser: AuthenticatedUser, branchId: string) {
+  const current = (await getOpenCashSession(currentUser, branchId)).data;
+  if (current) return current;
+  return (await openCashSession(currentUser, {
+    branchId,
+    openingAmountCounted: "500.00",
+    openingNote: "Permission hardening test",
+  })).data;
+}
+
+test("F6 role permissions block billing, reconciliation, reports, exports and cash withdrawals by role", async () => {
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
   const supervisorSession = await login({ email: "supervisor.demo@tortillaplus.mx", password: "Demo1234!" });
   const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
 
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const supervisor = asAuthenticatedUser(supervisorSession);
   const manager = asAuthenticatedUser(managerSession);
@@ -82,7 +100,21 @@ test("F6 role permissions block billing, reconciliation, reports and exports by 
   assert.ok((await exportOperationalReports(supervisor, { ...filters, format: "csv" })).body);
   assert.ok((await getSettingsSummary(supervisor, { branchId })).data.auditLogs);
 
+  const cashSession = await ensureCashSession(cashier, branchId);
+  const withdrawal = (await requestWithdrawal(cashier, {
+    branchId,
+    cashSessionId: cashSession.id,
+    amount: "1.00",
+    description: `Permission hardening ${Date.now()}`,
+  })).data;
+  const authorized = (await authorizeCashMovement(supervisor, withdrawal.id, { pin: "1234" })).data;
+  assert.equal(authorized.status, "authorized");
+
   assert.ok((await getBillingSummary(manager, { branchId, date: today })).data);
   assert.ok((await getReportsSummary(manager, filters)).data);
   assert.ok((await listReconciliationBatches(manager, { branchId })).data);
+
+  assert.ok((await getBillingSummary(owner, { date: today })).data);
+  assert.ok((await getReportsSummary(owner, filters)).data);
+  assert.ok((await listReconciliationBatches(owner, { branchId })).data);
 });
