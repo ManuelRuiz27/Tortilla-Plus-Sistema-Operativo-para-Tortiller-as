@@ -239,6 +239,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
               </div>
               {total > availableCredit ? (
                 <input
+                  autoComplete="one-time-code"
                   className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
                   disabled={isSubmitting}
                   onChange={(event) => setAuthorizationPin(event.target.value)}
@@ -329,6 +330,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
               />
               {credit > availableCredit ? (
                 <input
+                  autoComplete="one-time-code"
                   className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
                   disabled={isSubmitting}
                   onChange={(event) => setAuthorizationPin(event.target.value)}

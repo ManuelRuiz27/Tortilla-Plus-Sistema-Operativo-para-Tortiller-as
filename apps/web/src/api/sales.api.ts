@@ -63,6 +63,31 @@ export function addSaleItemRequest(payload: AddSaleItemPayload): Promise<void> {
   });
 }
 
+export function addSaleItemsRequest(payload: { saleId: string; items: PosCartItem[] }): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/sales/${payload.saleId}/items/batch`, {
+    method: "POST",
+    body: {
+      items: payload.items.map((item) =>
+        item.saleMode === "by_amount"
+          ? {
+              productId: item.productId,
+              saleMode: item.saleMode,
+              amount: item.total.toFixed(2)
+            }
+          : {
+              productId: item.productId,
+              saleMode: item.saleMode,
+              quantity: item.quantity.toFixed(3)
+            }
+      )
+    }
+  });
+}
+
 export function completeSaleRequest(payload: CompleteSalePayload): Promise<CompletedSale> {
   if (useMocks) {
     return Promise.resolve({

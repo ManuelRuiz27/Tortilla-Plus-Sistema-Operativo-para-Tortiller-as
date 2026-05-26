@@ -79,6 +79,7 @@ export function LoginForm() {
           Correo
         </label>
         <input
+          autoComplete="email"
           className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
           disabled={isSubmitting}
           id="email"
@@ -92,6 +93,7 @@ export function LoginForm() {
           Contrasena
         </label>
         <input
+          autoComplete="current-password"
           className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
           disabled={isSubmitting}
           id="password"

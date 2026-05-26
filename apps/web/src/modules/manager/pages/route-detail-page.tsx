@@ -426,7 +426,7 @@ export function RouteDetailPage() {
             </PermissionButton>
           </div>
           {paymentMethod === "credit" ? (
-            <input className="mt-3 h-11 w-full rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setAuthorizationPin(event.target.value)} placeholder="PIN si excede limite" type="password" value={authorizationPin} />
+            <input autoComplete="one-time-code" className="mt-3 h-11 w-full rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setAuthorizationPin(event.target.value)} placeholder="PIN si excede limite" type="password" value={authorizationPin} />
           ) : null}
         </article>
       </div>

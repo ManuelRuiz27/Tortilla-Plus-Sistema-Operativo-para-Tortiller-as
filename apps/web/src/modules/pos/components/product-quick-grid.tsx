@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { createId } from "../../../shared/utils/id";
 import type { PosCartItem, PosProduct } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
@@ -28,7 +29,7 @@ export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddIt
     }
 
     onAddItem({
-      localId: crypto.randomUUID(),
+      localId: createId(),
       productId: product.id,
       productName: product.name,
       productType: product.productType,

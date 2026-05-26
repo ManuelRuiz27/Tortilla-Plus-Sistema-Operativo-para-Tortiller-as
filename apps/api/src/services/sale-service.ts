@@ -15,6 +15,11 @@ const paymentMethods = ["cash", "card", "transfer", "credit"] as const;
 const inventoryConditions = ["sellable", "waste", "review_required"] as const;
 type SaleModeInput = (typeof saleModes)[number];
 type PaymentMethodInput = (typeof paymentMethods)[number];
+type SaleItemInput = {
+  productId: string;
+  saleMode: SaleModeInput;
+  quantityInput: string;
+};
 
 export async function createSale(currentUser: AuthenticatedUser, input: unknown) {
   await assertFeatureAvailable(currentUser, "pos_basic");
@@ -136,10 +141,7 @@ export async function quoteSale(currentUser: AuthenticatedUser, input: unknown) 
 export async function addSaleItem(currentUser: AuthenticatedUser, saleId: string, input: unknown) {
   await assertFeatureAvailable(currentUser, "pos_basic");
   await assertPermission(currentUser.id, "sales.create");
-  const body = asRecord(input);
-  const productId = asString(body.productId, "productId");
-  const saleMode = asEnum(body.saleMode, "saleMode", saleModes);
-  const quantityInput = asQuantity(body.quantity ?? body.amount, saleMode === "by_amount" ? "amount" : "quantity");
+  const itemInput = asSaleItemInput(input);
 
   const sale = await getSaleOrThrow(currentUser.organizationId, saleId);
   await assertBranchAccess(currentUser, sale.branchId);
@@ -149,48 +151,7 @@ export async function addSaleItem(currentUser: AuthenticatedUser, saleId: string
   }
 
   return prisma.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({
-      where: {
-        id: productId,
-        organizationId: currentUser.organizationId,
-        status: "active",
-      },
-      include: {
-        productPackageConfigProduct: true,
-      },
-    });
-
-    if (!product) {
-      throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
-    }
-
-    const price = await resolveBranchPrice(
-      tx,
-      currentUser.organizationId,
-      sale.branchId,
-      product.id,
-      saleMode,
-      sale.customerId,
-    );
-    const calculation = calculateSaleItem({
-      saleMode,
-      inputQuantityOrAmount: quantityInput,
-      unitPrice: normalizeMoney(price.price),
-    });
-
-    const item = await tx.saleItem.create({
-      data: {
-        saleId,
-        productId: product.id,
-        productNameSnapshot: product.name,
-        productTypeSnapshot: product.productType,
-        quantity: calculation.quantity,
-        unit: product.unit,
-        unitPrice: calculation.unitPrice,
-        total: calculation.total,
-        saleMode,
-      },
-    });
+    const item = await createSaleItem(tx, currentUser, sale, itemInput);
 
     await recalculateSaleTotals(tx, saleId);
 
@@ -208,6 +169,93 @@ export async function addSaleItem(currentUser: AuthenticatedUser, saleId: string
 
     return { data: await getSalePayload(tx, currentUser.organizationId, saleId) };
   });
+}
+
+export async function addSaleItems(currentUser: AuthenticatedUser, saleId: string, input: unknown) {
+  await assertFeatureAvailable(currentUser, "pos_basic");
+  await assertPermission(currentUser.id, "sales.create");
+  const body = asRecord(input);
+  const itemInputs = asSaleItemInputs(body.items);
+
+  const sale = await getSaleOrThrow(currentUser.organizationId, saleId);
+  await assertBranchAccess(currentUser, sale.branchId);
+
+  if (sale.status !== "draft") {
+    throw new DomainError(409, "SALE_NOT_DRAFT", "La venta no esta en borrador.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const items = [];
+    for (const itemInput of itemInputs) {
+      items.push(await createSaleItem(tx, currentUser, sale, itemInput));
+    }
+
+    await recalculateSaleTotals(tx, saleId);
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: currentUser.organizationId,
+        branchId: sale.branchId,
+        userId: currentUser.id,
+        action: "sale_items_added",
+        entityType: "sale",
+        entityId: saleId,
+        afterSnapshot: items.map(serializeSaleItem),
+      },
+    });
+
+    return { data: await getSalePayload(tx, currentUser.organizationId, saleId) };
+  });
+}
+
+async function createSaleItem(
+  tx: Prisma.TransactionClient,
+  currentUser: AuthenticatedUser,
+  sale: Awaited<ReturnType<typeof getSaleOrThrow>>,
+  itemInput: SaleItemInput,
+) {
+    const product = await tx.product.findFirst({
+      where: {
+        id: itemInput.productId,
+        organizationId: currentUser.organizationId,
+        status: "active",
+      },
+      include: {
+        productPackageConfigProduct: true,
+      },
+    });
+
+    if (!product) {
+      throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
+    }
+
+    const price = await resolveBranchPrice(
+      tx,
+      currentUser.organizationId,
+      sale.branchId,
+      product.id,
+      itemInput.saleMode,
+      sale.customerId,
+    );
+    const calculation = calculateSaleItem({
+      saleMode: itemInput.saleMode,
+      inputQuantityOrAmount: itemInput.quantityInput,
+      unitPrice: normalizeMoney(price.price),
+    });
+
+    return tx.saleItem.create({
+      data: {
+        saleId: sale.id,
+        productId: product.id,
+        productNameSnapshot: product.name,
+        productTypeSnapshot: product.productType,
+        quantity: calculation.quantity,
+        unit: product.unit,
+        unitPrice: calculation.unitPrice,
+        total: calculation.total,
+        saleMode: itemInput.saleMode,
+      },
+    });
 }
 
 export async function completeSale(
@@ -1130,6 +1178,24 @@ function asRecord(input: unknown): Record<string, unknown> {
   }
 
   return input as Record<string, unknown>;
+}
+
+function asSaleItemInput(input: unknown): SaleItemInput {
+  const body = asRecord(input);
+  const saleMode = asEnum(body.saleMode, "saleMode", saleModes);
+  return {
+    productId: asString(body.productId, "productId"),
+    saleMode,
+    quantityInput: asQuantity(body.quantity ?? body.amount, saleMode === "by_amount" ? "amount" : "quantity"),
+  };
+}
+
+function asSaleItemInputs(value: unknown): SaleItemInput[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new DomainError(400, "INVALID_REQUEST", "Items requeridos.");
+  }
+
+  return value.map(asSaleItemInput);
 }
 
 function asString(value: unknown, field: string): string {

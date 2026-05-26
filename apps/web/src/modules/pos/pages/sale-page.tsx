@@ -1,11 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CreditCard, Scale } from "lucide-react";
+import { CreditCard, Scale, Wheat } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
 import { managerCustomersRequest } from "../../../api/manager.api";
 import {
-  addSaleItemRequest,
+  addSaleItemsRequest,
   cancelDraftSaleRequest,
   completeSaleRequest,
   createSaleRequest,
@@ -14,19 +14,35 @@ import {
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { useBranchStore } from "../../../shared/stores/branch.store";
-import { AmountSaleInput } from "../components/amount-sale-input";
+import { createId } from "../../../shared/utils/id";
 import { CartPanel } from "../components/cart-panel";
 import { CustomerSelector } from "../components/customer-selector";
 import { PackageQuickButton } from "../components/package-quick-button";
 import { PaymentModal } from "../components/payment-modal";
 import { PosErrorAlert } from "../components/pos-error-alert";
+import { ProductSaleModal } from "../components/product-sale-modal";
 import { ProductQuickGrid } from "../components/product-quick-grid";
 import { SaleSuccessModal } from "../components/sale-success-modal";
-import { WeightSaleInput } from "../components/weight-sale-input";
 import { getProductPrice, usePosProducts } from "../hooks/use-pos-products";
 import { usePosCartStore } from "../stores/pos-cart.store";
 import type { CompletedSale, PosPayment } from "../types/payment.types";
-import type { PosCartItem } from "../types/pos.types";
+import type { PosCartItem, PosProduct, PosSaleMode } from "../types/pos.types";
+import { formatMoney } from "../utils/money";
+
+type CheckoutDraft = {
+  items: PosCartItem[];
+  total: number;
+};
+
+type QuickSaleProduct = {
+  product: PosProduct | null;
+  pricePerKg: number;
+  initialMode: Extract<PosSaleMode, "by_kg" | "by_amount">;
+};
+
+function calculateCartTotal(items: PosCartItem[]): number {
+  return Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
+}
 
 export function SalePage() {
   const [searchParams] = useSearchParams();
@@ -45,6 +61,8 @@ export function SalePage() {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [isQuoting, setIsQuoting] = useState(false);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
+  const [checkoutDraft, setCheckoutDraft] = useState<CheckoutDraft | null>(null);
+  const [quickSaleProduct, setQuickSaleProduct] = useState<QuickSaleProduct | null>(null);
   const items = usePosCartStore((state) => state.items);
   const subtotal = usePosCartStore((state) => state.subtotal);
   const total = usePosCartStore((state) => state.total);
@@ -64,23 +82,27 @@ export function SalePage() {
     queryFn: managerCustomersRequest,
     queryKey: ["manager-customers"]
   });
+  const tortillaKgPrice = tortillaProduct ? getProductPrice(tortillaProduct, "by_kg") : 0;
+  const masaKgPrice = masaProduct ? getProductPrice(masaProduct, "by_kg") : 0;
+  const packagePrice = package800gProduct ? getProductPrice(package800gProduct, "by_package") : 0;
   const checkoutMutation = useMutation({
     mutationFn: async (payload: { payments: PosPayment[]; changeAmount?: number; authorizationPin?: string }) => {
       if (!branchId) {
         throw new Error("Sucursal no seleccionada.");
       }
 
-      await applyQuote(items);
+      const checkoutItems = checkoutDraft?.items ?? items;
+      const checkoutTotal = checkoutDraft?.total ?? calculateCartTotal(checkoutItems);
       const draft = await createSaleRequest({ branchId, customerId: selectedCustomer?.id });
       setSaleDraftId(draft.id);
-      await Promise.all(items.map((item) => addSaleItemRequest({ saleId: draft.id, item })));
+      await addSaleItemsRequest({ saleId: draft.id, items: checkoutItems });
       return completeSaleRequest({
         saleId: draft.id,
-        total,
+        total: checkoutTotal,
         payments: payload.payments,
         changeAmount: payload.changeAmount,
         authorizationPin: payload.authorizationPin,
-        idempotencyKey: crypto.randomUUID()
+        idempotencyKey: createId()
       });
     },
     onError: (error) => {
@@ -95,6 +117,7 @@ export function SalePage() {
       clearCart();
       clearSaleDraftId();
       clearSelectedCustomer();
+      setCheckoutDraft(null);
       setPaymentError(null);
       setIsPaymentOpen(false);
       setCompletedSale(sale);
@@ -110,15 +133,16 @@ export function SalePage() {
       clearCart();
       clearSaleDraftId();
       clearSelectedCustomer();
+      setCheckoutDraft(null);
       setIsPaymentOpen(false);
       setPaymentError(null);
     }
   });
 
-  async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer) {
+  async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer): Promise<PosCartItem[]> {
     if (!branchId || nextItems.length === 0) {
       setItems(nextItems);
-      return;
+      return nextItems;
     }
 
     setIsQuoting(true);
@@ -129,22 +153,23 @@ export function SalePage() {
         customerId: customer?.id,
         items: nextItems
       });
-      setItems(
-        quote.items.map((item, index) => ({
-          ...nextItems[index],
-          productName: item.productName,
-          productType: item.productType,
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          unitPrice: Number(item.unitPrice),
-          total: Number(item.total),
-          priceSource: item.priceSource,
-          priceSourceLabel: item.priceSource === "customer" ? "Precio cliente" : "Precio sucursal"
-        }))
-      );
+      const quotedItems = quote.items.map((item, index) => ({
+        ...nextItems[index],
+        productName: item.productName,
+        productType: item.productType,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        unitPrice: Number(item.unitPrice),
+        total: Number(item.total),
+        priceSource: item.priceSource,
+        priceSourceLabel: item.priceSource === "customer" ? "Precio cliente" : "Precio sucursal"
+      }));
+      setItems(quotedItems);
+      return quotedItems;
     } catch (error) {
       setItems(nextItems);
       setQuoteError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo cotizar la venta.");
+      return nextItems;
     } finally {
       setIsQuoting(false);
     }
@@ -164,7 +189,11 @@ export function SalePage() {
 
   async function handleCheckout() {
     if (items.length > 0 && total > 0 && !checkoutMutation.isPending && !isQuoting) {
-      await applyQuote(items);
+      const quotedItems = await applyQuote(items);
+      setCheckoutDraft({
+        items: quotedItems,
+        total: calculateCartTotal(quotedItems)
+      });
       setIsPaymentOpen(true);
     }
   }
@@ -186,7 +215,20 @@ export function SalePage() {
   function handleClearCart() {
     clearCart();
     clearSelectedCustomer();
+    setCheckoutDraft(null);
     setQuoteError(null);
+  }
+
+  function openQuickSale(
+    product: PosProduct | null,
+    pricePerKg: number,
+    initialMode: Extract<PosSaleMode, "by_kg" | "by_amount"> = "by_kg"
+  ) {
+    if (!product || pricePerKg <= 0) {
+      return;
+    }
+
+    setQuickSaleProduct({ product, pricePerKg, initialMode });
   }
 
   function focusInput(id: string) {
@@ -239,10 +281,10 @@ export function SalePage() {
       }
 
       const shortcutMap: Record<string, () => void> = {
-        F1: () => focusInput("tortilla-kg-input"),
-        F2: () => focusInput("tortilla-amount-input"),
-        F3: () => focusInput("masa-kg-input"),
-        F4: () => focusInput("masa-amount-input"),
+        F1: () => openQuickSale(tortillaProduct, tortillaKgPrice, "by_kg"),
+        F2: () => openQuickSale(tortillaProduct, tortillaKgPrice, "by_amount"),
+        F3: () => openQuickSale(masaProduct, masaKgPrice, "by_kg"),
+        F4: () => openQuickSale(masaProduct, masaKgPrice, "by_amount"),
         F5: () => document.getElementById("package-800-button")?.click(),
         F8: () => void handleCheckout(),
         F9: handleCancelTicket
@@ -257,7 +299,7 @@ export function SalePage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [checkoutMutation.isPending, items.length, saleDraftId, total]);
+  }, [checkoutMutation.isPending, items.length, masaKgPrice, masaProduct, saleDraftId, tortillaKgPrice, tortillaProduct, total]);
 
   if (isLoading) {
     return <LoadingState message="Cargando productos..." />;
@@ -270,10 +312,6 @@ export function SalePage() {
       </div>
     );
   }
-
-  const tortillaKgPrice = tortillaProduct ? getProductPrice(tortillaProduct, "by_kg") : 0;
-  const masaKgPrice = masaProduct ? getProductPrice(masaProduct, "by_kg") : 0;
-  const packagePrice = package800gProduct ? getProductPrice(package800gProduct, "by_package") : 0;
 
   return (
     <section className="grid min-h-[calc(100vh-7rem)] gap-5 lg:grid-cols-[1fr_380px]">
@@ -296,53 +334,52 @@ export function SalePage() {
           />
         </div>
 
-        <div className="mt-5 grid gap-3 xl:grid-cols-2">
-          <WeightSaleInput
-            inputId="tortilla-kg-input"
-            label="Tortilla kg"
-            onAddItem={handleAddItem}
-            pricePerKg={tortillaKgPrice}
-            product={tortillaProduct}
-            shortcut="F1"
-          />
-          <AmountSaleInput
-            inputId="tortilla-amount-input"
-            label="Tortilla $"
-            onAddItem={handleAddItem}
-            pricePerKg={tortillaKgPrice}
-            product={tortillaProduct}
-            shortcut="F2"
-          />
-          <WeightSaleInput
-            inputId="masa-kg-input"
-            label="Masa kg"
-            onAddItem={handleAddItem}
-            pricePerKg={masaKgPrice}
-            product={masaProduct}
-            shortcut="F3"
-          />
-          <AmountSaleInput
-            inputId="masa-amount-input"
-            label="Masa $"
-            onAddItem={handleAddItem}
-            pricePerKg={masaKgPrice}
-            product={masaProduct}
-            shortcut="F4"
-          />
+        <div className="mt-5">
+          <h2 className="text-sm font-semibold">Productos principales</h2>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <Button
+              className="min-h-24 justify-start px-5 text-left"
+              disabled={!tortillaProduct || tortillaKgPrice <= 0}
+              onClick={() => openQuickSale(tortillaProduct, tortillaKgPrice)}
+              variant="secondary"
+            >
+              <Wheat className="h-5 w-5" aria-hidden="true" />
+              <span>
+                Tortilla
+                <span className="block text-xs font-medium text-tp-muted">
+                  F1 kg - F2 $ - {formatMoney(tortillaKgPrice)}/kg
+                </span>
+              </span>
+            </Button>
+            <Button
+              className="min-h-24 justify-start px-5 text-left"
+              disabled={!masaProduct || masaKgPrice <= 0}
+              onClick={() => openQuickSale(masaProduct, masaKgPrice)}
+              variant="secondary"
+            >
+              <Scale className="h-5 w-5" aria-hidden="true" />
+              <span>
+                Masa
+                <span className="block text-xs font-medium text-tp-muted">
+                  F3 kg - F4 $ - {formatMoney(masaKgPrice)}/kg
+                </span>
+              </span>
+            </Button>
+            <PackageQuickButton
+              buttonId="package-800-button"
+              onAddItem={handleAddItem}
+              product={package800gProduct}
+              unitPrice={packagePrice}
+            />
+          </div>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <PackageQuickButton
-            buttonId="package-800-button"
-            onAddItem={handleAddItem}
-            product={package800gProduct}
-            unitPrice={packagePrice}
-          />
-          <Button className="min-h-20 justify-start px-5 text-left" disabled variant="secondary">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <Button className="min-h-14 justify-start px-5 text-left" disabled variant="secondary">
             <Scale className="h-5 w-5" aria-hidden="true" />
             Bascula futura
           </Button>
-          <Button className="min-h-20 justify-start px-5 text-left" disabled variant="secondary">
+          <Button className="min-h-14 justify-start px-5 text-left" disabled variant="secondary">
             <CreditCard className="h-5 w-5" aria-hidden="true" />
             Cobro con terminal
           </Button>
@@ -372,11 +409,22 @@ export function SalePage() {
       <PaymentModal
         error={paymentError}
         isSubmitting={checkoutMutation.isPending || isQuoting}
-        onClose={() => setIsPaymentOpen(false)}
+        onClose={() => {
+          setCheckoutDraft(null);
+          setIsPaymentOpen(false);
+        }}
         onSubmit={(payload) => checkoutMutation.mutate(payload)}
         open={isPaymentOpen}
         selectedCustomer={selectedCustomer}
-        total={total}
+        total={checkoutDraft?.total ?? total}
+      />
+      <ProductSaleModal
+        initialMode={quickSaleProduct?.initialMode ?? "by_kg"}
+        onAddItem={handleAddItem}
+        onClose={() => setQuickSaleProduct(null)}
+        open={Boolean(quickSaleProduct)}
+        pricePerKg={quickSaleProduct?.pricePerKg ?? 0}
+        product={quickSaleProduct?.product ?? null}
       />
       <SaleSuccessModal onNewSale={handleNewSale} sale={completedSale} />
     </section>

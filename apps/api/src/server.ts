@@ -41,6 +41,7 @@ import {
 } from "./services/inventory-service.js";
 import {
   addSaleItem,
+  addSaleItems,
   cancelDraftSale,
   cancelPaidSale,
   completeSale,
@@ -271,6 +272,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && saleItemMatch) {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await addSaleItem(currentUser, saleItemMatch[1], await readJson(request)));
+    return;
+  }
+
+  const saleItemsBatchMatch = path.match(/^\/api\/v1\/sales\/([^/]+)\/items\/batch$/);
+  if (method === "POST" && saleItemsBatchMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await addSaleItems(currentUser, saleItemsBatchMatch[1], await readJson(request)));
     return;
   }
 

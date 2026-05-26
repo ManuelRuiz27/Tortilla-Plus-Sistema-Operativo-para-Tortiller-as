@@ -18,6 +18,7 @@ import {
 } from "./mock-data";
 import { ApiErrorException } from "./api-error";
 import { httpClient } from "./http-client";
+import { createId } from "../shared/utils/id";
 import type {
   BillingDocuments,
   BillingReceipt,
@@ -861,7 +862,7 @@ export function createDeliveryOrderRequest(payload: {
   return httpClient<ApiDeliveryOrder>("/delivery-orders", {
     method: "POST",
     headers: {
-      "Idempotency-Key": crypto.randomUUID()
+      "Idempotency-Key": createId()
     },
     body: payload
   }).then(mapDeliveryOrder);
@@ -914,7 +915,7 @@ export function recordDeliveryPaymentRequest(payload: {
   return httpClient<void>(`/delivery-orders/${payload.orderId}/payments`, {
     method: "POST",
     headers: {
-      "Idempotency-Key": crypto.randomUUID()
+      "Idempotency-Key": createId()
     },
     body: {
       amount: payload.amount,
@@ -981,7 +982,7 @@ export function depositDeliverySettlementRequest(settlementId: string): Promise<
   return httpClient<void>(`/delivery-settlements/${settlementId}/deposit-to-cash`, {
     method: "POST",
     headers: {
-      "Idempotency-Key": crypto.randomUUID()
+      "Idempotency-Key": createId()
     },
     body: {}
   });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/button";
+import { createId } from "../../../shared/utils/id";
 import type { PosCartItem, PosProduct } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
@@ -24,7 +25,7 @@ export function WeightSaleInput({ product, pricePerKg, label, shortcut, inputId,
     }
 
     onAddItem({
-      localId: crypto.randomUUID(),
+      localId: createId(),
       productId: product.id,
       productName: product.name,
       productType: product.productType,

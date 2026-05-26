@@ -1,5 +1,6 @@
 import { PackagePlus } from "lucide-react";
 import { Button } from "../../../shared/components/button";
+import { createId } from "../../../shared/utils/id";
 import type { PosCartItem, PosProduct } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
@@ -17,7 +18,7 @@ export function PackageQuickButton({ product, unitPrice, buttonId, onAddItem }: 
     }
 
     onAddItem({
-      localId: crypto.randomUUID(),
+      localId: createId(),
       productId: product.id,
       productName: product.name,
       productType: "package",
