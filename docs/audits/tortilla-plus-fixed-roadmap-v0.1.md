@@ -20,6 +20,7 @@
 ```txt
 [real] F0 Estabilidad operativa P0/P1 backend
 [mock] F1 Billing/autofactura con PAC mock
+[contrato] F1.1 Facturacion Real V1 con Facturapi aprobada por ADR; base fiscal inicial implementada
 [real] F2 Conciliacion bancaria por import/manual interno
 [real] F3 Dashboard y reportes internos
 [real] F4 Exportaciones internas CSV/XLSX minimo
@@ -82,8 +83,11 @@ Alcance:
 Decision documentada:
 
 ```txt
-[real] Autofactura publica genera receipt solo para pagos con tarjeta.
-[pendiente] Si negocio requiere autofactura en efectivo, se debe definir politica antes de cambiar codigo.
+[real] Autofactura publica actual genera receipt solo para pagos con tarjeta.
+[contrato] Facturacion Real V1 define tarjeta y mixto con tarjeta como QR automatico.
+[contrato] Efectivo, transferencia y credito/fiado generan QR solo con requestInvoice=true.
+[contrato] Conciliacion bancaria queda fuera de Facturacion Real V1.
+[contrato] organization_owner se mantiene como superrol tecnico.
 ```
 
 No cerrado real:
@@ -91,6 +95,81 @@ No cerrado real:
 ```txt
 [externo] PAC real
 [externo] Certificados, CSD, sellado y cancelacion SAT real
+```
+
+## F1.1 - Facturacion Real V1 con Facturapi
+
+Estado: **aprobado como contrato/roadmap; base fiscal inicial implementada; Facturapi real pendiente**.
+
+Evidencia documental:
+
+```txt
+docs/adr/ADR-billing-facturapi-v1.md
+docs/adr/ADR-billing-status-normalization-v1.md
+docs/billing/facturapi-implementation-plan-v1.md
+docs/billing/facturapi-implementation-plan-v1-docs-first.md
+apps/api/prisma/migrations/0004_sales_fiscal_fields/migration.sql
+apps/api/src/services/billing-fiscal-classifier.ts
+apps/api/src/services/billing-pac-adapter.ts
+apps/api/src/services/billing-provider-log-service.ts
+apps/api/tests/billing-fiscal-classifier.test.ts
+apps/api/tests/billing-pac-adapter.test.ts
+apps/api/prisma/migrations/0005_billing_provider_logs/migration.sql
+apps/api/tests/integration/billing-operational-flow.test.ts
+```
+
+Avance tecnico inicial:
+
+```txt
+[real] Campos fiscales minimos en sales: fiscal_intent, fiscal_status, invoice_deadline_at, fiscal_locked_at.
+[real] Fiscal classifier para cash/card/transfer/credit segun ADR.
+[real] POS completeSale clasifica fiscalmente la venta.
+[real] Tarjeta y mixto con tarjeta generan QR automatico.
+[real] Efectivo, transferencia y credito/fiado generan QR solo con requestInvoice/customerRequestedInvoice.
+[real] Receipt vencido mueve venta pending_customer_invoice a expired_to_pending_global.
+[real] Autofactura stamped mueve venta a customer_invoiced y fiscal_locked_at.
+[real] PacAdapter formal creado.
+[real] MockPacAdapter conservado y centralizado.
+[real] Timbrado/cancelacion mock existentes pasan por PacAdapter.
+[real] billing_provider_logs minimo creado.
+[real] Llamadas PAC mock exitosas registran provider, operacion, entidad relacionada, duracion y payload sanitizado.
+[contrato] FacturapiAdapter queda pendiente y bloqueado por sandbox/configuracion real.
+```
+
+Alcance aprobado:
+
+```txt
+[contrato] Facturapi sera el proveedor PAC inicial en sandbox.
+[contrato] Mock PAC se conserva para pruebas.
+[contrato] POS no llama Facturapi directamente.
+[contrato] Provider real debe ir detras de PacAdapter/BillingProvider.
+[contrato] Factura individual real.
+[contrato] Factura global diaria real por branchId y timezone de sucursal.
+[contrato] Autofactura publica real.
+[contrato] Cancelacion CFDI.
+[contrato] XML persistente.
+[contrato] PDF bajo demanda.
+[contrato] Auditoria fiscal y provider logs sanitizados.
+[contrato] InvoiceStatus publico usa DTO catalog: processing/failed.
+[contrato] stamping/stamp_failed solo internos o de jobs si se requieren.
+```
+
+Fuera de alcance de Facturacion Real V1:
+
+```txt
+[real] Conciliacion bancaria interna/manual permanece como F2 separado.
+[externo] Conciliacion bancaria externa/proveedor real no bloquea Facturacion Real V1.
+[externo] Mercado Pago real, Clip real y bascula real siguen fuera de este modulo.
+```
+
+Siguiente fase permitida:
+
+```txt
+[real] Migraciones/enums/base fiscal inicial.
+[real] Fiscal classifier integrado a completeSale.
+[real] PacAdapter/MockPacAdapter formal.
+[pendiente] Portal publico y timbrado individual.
+[pendiente] FacturapiAdapter sandbox real.
 ```
 
 ## F2 - Conciliacion Bancaria
@@ -232,11 +311,58 @@ Ningun QA operativo se acepta con VITE_USE_MOCKS=true.
 ## Checklist de Preparacion
 
 ```txt
-Listo para construir facturacion real PAC: SI, sobre contrato interno existente; bloqueado por PAC/CSD/SAT reales.
+Listo para construir facturacion real PAC: SI, sobre contrato interno existente y ADRs Facturapi V1 cerrados; produccion sigue bloqueada por PAC/CSD/SAT reales.
 Listo para Mercado Pago real: PARCIAL, contrato y fallback listos; bloqueado por credenciales/terminal real.
 Listo para Clip real: PARCIAL, contrato y fallback listos; bloqueado por SDK/PinPad certificado.
 Listo para bascula real: PARCIAL, contrato y fallback listos; bloqueado por driver/protocolo/dispositivo.
-Bloqueantes pendientes: integraciones externas reales, E2E navegador profundo, politica de autofactura para efectivo si negocio la requiere.
+Bloqueantes pendientes: integraciones externas reales, E2E navegador profundo, validacion Facturapi sandbox con credenciales/CSD reales.
+```
+
+## F1.1 - Facturacion Real V1 / Facturapi
+
+Estado: **adapter real y base fiscal implementados para sandbox; produccion fiscal sigue bloqueada por validacion externa SAT/contador/CSD**.
+
+Evidencia:
+
+```txt
+docs/adr/ADR-billing-facturapi-v1.md
+docs/adr/ADR-billing-status-normalization-v1.md
+docs/billing/facturapi-implementation-plan-v1.md
+docs/billing/facturapi-technical-debt-v1.md
+apps/api/src/services/billing-pac-adapter.ts
+apps/api/src/services/billing-service.ts
+apps/api/src/services/public-autofactura-service.ts
+apps/api/prisma/migrations/0004_sales_fiscal_fields/migration.sql
+apps/api/prisma/migrations/0005_billing_provider_logs/migration.sql
+apps/api/prisma/migrations/0006_billing_facturapi_documents_status/migration.sql
+apps/api/tests/billing-pac-adapter.test.ts
+apps/api/tests/billing-fiscal-classifier.test.ts
+apps/api/tests/integration/billing-operational-flow.test.ts
+```
+
+Alcance cerrado:
+
+```txt
+[real] FacturapiAdapter REST detras de PacAdapter
+[mock] MockPacAdapter conservado como default local/CI
+[contrato] InvoiceStatus publico normalizado a DTO catalog
+[real] provider logs sanitizados en exito y fallo
+[real] providerInvoiceId persistente
+[real] XML persistente con SHA-256
+[real] PDF bajo demanda para Facturapi
+[real] cancelacion por adapter con motivo SAT
+[real] transferencia y credito bajo solicitud de factura
+[real] organization_owner conservado como superrol tecnico
+```
+
+Pendiente de cierre final:
+
+```txt
+[externo] FACTURAPI_API_KEY sandbox y CSD/configuracion fiscal validos
+[externo] validacion contador/SAT del payload individual/global
+[infra] storage productivo externo para XML
+[runtime] provider-status-sync para timeout ambiguo
+[qa] npm run audit:stability:e2e pasa
 ```
 
 ## Comando de Aceptacion

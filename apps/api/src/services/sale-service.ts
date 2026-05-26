@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from "./auth-service.js";
 import { runIdempotent } from "./idempotency-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
+import { classifyFiscalSale, invoiceDeadlineEndOfMonth } from "./billing-fiscal-classifier.js";
 import { createBillingReceiptForSale } from "./public-autofactura-service.js";
 
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
@@ -229,6 +230,7 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
   await assertPermission(currentUser.id, "payments.create");
   const body = asRecord(input);
   const payments = parseSalePayments(body.payments);
+  const customerRequestedInvoice = optionalBoolean(body.customerRequestedInvoice ?? body.requestInvoice) ?? false;
   const sale = await getSaleOrThrow(currentUser.organizationId, saleId);
   await assertBranchAccess(currentUser, sale.branchId);
 
@@ -266,6 +268,8 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
 
     assertPaymentTotal(normalizeMoney(draft.total), payments);
     await assertCreditPayments(tx, currentUser, draft, payments, body);
+    const fiscalClassification = classifyFiscalSale({ payments, customerRequestedInvoice });
+    const invoiceDeadlineAt = fiscalClassification.requiresReceipt ? invoiceDeadlineEndOfMonth(new Date()) : null;
 
     const createdPayments = [];
     for (const payment of payments) {
@@ -310,6 +314,9 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
       where: { id: saleId },
       data: {
         status: "completed",
+        fiscalIntent: fiscalClassification.fiscalIntent,
+        fiscalStatus: fiscalClassification.fiscalStatus,
+        invoiceDeadlineAt,
         updatedAt: new Date(),
       },
       include: {
@@ -323,6 +330,8 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
       branchId: sale.branchId,
       saleId,
       payments: createdPayments,
+      requiresReceipt: fiscalClassification.requiresReceipt,
+      expiresAt: invoiceDeadlineAt ?? undefined,
     });
 
     for (const payment of payments.filter((item) => item.paymentMethod === "credit")) {
@@ -364,6 +373,7 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
         afterSnapshot: {
           sale: serializeSale(completed),
           payments: createdPayments.map(serializeSalePayment),
+          fiscalClassification,
           inventoryMovements: movements.map(serializeInventoryMovement),
         },
       },
@@ -1300,6 +1310,10 @@ function serializeSale(sale: {
   customerId: string | null;
   saleNumber: string;
   status: string;
+  fiscalIntent: string;
+  fiscalStatus: string;
+  invoiceDeadlineAt: Date | null;
+  fiscalLockedAt: Date | null;
   subtotal: Prisma.Decimal;
   discountTotal: Prisma.Decimal;
   taxTotal: Prisma.Decimal;
@@ -1319,6 +1333,10 @@ function serializeSale(sale: {
     customerId: sale.customerId,
     saleNumber: sale.saleNumber,
     status: sale.status,
+    fiscalIntent: sale.fiscalIntent,
+    fiscalStatus: sale.fiscalStatus,
+    invoiceDeadlineAt: sale.invoiceDeadlineAt,
+    fiscalLockedAt: sale.fiscalLockedAt,
     subtotal: normalizeMoney(sale.subtotal),
     discountTotal: normalizeMoney(sale.discountTotal),
     taxTotal: normalizeMoney(sale.taxTotal),

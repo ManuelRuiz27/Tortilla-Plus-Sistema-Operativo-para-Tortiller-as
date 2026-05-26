@@ -87,6 +87,7 @@ import {
   createGlobalDailyInvoice,
   createIndividualInvoice,
   getBillingSummary,
+  getInvoiceDocumentFile,
   getInvoiceDocuments,
   processPacWebhook,
   stampInvoice,
@@ -672,6 +673,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/billing/invoices/global-daily") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createGlobalDailyInvoice(currentUser, await readJson(request)));
+    return;
+  }
+
+  const billingInvoiceDocumentFileMatch = path.match(/^\/api\/v1\/billing\/invoices\/([^/]+)\/(pdf|xml)$/);
+  if (billingInvoiceDocumentFileMatch && method === "GET") {
+    const currentUser = await authenticate(request);
+    const [, invoiceId, documentType] = billingInvoiceDocumentFileMatch;
+    sendDocument(response, 200, await getInvoiceDocumentFile(currentUser, invoiceId, documentType as "pdf" | "xml"));
     return;
   }
 

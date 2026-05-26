@@ -32,7 +32,7 @@ function today() {
 }
 
 function uniqueInvoiceDate() {
-  const year = 2200 + (Date.now() % 500);
+  const year = 2300 + Math.floor(Math.random() * 5000);
   return `${year}-06-15`;
 }
 

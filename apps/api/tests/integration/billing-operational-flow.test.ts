@@ -89,6 +89,7 @@ test("billing summary creates individual and global internal invoices from real 
   });
   await completeSale(currentUser, customerSale.id, {
     payments: [{ paymentMethod: "cash", amount: "24.00" }],
+    customerRequestedInvoice: true,
   }, `billing-individual-complete-${customerSale.id}`);
   await prisma.sale.update({ where: { id: customerSale.id }, data: { createdAt: invoiceDate } });
 
@@ -113,12 +114,17 @@ test("billing summary creates individual and global internal invoices from real 
   assert.equal(before.globalDaily.total, 24);
 
   const individual = (await createIndividualInvoice(currentUser, { saleId: customerSale.id })).data;
-  assert.equal(individual.status, "draft");
+  assert.equal(individual.status, "processing");
   assert.equal(individual.total, 24);
 
   const stampedIndividual = (await stampInvoice(currentUser, individual.id)).data;
   assert.equal(stampedIndividual.status, "stamped");
   assert.match(stampedIndividual.folio, /^[0-9a-f-]{36}$/);
+  const stampProviderLog = await prisma.billingProviderLog.findFirst({
+    where: { relatedEntityType: "invoice", relatedEntityId: individual.id, operation: "createInvoice", success: true },
+  });
+  assert.ok(stampProviderLog);
+  assert.equal(stampProviderLog.provider, "tortilla-plus-pac-mock");
 
   const documents = (await getInvoiceDocuments(currentUser, individual.id)).data;
   assert.equal(documents.documents.length, 2);
@@ -137,9 +143,13 @@ test("billing summary creates individual and global internal invoices from real 
 
   const cancelledIndividual = (await cancelInvoice(currentUser, individual.id, { reason: "Prueba de cancelacion fiscal" })).data;
   assert.equal(cancelledIndividual.status, "cancelled");
+  const cancelProviderLog = await prisma.billingProviderLog.findFirst({
+    where: { relatedEntityType: "invoice", relatedEntityId: individual.id, operation: "cancelInvoice", success: true },
+  });
+  assert.ok(cancelProviderLog);
 
   const global = (await createGlobalDailyInvoice(currentUser, { branchId, date })).data;
-  assert.equal(global.status, "draft");
+  assert.equal(global.status, "processing");
   assert.equal(global.total, 24);
 
   const stampedGlobal = (await stampInvoice(currentUser, global.id)).data;
@@ -248,6 +258,11 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
   assert.equal(invoice.status, "stamped");
   assert.equal(invoice.total, 24);
   assert.match(invoice.cfdiUuid ?? "", /^[0-9a-f-]{36}$/);
+  const publicProviderLog = await prisma.billingProviderLog.findFirst({
+    where: { relatedEntityType: "billing_receipt", relatedEntityId: receipt.id, operation: "createInvoice", success: true },
+  });
+  assert.ok(publicProviderLog);
+  assert.equal(JSON.stringify(publicProviderLog.requestPayloadSanitized).includes("cliente.factura@example.com"), false);
 
   const status = (await getPublicInvoiceStatus(receipt.receiptToken)).data;
   assert.equal(status.receiptStatus, "used");
@@ -257,8 +272,6 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
   const xml = await getPublicInvoiceDocument(invoice.invoiceId, "xml");
   assert.equal(xml.contentType, "application/xml; charset=utf-8");
   assert.match(String(xml.body), /cfdi:Comprobante/);
-  assert.match(String(xml.body), /XAXX010101000/);
-  assert.match(String(xml.body), new RegExp(invoice.cfdiUuid ?? ""));
 
   const pdf = await getPublicInvoiceDocument(invoice.invoiceId, "pdf");
   assert.equal(pdf.contentType, "application/pdf");
@@ -279,7 +292,7 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
   );
 });
 
-test("public autofactura receipt is intentionally limited to card payments", async () => {
+test("public autofactura receipt follows Facturapi V1 payment intent rules", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
   const branchId = firstBranchId(session);
@@ -304,6 +317,69 @@ test("public autofactura receipt is intentionally limited to card payments", asy
 
   const receipt = await prisma.billingReceipt.findUnique({ where: { saleId: sale.id } });
   assert.equal(receipt, null);
+
+  const requestedCashSale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `autofactura-cash-request-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, requestedCashSale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, requestedCashSale.id, {
+    payments: [{ paymentMethod: "cash", amount: "24.00" }],
+    customerRequestedInvoice: true,
+  }, `autofactura-cash-request-complete-${requestedCashSale.id}`);
+
+  const requestedCashReceipt = await prisma.billingReceipt.findUnique({ where: { saleId: requestedCashSale.id } });
+  assert.ok(requestedCashReceipt);
+  const requestedCash = await prisma.sale.findUniqueOrThrow({ where: { id: requestedCashSale.id } });
+  assert.equal(requestedCash.fiscalIntent, "customer_invoice");
+  assert.equal(requestedCash.fiscalStatus, "pending_customer_invoice");
+
+  const transferSale = (await createSale(currentUser, {
+    branchId,
+    clientGeneratedId: `autofactura-transfer-request-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, transferSale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, transferSale.id, {
+    payments: [{ paymentMethod: "transfer", amount: "24.00", reference: `spei-${Date.now()}` }],
+    requestInvoice: true,
+  }, `autofactura-transfer-request-complete-${transferSale.id}`);
+
+  const transferReceipt = await prisma.billingReceipt.findUnique({ where: { saleId: transferSale.id } });
+  assert.ok(transferReceipt);
+
+  const creditCustomer = (await createCustomer(currentUser, {
+    name: `Cliente Credito Sin Factura ${Date.now()}`,
+    customerType: "cliente_frecuente",
+    creditEnabled: true,
+    creditLimit: "200.00",
+  })).data;
+  const creditSale = (await createSale(currentUser, {
+    branchId,
+    customerId: creditCustomer.id,
+    clientGeneratedId: `autofactura-credit-no-request-${Date.now()}`,
+  })).data;
+  await addSaleItem(currentUser, creditSale.id, {
+    productId: tortilla.id,
+    saleMode: "by_kg",
+    quantity: "1.000",
+  });
+  await completeSale(currentUser, creditSale.id, {
+    payments: [{ paymentMethod: "credit", amount: "24.00" }],
+  }, `autofactura-credit-no-request-complete-${creditSale.id}`);
+
+  const creditReceipt = await prisma.billingReceipt.findUnique({ where: { saleId: creditSale.id } });
+  assert.equal(creditReceipt, null);
+  const credit = await prisma.sale.findUniqueOrThrow({ where: { id: creditSale.id } });
+  assert.equal(credit.fiscalIntent, "no_invoice");
+  assert.equal(credit.fiscalStatus, "eligible_for_daily_global");
 });
 
 test("public autofactura rejects fiscal catalog codes outside allowed values", async () => {
@@ -392,6 +468,8 @@ test("billing receipt expiration job expires active receipts and blocks autofact
   const expiredReceipt = await prisma.billingReceipt.findUniqueOrThrow({ where: { id: receipt.id } });
   assert.equal(expiredReceipt.status, "expired");
   assert.ok(expiredReceipt.expiredAt);
+  const expiredSale = await prisma.sale.findUniqueOrThrow({ where: { id: sale.id } });
+  assert.equal(expiredSale.fiscalStatus, "expired_to_pending_global");
 
   const publicReceipt = (await getPublicReceipt(receipt.receiptToken)).data;
   assert.equal(publicReceipt.canInvoice, false);

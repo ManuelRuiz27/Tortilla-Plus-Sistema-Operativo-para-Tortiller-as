@@ -763,6 +763,10 @@ model Sale {
   saleNumber         String        @map("sale_number") @db.VarChar(80)
   status             SaleStatus    @default(draft)
   saleType           SaleType      @default(counter) @map("sale_type")
+  fiscalIntent       FiscalIntent  @default(no_invoice) @map("fiscal_intent")
+  fiscalStatus       SaleFiscalStatus @default(sale_completed) @map("fiscal_status")
+  invoiceDeadlineAt  DateTime?     @map("invoice_deadline_at") @db.Timestamptz(6)
+  fiscalLockedAt     DateTime?     @map("fiscal_locked_at") @db.Timestamptz(6)
   subtotal           Decimal       @default(0) @db.Decimal(12, 2)
   discountTotal      Decimal       @default(0) @map("discount_total") @db.Decimal(12, 2)
   taxTotal           Decimal       @default(0) @map("tax_total") @db.Decimal(12, 2)
@@ -794,6 +798,8 @@ model Sale {
   @@index([branchId], map: "idx_sales_branch")
   @@index([cashSessionId], map: "idx_sales_cash_session")
   @@index([createdAt], map: "idx_sales_created_at")
+  @@index([fiscalStatus], map: "idx_sales_fiscal_status")
+  @@index([invoiceDeadlineAt], map: "idx_sales_invoice_deadline_at")
   @@map("sales")
 }
 
@@ -1202,6 +1208,7 @@ model Invoice {
   taxTotal               Decimal           @default(0) @map("tax_total") @db.Decimal(12, 2)
   total                  Decimal           @default(0) @db.Decimal(12, 2)
   cfdiUuid               String?           @unique @map("cfdi_uuid") @db.VarChar(80)
+  providerInvoiceId      String?           @map("provider_invoice_id") @db.VarChar(120)
   pacProvider            String?           @map("pac_provider") @db.VarChar(120)
   pacStatus              String?           @map("pac_status") @db.VarChar(120)
   issuedAt               DateTime?         @map("issued_at") @db.Timestamptz(6)
@@ -1265,6 +1272,9 @@ model InvoiceDocument {
   invoiceId    String              @map("invoice_id") @db.Uuid
   documentType InvoiceDocumentType @map("document_type")
   storageUrl   String              @map("storage_url")
+  contentType  String?             @map("content_type") @db.VarChar(120)
+  contentSha256 String?            @map("content_sha256") @db.VarChar(64)
+  storageContent String?           @map("storage_content")
   createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   invoice      Invoice             @relation("InvoiceDocument_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -1339,6 +1349,27 @@ model PacWebhookEvent {
   invoice     Invoice?  @relation("PacWebhookEvent_invoice", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("pac_webhook_events")
+}
+
+model BillingProviderLog {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String?  @map("organization_id") @db.Uuid
+  provider                 String   @db.VarChar(120)
+  operation                String   @db.VarChar(120)
+  relatedEntityType        String?  @map("related_entity_type") @db.VarChar(120)
+  relatedEntityId          String?  @map("related_entity_id") @db.Uuid
+  requestPayloadSanitized  Json?    @map("request_payload_sanitized")
+  responsePayloadSanitized Json?    @map("response_payload_sanitized")
+  durationMs               Int?     @map("duration_ms")
+  success                  Boolean
+  errorCode                String?  @map("error_code") @db.VarChar(120)
+  errorMessage             String?  @map("error_message")
+  idempotencyKey           String?  @map("idempotency_key") @db.VarChar(220)
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([relatedEntityType, relatedEntityId], map: "idx_billing_provider_logs_related")
+  @@index([provider, operation], map: "idx_billing_provider_logs_provider_operation")
+  @@map("billing_provider_logs")
 }
 
 model AuditLog {
@@ -1594,6 +1625,30 @@ enum SaleStatus {
   @@map("sale_status")
 }
 
+enum FiscalIntent {
+  no_invoice
+  customer_invoice
+  auto_customer_invoice
+
+  @@map("fiscal_intent")
+}
+
+enum SaleFiscalStatus {
+  sale_completed
+  eligible_for_daily_global
+  pending_customer_invoice
+  invoice_processing
+  customer_invoiced
+  invoice_failed
+  requires_manual_review
+  expired_to_pending_global
+  included_in_global
+  cfdi_cancelled
+  cancelled
+
+  @@map("sale_fiscal_status")
+}
+
 enum SaleType {
   counter
   customer_order
@@ -1718,10 +1773,14 @@ enum InvoiceType {
 enum InvoiceStatus {
   draft
   requested
+  processing
   stamped
   failed
+  requires_manual_review
   cancel_requested
+  cancel_processing
   cancelled
+  cancel_failed
 
   @@map("invoice_status")
 }

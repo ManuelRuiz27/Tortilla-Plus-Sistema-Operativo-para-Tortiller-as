@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { Prisma } from "@prisma/client";
 
@@ -6,6 +6,9 @@ import { DomainError } from "../lib/domain-error.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
 import { isValidCfdiUse, isValidTaxRegime } from "./billing-catalog-service.js";
+import { invoiceDeadlineEndOfMonth } from "./billing-fiscal-classifier.js";
+import { getPacAdapter, PacProviderError } from "./billing-pac-adapter.js";
+import { recordBillingProviderLog } from "./billing-provider-log-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 
 type ReceiptWithSale = Prisma.BillingReceiptGetPayload<{
@@ -36,9 +39,12 @@ export async function createBillingReceiptForSale(
     branchId: string;
     saleId: string;
     payments: Array<{ paymentMethod: string }>;
+    requiresReceipt?: boolean;
+    expiresAt?: Date;
   },
 ) {
-  if (!input.payments.some((payment) => payment.paymentMethod === "card")) {
+  const requiresReceipt = input.requiresReceipt ?? input.payments.some((payment) => payment.paymentMethod === "card");
+  if (!requiresReceipt) {
     return null;
   }
 
@@ -53,7 +59,7 @@ export async function createBillingReceiptForSale(
       saleId: input.saleId,
       receiptToken: token,
       receiptUrl: `/r/${token}`,
-      expiresAt: endOfMonth(new Date()),
+      expiresAt: input.expiresAt ?? invoiceDeadlineEndOfMonth(new Date()),
     },
   });
 }
@@ -201,6 +207,16 @@ export async function expireBillingReceipts(input: { now?: Date; limit?: number 
         updatedAt: now,
       },
     });
+    await tx.sale.updateMany({
+      where: {
+        id: { in: receipts.map((receipt) => receipt.saleId) },
+        fiscalStatus: "pending_customer_invoice",
+      },
+      data: {
+        fiscalStatus: "expired_to_pending_global",
+        updatedAt: now,
+      },
+    });
 
     await tx.auditLog.createMany({
       data: receipts.map((receipt) => ({
@@ -278,7 +294,28 @@ export async function submitPublicInvoice(token: string, input: unknown) {
       },
     });
 
-    const invoice = await createStampedPublicInvoice(tx, receipt, taxData);
+    let invoice;
+    try {
+      invoice = await createStampedPublicInvoice(tx, receipt, taxData);
+    } catch (error) {
+      await tx.billingInvoiceRequest.update({
+        where: { id: request.id },
+        data: {
+          status: isRetryablePacError(error) ? "manual_review" : "failed",
+          errorCode: errorCode(error),
+          errorMessage: errorMessage(error),
+          updatedAt: new Date(),
+        },
+      });
+      await tx.sale.update({
+        where: { id: receipt.saleId },
+        data: {
+          fiscalStatus: isRetryablePacError(error) ? "requires_manual_review" : "invoice_failed",
+          updatedAt: new Date(),
+        },
+      });
+      throw error;
+    }
     await tx.billingInvoiceRequest.update({
       where: { id: request.id },
       data: { status: "stamped", invoiceId: invoice.id, updatedAt: new Date() },
@@ -286,6 +323,14 @@ export async function submitPublicInvoice(token: string, input: unknown) {
     await tx.billingReceipt.update({
       where: { id: receipt.id },
       data: { status: "used", usedAt: new Date(), updatedAt: new Date() },
+    });
+    await tx.sale.update({
+      where: { id: receipt.saleId },
+      data: {
+        fiscalStatus: "customer_invoiced",
+        fiscalLockedAt: new Date(),
+        updatedAt: new Date(),
+      },
     });
     await tx.auditLog.create({
       data: {
@@ -333,6 +378,7 @@ export async function getPublicInvoiceDocument(invoiceId: string, documentType: 
       organization: true,
       branch: true,
       invoiceItemInvoice: true,
+      invoiceDocumentInvoice: true,
       billingInvoiceRequestInvoice: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
@@ -347,10 +393,27 @@ export async function getPublicInvoiceDocument(invoiceId: string, documentType: 
   }
 
   if (documentType === "xml") {
+    const persistedXml = invoice.invoiceDocumentInvoice.find((document) => document.documentType === "xml" && document.storageContent);
+    if (persistedXml?.storageContent) {
+      return {
+        filename: `cfdi-${invoice.cfdiUuid ?? invoice.id}.xml`,
+        contentType: persistedXml.contentType ?? "application/xml; charset=utf-8",
+        body: persistedXml.storageContent,
+      };
+    }
     return {
       filename: `cfdi-${invoice.cfdiUuid ?? invoice.id}.xml`,
       contentType: "application/xml; charset=utf-8",
       body: buildMockCfdiXml(invoice, request),
+    };
+  }
+
+  if (invoice.pacProvider === "facturapi" && invoice.providerInvoiceId) {
+    const pac = getPacAdapter("facturapi");
+    return {
+      filename: `cfdi-${invoice.cfdiUuid ?? invoice.id}.pdf`,
+      contentType: "application/pdf",
+      body: await pac.downloadInvoiceDocument?.(invoice.providerInvoiceId, "pdf") ?? buildMockPdf(invoice, request),
     };
   }
 
@@ -389,9 +452,16 @@ async function findReceiptByToken(token: string): Promise<ReceiptWithSale> {
 
 async function expireIfNeeded(receipt: ReceiptWithSale) {
   if (receipt.status !== "active" || receipt.expiresAt >= new Date()) return;
-  await prisma.billingReceipt.update({
-    where: { id: receipt.id },
-    data: { status: "expired", expiredAt: new Date(), updatedAt: new Date() },
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.billingReceipt.update({
+      where: { id: receipt.id },
+      data: { status: "expired", expiredAt: now, updatedAt: now },
+    });
+    await tx.sale.updateMany({
+      where: { id: receipt.saleId, fiscalStatus: "pending_customer_invoice" },
+      data: { fiscalStatus: "expired_to_pending_global", updatedAt: now },
+    });
   });
 }
 
@@ -404,6 +474,12 @@ function assertReceiptCanInvoice(receipt: ReceiptWithSale) {
   }
   if (receipt.sale.status !== "completed") {
     throw new DomainError(409, "PUBLIC_SALE_NOT_COMPLETED", "La venta no esta disponible para autofactura.");
+  }
+  if (receipt.sale.fiscalStatus === "included_in_global") {
+    throw new DomainError(409, "PUBLIC_SALE_ALREADY_GLOBALIZED", "Este ticket ya fue incluido en factura global.");
+  }
+  if (!["pending_customer_invoice", "invoice_failed"].includes(receipt.sale.fiscalStatus)) {
+    throw new DomainError(409, "PUBLIC_SALE_NOT_INVOICEABLE", "La venta no esta disponible para autofactura.");
   }
   if (receipt.sale.invoiceSaleSale.length > 0) {
     throw new DomainError(409, "PUBLIC_SALE_ALREADY_INVOICED", "Este ticket ya fue facturado.");
@@ -425,7 +501,63 @@ async function createStampedPublicInvoice(
     email: string;
   },
 ) {
-  const cfdiUuid = randomUUID();
+  const pac = getPacAdapter();
+  const pacInput = {
+    operationId: `public-autofactura:${receipt.id}`,
+    invoiceType: "individual" as const,
+    saleIds: [receipt.saleId],
+    subtotal: normalizeMoney(receipt.sale.subtotal),
+    taxTotal: normalizeMoney(receipt.sale.taxTotal),
+    total: normalizeMoney(receipt.sale.total),
+    customerRfc: taxData.rfc,
+    taxData,
+    items: receipt.sale.saleItemSale.map((item) => ({
+      description: item.productNameSnapshot,
+      quantity: normalizeQuantity(item.quantity),
+      unitPrice: normalizeMoney(item.unitPrice),
+      subtotal: normalizeMoney(item.total),
+      total: normalizeMoney(item.total),
+      satProductKey: "50181900",
+      satUnitKey: "KGM",
+    })),
+    paymentFormSat: paymentFormSat(receipt.sale.salePaymentSale.map((payment) => payment.paymentMethod)),
+    paymentMethodSat: "PUE",
+  };
+  const startedAt = Date.now();
+  let pacResult;
+  try {
+    pacResult = await pac.createInvoice(pacInput);
+  } catch (error) {
+    await recordBillingProviderLog(tx, {
+      organizationId: receipt.organizationId,
+      provider: pac.provider,
+      operation: "createInvoice",
+      relatedEntityType: "billing_receipt",
+      relatedEntityId: receipt.id,
+      requestPayload: pacInput,
+      responsePayload: errorRawResponse(error),
+      durationMs: Date.now() - startedAt,
+      success: false,
+      errorCode: errorCode(error),
+      errorMessage: errorMessage(error),
+      idempotencyKey: pacInput.operationId,
+    });
+    throw error;
+  }
+  await recordBillingProviderLog(tx, {
+    organizationId: receipt.organizationId,
+    provider: pacResult.provider,
+    operation: "createInvoice",
+    relatedEntityType: "billing_receipt",
+    relatedEntityId: receipt.id,
+    requestPayload: pacInput,
+    responsePayload: pacResult.rawResponse,
+    durationMs: Date.now() - startedAt,
+    success: true,
+    idempotencyKey: pacInput.operationId,
+  });
+  const cfdiUuid = pacResult.cfdiUuid;
+  const xmlBody = await downloadOrBuildXml(pac, pacResult.providerInvoiceId);
   const invoice = await tx.invoice.create({
     data: {
       organizationId: receipt.organizationId,
@@ -440,8 +572,9 @@ async function createStampedPublicInvoice(
       taxTotal: normalizeMoney(receipt.sale.taxTotal),
       total: normalizeMoney(receipt.sale.total),
       cfdiUuid,
-      pacProvider: "tortilla-plus-pac-mock",
-      pacStatus: "stamped",
+      providerInvoiceId: pacResult.providerInvoiceId,
+      pacProvider: pacResult.provider,
+      pacStatus: pacResult.status,
       issuedAt: new Date(),
       invoiceDate: new Date(`${receipt.sale.createdAt.toISOString().slice(0, 10)}T00:00:00.000Z`),
       rawRequest: {
@@ -450,11 +583,7 @@ async function createStampedPublicInvoice(
         saleId: receipt.saleId,
         taxData,
       },
-      rawResponse: {
-        provider: "tortilla-plus-pac-mock",
-        status: "stamped",
-        cfdiUuid,
-      },
+      rawResponse: pacResult.rawResponse as Prisma.InputJsonValue,
       invoiceSaleInvoice: {
         create: [{ saleId: receipt.saleId }],
       },
@@ -472,8 +601,18 @@ async function createStampedPublicInvoice(
       },
       invoiceDocumentInvoice: {
         create: [
-          { documentType: "xml", storageUrl: `/api/v1/public/billing/invoices/${cfdiUuid}.xml` },
-          { documentType: "pdf", storageUrl: `/api/v1/public/billing/invoices/${cfdiUuid}.pdf` },
+          {
+            documentType: "xml",
+            storageUrl: `/api/v1/public/billing/invoices/${cfdiUuid}.xml`,
+            contentType: "application/xml; charset=utf-8",
+            contentSha256: sha256(xmlBody),
+            storageContent: xmlBody.toString("utf8"),
+          },
+          {
+            documentType: "pdf",
+            storageUrl: `/api/v1/public/billing/invoices/${cfdiUuid}.pdf`,
+            contentType: "application/pdf",
+          },
         ],
       },
     },
@@ -629,10 +768,6 @@ function pdfText(value: string) {
   return value.replace(/[()\\]/g, "");
 }
 
-function endOfMonth(date: Date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1, 5, 59, 59, 999));
-}
-
 function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new DomainError(400, "INVALID_REQUEST", "Body invalido.");
@@ -722,4 +857,43 @@ function normalizeQuantity(value: Prisma.Decimal | string | number) {
 
 function moneyNumber(value: Prisma.Decimal | string | number) {
   return Number(Number(value).toFixed(2));
+}
+
+function paymentFormSat(paymentMethods: string[]) {
+  if (paymentMethods.includes("card")) return "04";
+  if (paymentMethods.includes("transfer")) return "03";
+  if (paymentMethods.includes("credit")) return "99";
+  return "01";
+}
+
+async function downloadOrBuildXml(pac: ReturnType<typeof getPacAdapter>, providerInvoiceId: string) {
+  if (pac.downloadInvoiceDocument) {
+    return pac.downloadInvoiceDocument(providerInvoiceId, "xml");
+  }
+  return Buffer.from(`<?xml version="1.0" encoding="UTF-8"?><cfdi:Comprobante ProviderInvoiceId="${providerInvoiceId}" xmlns:cfdi="http://www.sat.gob.mx/cfd/4" />`, "utf8");
+}
+
+function sha256(value: Buffer) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function isRetryablePacError(error: unknown) {
+  return error instanceof PacProviderError && error.retryable;
+}
+
+function errorCode(error: unknown) {
+  if (error instanceof DomainError) return error.code;
+  return "UNKNOWN_PROVIDER_ERROR";
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return "Error desconocido de proveedor.";
+}
+
+function errorRawResponse(error: unknown): Prisma.InputJsonValue {
+  if (error instanceof PacProviderError && error.rawResponse !== undefined) {
+    return error.rawResponse as Prisma.InputJsonValue;
+  }
+  return { error: errorMessage(error) };
 }
