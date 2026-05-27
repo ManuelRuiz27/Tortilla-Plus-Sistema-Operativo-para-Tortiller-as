@@ -45,8 +45,8 @@ function firstBranchId(session: LoginResult): string {
 }
 
 function uniqueDateOnly() {
-  const year = 2100 + (Date.now() % 800);
-  return `${year}-05-24`;
+  const date = new Date(Date.UTC(2100, 0, 1 + (Date.now() % 50000)));
+  return date.toISOString().slice(0, 10);
 }
 
 async function ensureCashSession(currentUser: AuthenticatedUser, branchId: string) {

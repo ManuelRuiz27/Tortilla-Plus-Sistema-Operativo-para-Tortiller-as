@@ -8,6 +8,7 @@ type CartPanelProps = {
   subtotal: number;
   total: number;
   onRemoveItem: (localId: string) => void;
+  onUpdateQuantity: (localId: string, quantity: number) => void;
   onClearCart: () => void;
   onCancelTicket: () => void;
   onCheckout: () => void;
@@ -18,6 +19,7 @@ export function CartPanel({
   subtotal,
   total,
   onRemoveItem,
+  onUpdateQuantity,
   onClearCart,
   onCancelTicket,
   onCheckout
@@ -54,6 +56,7 @@ export function CartPanel({
               item={item}
               key={item.localId}
               onRemove={() => onRemoveItem(item.localId)}
+              onUpdateQuantity={(quantity) => onUpdateQuantity(item.localId, quantity)}
             />
           ))
         )}

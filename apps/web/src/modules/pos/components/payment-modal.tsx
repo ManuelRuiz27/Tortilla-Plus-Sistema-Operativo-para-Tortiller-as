@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../../shared/components/button";
+import { parseMoneyInput } from "../../../shared/utils/decimal-input";
+import { POS_OPERATION_LIMITS } from "../config/pos.config";
 import type { PosPayment } from "../types/payment.types";
 import type { PosSelectedCustomer } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
@@ -45,18 +47,36 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
     return null;
   }
 
-  const cash = Number(cashAmount || 0);
-  const card = Number(cardAmount || 0);
-  const transfer = Number(transferAmount || 0);
-  const credit = Number(creditAmount || 0);
+  const paymentMoneyLimits = { ...POS_OPERATION_LIMITS.saleMoney, min: 0, allowZero: true };
+  const cashParsed = parseMoneyInput(cashAmount, { ...paymentMoneyLimits, fieldLabel: "El efectivo" });
+  const cardParsed = parseMoneyInput(cardAmount, { ...paymentMoneyLimits, fieldLabel: "La tarjeta" });
+  const transferParsed = parseMoneyInput(transferAmount, { ...paymentMoneyLimits, fieldLabel: "La transferencia" });
+  const creditParsed = parseMoneyInput(creditAmount, { ...paymentMoneyLimits, fieldLabel: "El fiado" });
+  const cash = cashParsed.ok ? cashParsed.value : 0;
+  const card = cardParsed.ok ? cardParsed.value : 0;
+  const transfer = transferParsed.ok ? transferParsed.value : 0;
+  const credit = creditParsed.ok ? creditParsed.value : 0;
   const cashChange = mode === "cash" ? Math.max(0, cash - total) : 0;
   const mixedDifference = cash + card + transfer + credit - total;
   const availableCredit = selectedCustomer ? selectedCustomer.creditLimit - selectedCustomer.currentBalance : 0;
   const canUseCredit = Boolean(selectedCustomer?.creditEnabled);
   const creditExceedsLimit = credit > Math.max(0, availableCredit);
+  const isCashValid = cashParsed.ok && cash >= total;
+  const isCardValid = Boolean(reference.trim());
+  const isTransferValid = Boolean(transferReference.trim());
+  const isCreditValid = canUseCredit && (!creditExceedsLimit || Boolean(authorizationPin.trim()));
+  const isMixedValid =
+    cashParsed.ok &&
+    cardParsed.ok &&
+    transferParsed.ok &&
+    creditParsed.ok &&
+    Math.abs(mixedDifference) <= 0.009 &&
+    (card <= 0 || isCardValid) &&
+    (transfer <= 0 || isTransferValid) &&
+    (credit <= 0 || isCreditValid);
 
   function submitCash() {
-    if (cash < total) {
+    if (!isCashValid) {
       return;
     }
 
@@ -113,10 +133,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
 
   function submitMixed() {
     if (
-      Math.abs(mixedDifference) > 0.009 ||
-      card > 0 && !reference.trim() ||
-      transfer > 0 && !transferReference.trim() ||
-      credit > 0 && (!canUseCredit || creditExceedsLimit && !authorizationPin.trim())
+      !isMixedValid
     ) {
       return;
     }
@@ -188,8 +205,9 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                 onChange={(event) => setCashAmount(event.target.value)}
                 value={cashAmount}
               />
+              {!cashParsed.ok ? <p className="text-sm text-tp-danger">{cashParsed.reason}</p> : null}
               <p className="text-sm text-tp-muted">Cambio: {formatMoney(cashChange)}</p>
-              <Button className="w-full" disabled={cash < total || isSubmitting} onClick={submitCash}>
+              <Button className="w-full" disabled={!isCashValid || isSubmitting} onClick={submitCash}>
                 Completar venta
               </Button>
             </>
@@ -273,6 +291,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                     onChange={(event) => setCashAmount(event.target.value)}
                     value={cashAmount}
                   />
+                  {!cashParsed.ok ? <p className="mt-1 text-xs text-tp-danger">{cashParsed.reason}</p> : null}
                 </div>
                 <div>
                   <label className="text-sm font-semibold" htmlFor="mixed-card">
@@ -286,6 +305,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                     onChange={(event) => setCardAmount(event.target.value)}
                     value={cardAmount}
                   />
+                  {!cardParsed.ok ? <p className="mt-1 text-xs text-tp-danger">{cardParsed.reason}</p> : null}
                 </div>
                 <div>
                   <label className="text-sm font-semibold" htmlFor="mixed-transfer">
@@ -299,6 +319,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                     onChange={(event) => setTransferAmount(event.target.value)}
                     value={transferAmount}
                   />
+                  {!transferParsed.ok ? <p className="mt-1 text-xs text-tp-danger">{transferParsed.reason}</p> : null}
                 </div>
                 <div>
                   <label className="text-sm font-semibold" htmlFor="mixed-credit">
@@ -312,6 +333,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                     onChange={(event) => setCreditAmount(event.target.value)}
                     value={creditAmount}
                   />
+                  {!creditParsed.ok ? <p className="mt-1 text-xs text-tp-danger">{creditParsed.reason}</p> : null}
                 </div>
               </div>
               <input
@@ -349,11 +371,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
               <Button
                 className="w-full"
                 disabled={
-                  Math.abs(mixedDifference) > 0.009 ||
-                  card > 0 && !reference.trim() ||
-                  transfer > 0 && !transferReference.trim() ||
-                  credit > 0 && (!canUseCredit || creditExceedsLimit && !authorizationPin.trim()) ||
-                  isSubmitting
+                  !isMixedValid || isSubmitting
                 }
                 onClick={submitMixed}
               >

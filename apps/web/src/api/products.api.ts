@@ -24,42 +24,64 @@ type ApiBranchPrice = {
   status?: string;
 };
 
-const productTypes = new Set(["tortilla", "masa", "package", "retail", "service"]);
-const productUnits = new Set(["kg", "piece", "package", "liter", "service"]);
-const saleModes = new Set(["by_kg", "by_amount", "by_package", "by_unit"]);
+type ApiInventoryStock = {
+  productId: string;
+  quantity: string | number;
+};
 
-function normalizeProductType(value: string | undefined): PosProductType {
-  return productTypes.has(value ?? "") ? (value as PosProductType) : "retail";
+const productTypes = new Set<PosProductType>(["tortilla", "masa", "package", "retail", "service"]);
+const productUnits = new Set<PosUnit>(["kg", "piece", "package", "liter", "service"]);
+const saleModes = new Set<PosSaleMode>(["by_kg", "by_amount", "by_package", "by_unit"]);
+
+function parseProductType(value: string | undefined): PosProductType | null {
+  return productTypes.has(value as PosProductType) ? (value as PosProductType) : null;
 }
 
-function normalizeUnit(value: string | undefined): PosUnit {
-  return productUnits.has(value ?? "") ? (value as PosUnit) : "piece";
+function parseUnit(value: string | undefined): PosUnit | null {
+  return productUnits.has(value as PosUnit) ? (value as PosUnit) : null;
 }
 
-function normalizeSaleMode(value: string | undefined): PosSaleMode {
-  return saleModes.has(value ?? "") ? (value as PosSaleMode) : "by_unit";
+function parseSaleMode(value: string | undefined): PosSaleMode | null {
+  return saleModes.has(value as PosSaleMode) ? (value as PosSaleMode) : null;
 }
 
-function mapProduct(product: ApiProduct, prices: ApiBranchPrice[]): PosProduct {
+function mapProduct(product: ApiProduct, prices: ApiBranchPrice[], stocks: ApiInventoryStock[]): PosProduct | null {
+  const productType = parseProductType(product.productType);
+  const unit = parseUnit(product.unit);
+  if (!productType || !unit) {
+    return null;
+  }
+
   const productPrices: PosProductPrice[] = prices
     .filter((price) => price.productId === product.id && price.status !== "inactive")
-    .map((price) => ({
-      branchId: price.branchId,
-      saleMode: normalizeSaleMode(price.saleMode),
-      price: Number(price.price),
-      currency: price.currency === "MXN" ? "MXN" : "MXN"
-    }));
+    .flatMap((price) => {
+      const saleMode = parseSaleMode(price.saleMode);
+      const numericPrice = Number(price.price);
+      if (!saleMode || !Number.isFinite(numericPrice) || numericPrice <= 0) {
+        return [];
+      }
+
+      return [{
+        branchId: price.branchId,
+        saleMode,
+        price: numericPrice,
+        currency: "MXN" as const
+      }];
+    });
+
+  const stock = stocks.find((item) => item.productId === product.id);
 
   return {
     id: product.id,
     name: product.name,
     sku: product.sku,
     barcode: product.barcode,
-    productType: normalizeProductType(product.productType),
-    unit: normalizeUnit(product.unit),
+    productType,
+    unit,
     isSellable: product.isSellable ?? true,
     isStockTracked: product.isStockTracked ?? false,
     requiresProduction: product.requiresProduction ?? false,
+    currentStock: stock ? Number(stock.quantity) : undefined,
     status: product.status === "inactive" || product.status === "deleted" ? product.status : "active",
     prices: productPrices
   };
@@ -70,10 +92,13 @@ export async function posProductsRequest(branchId: string): Promise<PosProduct[]
     return Promise.resolve(buildDemoPosProducts(branchId));
   }
 
-  const [products, prices] = await Promise.all([
+  const [products, prices, stocks] = await Promise.all([
     httpClient<ApiProduct[]>("/products"),
-    httpClient<ApiBranchPrice[]>(`/prices/branch/${branchId}`)
+    httpClient<ApiBranchPrice[]>(`/prices/branch/${branchId}`),
+    httpClient<ApiInventoryStock[]>(`/inventory/branch/${branchId}`)
   ]);
 
-  return products.map((product) => mapProduct(product, prices)).filter((product) => product.isSellable);
+  return products
+    .map((product) => mapProduct(product, prices, stocks))
+    .filter((product): product is PosProduct => Boolean(product?.isSellable));
 }

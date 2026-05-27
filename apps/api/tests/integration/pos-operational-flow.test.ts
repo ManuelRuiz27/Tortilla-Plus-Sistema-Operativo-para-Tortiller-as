@@ -20,7 +20,7 @@ import {
   recordDeliveryPayment,
   createDeliverySettlement,
 } from "../../src/services/delivery-service.js";
-import { addSaleItem, completeSale, createSale, quoteSale } from "../../src/services/sale-service.js";
+import { addSaleItem, checkoutSale, completeSale, createSale, quoteSale } from "../../src/services/sale-service.js";
 import { DomainError } from "../../src/lib/domain-error.js";
 
 type LoginResult = Awaited<ReturnType<typeof login>>;
@@ -238,6 +238,83 @@ test("POS inventory rules allow tortilla and masa negative stock but block retai
       });
     }
   }
+});
+
+test("POS checkout endpoint is atomic and idempotent", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Atomic checkout test",
+    })).data;
+  }
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+  const key = `integration-checkout-${Date.now()}`;
+  const payload = {
+    branchId,
+    clientGeneratedId: key,
+    items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+    payments: [{ paymentMethod: "cash", amount: "24.00" }],
+  };
+
+  const completed = (await checkoutSale(cashier, payload, key)).data;
+  const repeated = (await checkoutSale(cashier, payload, key)).data;
+
+  assert.equal(completed.id, repeated.id);
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.payments.length, 1);
+
+  const saleCount = await prisma.sale.count({
+    where: {
+      organizationId: cashier.organizationId,
+      clientGeneratedId: key,
+    },
+  });
+  assert.equal(saleCount, 1);
+});
+
+test("POS checkout rolls back completely when payment total does not match", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Atomic checkout rollback test",
+    })).data;
+  }
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+  const clientGeneratedId = `integration-checkout-rollback-${Date.now()}`;
+
+  await assert.rejects(
+    () => checkoutSale(cashier, {
+      branchId,
+      clientGeneratedId,
+      items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+      payments: [{ paymentMethod: "cash", amount: "1.00" }],
+    }, clientGeneratedId),
+    (error) => error instanceof DomainError && error.code === "PAYMENT_TOTAL_MISMATCH",
+  );
+
+  const saleCount = await prisma.sale.count({
+    where: {
+      organizationId: cashier.organizationId,
+      clientGeneratedId,
+    },
+  });
+  assert.equal(saleCount, 0);
 });
 
 test("delivery route completes order, partial return, cash payment, settlement deposit and duplicate block", async () => {

@@ -1,19 +1,26 @@
-import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { openCashSessionRequest } from "../../../api/cash.api";
+import { currentCashSessionRequest, openCashSessionRequest } from "../../../api/cash.api";
 import { Button } from "../../../shared/components/button";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { useCashStore } from "../../../shared/stores/cash.store";
+import { parseMoneyInput } from "../../../shared/utils/decimal-input";
+import { POS_OPERATION_LIMITS } from "../config/pos.config";
 
 export function OpenCashPage() {
   const navigate = useNavigate();
   const branchId = useBranchStore((state) => state.activeBranchId);
   const branchName = useBranchStore((state) => state.activeBranchName);
   const setCashSession = useCashStore((state) => state.setCashSession);
-  const [openingAmountCounted, setOpeningAmountCounted] = useState("500.00");
+  const [openingAmountCounted, setOpeningAmountCounted] = useState("");
   const [openingNote, setOpeningNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const currentCashQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => currentCashSessionRequest(branchId ?? ""),
+    queryKey: ["current-cash-session", branchId]
+  });
   const openCashMutation = useMutation({
     mutationFn: openCashSessionRequest,
     onSuccess: (session) => {
@@ -22,21 +29,32 @@ export function OpenCashPage() {
     }
   });
 
+  useEffect(() => {
+    if (currentCashQuery.data?.status === "open") {
+      setCashSession(currentCashQuery.data);
+      navigate("/app/pos/sale", { replace: true });
+    }
+  }, [currentCashQuery.data, navigate, setCashSession]);
+
   function openCash() {
     if (!branchId) {
       return;
     }
 
-    const amount = Number(openingAmountCounted);
-    if (!Number.isFinite(amount) || amount < 0) {
-      setError("El saldo contado no puede ser negativo.");
+    const parsed = parseMoneyInput(openingAmountCounted, {
+      ...POS_OPERATION_LIMITS.openingCash,
+      allowZero: true,
+      fieldLabel: "El efectivo contado"
+    });
+    if (!parsed.ok) {
+      setError(parsed.reason);
       return;
     }
 
     setError(null);
     openCashMutation.mutate({
       branchId,
-      openingAmountCounted: amount.toFixed(2),
+      openingAmountCounted: parsed.normalized,
       openingNote: openingNote.trim() || undefined
     });
   }
@@ -49,14 +67,15 @@ export function OpenCashPage() {
       <div className="mt-6 grid gap-4">
         <div>
           <label className="text-sm font-semibold" htmlFor="openingAmount">
-            Efectivo inicial
+            Efectivo contado
           </label>
           <input
             className="mt-2 h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
-            disabled={openCashMutation.isPending}
+            disabled={openCashMutation.isPending || currentCashQuery.isLoading}
             id="openingAmount"
             inputMode="decimal"
             onChange={(event) => setOpeningAmountCounted(event.target.value)}
+            placeholder="0.00"
             value={openingAmountCounted}
           />
         </div>

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Boxes, CreditCard, ReceiptText, Route, ShoppingCart, Users } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign, Boxes, CreditCard, PackagePlus, ReceiptText, Route, ShoppingCart, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { managerDashboardRequest } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
@@ -41,6 +41,8 @@ export function DashboardPage() {
         {[
           { label: "Vender en POS", to: "/app/pos/sale", icon: ShoppingCart },
           { label: "Preparar ruta", to: "/app/manager/routes", icon: Route },
+          { label: "Agregar producto", to: "/app/manager/products", icon: PackagePlus },
+          { label: "Actualizar precios", to: "/app/manager/prices", icon: BadgeDollarSign },
           { label: "Cobrar saldos", to: "/app/manager/customers", icon: Users },
           { label: "Revisar stock", to: "/app/manager/inventory", icon: Boxes },
           { label: "Autorizar retiros", to: "/app/manager/withdrawals", icon: AlertTriangle },

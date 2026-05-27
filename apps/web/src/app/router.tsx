@@ -23,11 +23,13 @@ import { PublicAutofacturaPage } from "../modules/public-billing/pages/public-au
 import { SalePage } from "../modules/pos/pages/sale-page";
 import { AuthGuard } from "../shared/guards/auth-guard";
 import { BranchGuard } from "../shared/guards/branch-guard";
+import { CashSessionGuard } from "../shared/guards/cash-session-guard";
 import { FeatureGuard } from "../shared/guards/feature-guard";
 import { RoleGuard } from "../shared/guards/role-guard";
 import { AuthLayout } from "../shared/layouts/auth-layout";
 import { ManagerLayout } from "../shared/layouts/manager-layout";
 import { PosLayout } from "../shared/layouts/pos-layout";
+import { POS_ALLOWED_ROLES } from "../modules/pos/config/pos.config";
 
 export function AppRouter() {
   return (
@@ -49,7 +51,9 @@ export function AppRouter() {
         element={
           <AuthGuard>
             <BranchGuard>
-              <PosLayout />
+              <RoleGuard allowedRoles={POS_ALLOWED_ROLES}>
+                <PosLayout />
+              </RoleGuard>
             </BranchGuard>
           </AuthGuard>
         }
@@ -57,7 +61,14 @@ export function AppRouter() {
       >
         <Route index element={<PosRouterPage />} />
         <Route element={<OpenCashPage />} path="cash/open" />
-        <Route element={<SalePage />} path="sale" />
+        <Route
+          element={
+            <CashSessionGuard>
+              <SalePage />
+            </CashSessionGuard>
+          }
+          path="sale"
+        />
       </Route>
       <Route
         element={

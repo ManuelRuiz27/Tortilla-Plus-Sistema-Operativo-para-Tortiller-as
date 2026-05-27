@@ -243,7 +243,27 @@ export async function getBranchInventory(currentUser: AuthenticatedUser, branchI
     },
   });
 
-  return { data: stocks.map(serializeInventoryStock) };
+  const stockedProductIds = new Set(stocks.map((stock) => stock.productId));
+  const productsWithoutStock = await prisma.product.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      isStockTracked: true,
+      status: "active",
+      id: {
+        notIn: [...stockedProductIds],
+      },
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
+
+  return {
+    data: [
+      ...stocks.map(serializeInventoryStock),
+      ...productsWithoutStock.map((product) => serializeEmptyInventoryStock(currentUser.organizationId, branchId, product)),
+    ].sort((left, right) => (left.product?.name ?? "").localeCompare(right.product?.name ?? "")),
+  };
 }
 
 export async function createInventoryAdjustment(currentUser: AuthenticatedUser, input: unknown) {
@@ -982,6 +1002,37 @@ function serializeInventoryStock(stock: {
     reservedQuantity: normalizeQuantity(stock.reservedQuantity),
     minimumQuantity: normalizeQuantity(stock.minimumQuantity),
     updatedAt: stock.updatedAt,
+  };
+}
+
+function serializeEmptyInventoryStock(
+  organizationId: string,
+  branchId: string,
+  product: {
+    id: string;
+    name: string;
+    sku: string | null;
+    productType: string;
+    unit: string;
+    updatedAt: Date;
+  },
+) {
+  return {
+    id: `empty-${branchId}-${product.id}`,
+    organizationId,
+    branchId,
+    productId: product.id,
+    product: {
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      productType: product.productType,
+      unit: product.unit,
+    },
+    quantity: "0.000",
+    reservedQuantity: "0.000",
+    minimumQuantity: "0.000",
+    updatedAt: product.updatedAt,
   };
 }
 

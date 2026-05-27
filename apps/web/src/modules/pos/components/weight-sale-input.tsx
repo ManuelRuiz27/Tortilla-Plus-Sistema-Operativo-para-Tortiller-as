@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button } from "../../../shared/components/button";
 import { createId } from "../../../shared/utils/id";
+import { parseKgInput } from "../../../shared/utils/decimal-input";
+import { POS_OPERATION_LIMITS } from "../config/pos.config";
 import type { PosCartItem, PosProduct } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
@@ -15,9 +17,13 @@ type WeightSaleInputProps = {
 
 export function WeightSaleInput({ product, pricePerKg, label, shortcut, inputId, onAddItem }: WeightSaleInputProps) {
   const [quantity, setQuantity] = useState("");
-  const quantityKg = Number(quantity);
+  const parsedQuantity = parseKgInput(quantity, {
+    ...POS_OPERATION_LIMITS.itemKg,
+    fieldLabel: "La cantidad"
+  });
+  const quantityKg = parsedQuantity.ok ? parsedQuantity.value : 0;
   const total = Number.isFinite(quantityKg) ? quantityKg * pricePerKg : 0;
-  const canAdd = Boolean(product && quantityKg > 0 && pricePerKg > 0);
+  const canAdd = Boolean(product && parsedQuantity.ok && pricePerKg > 0);
 
   function addItem() {
     if (!product || !canAdd) {
@@ -60,6 +66,7 @@ export function WeightSaleInput({ product, pricePerKg, label, shortcut, inputId,
           Agregar
         </Button>
       </div>
+      {quantity && !parsedQuantity.ok ? <p className="mt-2 text-xs text-tp-danger">{parsedQuantity.reason}</p> : null}
     </div>
   );
 }

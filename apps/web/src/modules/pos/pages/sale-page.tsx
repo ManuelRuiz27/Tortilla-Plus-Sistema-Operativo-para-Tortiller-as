@@ -5,10 +5,8 @@ import { useSearchParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
 import { managerCustomersRequest } from "../../../api/manager.api";
 import {
-  addSaleItemsRequest,
   cancelDraftSaleRequest,
-  completeSaleRequest,
-  createSaleRequest,
+  checkoutSaleRequest,
   quoteSaleRequest
 } from "../../../api/sales.api";
 import { Button } from "../../../shared/components/button";
@@ -32,6 +30,8 @@ import { formatMoney } from "../utils/money";
 type CheckoutDraft = {
   items: PosCartItem[];
   total: number;
+  idempotencyKey: string;
+  clientGeneratedId: string;
 };
 
 type QuickSaleProduct = {
@@ -70,7 +70,6 @@ export function SalePage() {
   const removeItem = usePosCartStore((state) => state.removeItem);
   const setItems = usePosCartStore((state) => state.setItems);
   const clearCart = usePosCartStore((state) => state.clearCart);
-  const setSaleDraftId = usePosCartStore((state) => state.setSaleDraftId);
   const saleDraftId = usePosCartStore((state) => state.saleDraftId);
   const clearSaleDraftId = usePosCartStore((state) => state.clearSaleDraftId);
   const selectedCustomer = usePosCartStore((state) => state.selectedCustomer);
@@ -92,18 +91,14 @@ export function SalePage() {
       }
 
       const checkoutItems = checkoutDraft?.items ?? items;
-      const checkoutTotal = checkoutDraft?.total ?? calculateCartTotal(checkoutItems);
-      const draft = await createSaleRequest({ branchId, customerId: selectedCustomer?.id });
-      setSaleDraftId(draft.id);
-      await addSaleItemsRequest({ saleId: draft.id, items: checkoutItems });
-      return completeSaleRequest({
-        saleId: draft.id,
-        total: checkoutTotal,
+      return checkoutSaleRequest({
+        branchId,
+        customerId: selectedCustomer?.id,
+        items: checkoutItems,
         payments: payload.payments,
-        changeAmount: payload.changeAmount,
         authorizationPin: payload.authorizationPin,
-        idempotencyKey: createId()
-      });
+        clientGeneratedId: checkoutDraft?.clientGeneratedId
+      }, checkoutDraft?.idempotencyKey ?? createId());
     },
     onError: (error) => {
       if (error instanceof ApiErrorException) {
@@ -139,7 +134,7 @@ export function SalePage() {
     }
   });
 
-  async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer): Promise<PosCartItem[]> {
+  async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer, failOnError = false): Promise<PosCartItem[]> {
     if (!branchId || nextItems.length === 0) {
       setItems(nextItems);
       return nextItems;
@@ -169,6 +164,9 @@ export function SalePage() {
     } catch (error) {
       setItems(nextItems);
       setQuoteError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo cotizar la venta.");
+      if (failOnError) {
+        throw error;
+      }
       return nextItems;
     } finally {
       setIsQuoting(false);
@@ -187,14 +185,44 @@ export function SalePage() {
     void applyQuote(nextItems);
   }
 
+  function handleUpdateQuantity(localId: string, quantity: number) {
+    const target = items.find((item) => item.localId === localId);
+    if (
+      target?.productType === "retail" &&
+      target.currentStock !== undefined &&
+      quantity > target.currentStock
+    ) {
+      setQuoteError("Stock insuficiente para producto retail.");
+      return;
+    }
+
+    const nextItems = items.map((item) =>
+      item.localId === localId
+        ? {
+            ...item,
+            quantity,
+            total: Number((item.unitPrice * quantity).toFixed(2))
+          }
+        : item
+    );
+    setItems(nextItems);
+    void applyQuote(nextItems);
+  }
+
   async function handleCheckout() {
     if (items.length > 0 && total > 0 && !checkoutMutation.isPending && !isQuoting) {
-      const quotedItems = await applyQuote(items);
-      setCheckoutDraft({
-        items: quotedItems,
-        total: calculateCartTotal(quotedItems)
-      });
-      setIsPaymentOpen(true);
+      try {
+        const quotedItems = await applyQuote(items, selectedCustomer, true);
+        setCheckoutDraft({
+          items: quotedItems,
+          total: calculateCartTotal(quotedItems),
+          idempotencyKey: createId(),
+          clientGeneratedId: createId()
+        });
+        setIsPaymentOpen(true);
+      } catch {
+        setIsPaymentOpen(false);
+      }
     }
   }
 
@@ -263,6 +291,15 @@ export function SalePage() {
     clearSelectedCustomer();
     setQuoteError("Cliente no encontrado o inactivo. La venta continua como publico general.");
   }, [clearSelectedCustomer, customersQuery.data, queryCustomerId, selectedCustomer?.id, setSelectedCustomer]);
+
+  useEffect(() => {
+    if (!queryCustomerId || !customersQuery.isError) {
+      return;
+    }
+
+    clearSelectedCustomer();
+    setQuoteError("No se pudo validar el cliente. La venta continua como publico general.");
+  }, [clearSelectedCustomer, customersQuery.isError, queryCustomerId]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -402,6 +439,7 @@ export function SalePage() {
         onCheckout={() => void handleCheckout()}
         onClearCart={handleClearCart}
         onRemoveItem={handleRemoveItem}
+        onUpdateQuantity={handleUpdateQuantity}
         subtotal={subtotal}
         total={total}
       />

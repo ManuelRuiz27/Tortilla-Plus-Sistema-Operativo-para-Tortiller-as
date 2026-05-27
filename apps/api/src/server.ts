@@ -44,6 +44,7 @@ import {
   addSaleItems,
   cancelDraftSale,
   cancelPaidSale,
+  checkoutSale,
   completeSale,
   createSale,
   createSaleReturn,
@@ -220,6 +221,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/sales/quote") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await quoteSale(currentUser, await readJson(request)));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/sales/checkout") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await checkoutSale(currentUser, await readJson(request), getIdempotencyKey(request)));
     return;
   }
 

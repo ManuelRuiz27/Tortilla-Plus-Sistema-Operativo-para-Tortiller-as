@@ -21,6 +21,7 @@ export type PosProduct = {
   isSellable: boolean;
   isStockTracked: boolean;
   requiresProduction: boolean;
+  currentStock?: number;
   status: "active" | "inactive" | "deleted";
   prices: PosProductPrice[];
 };
@@ -35,6 +36,7 @@ export type PosCartItem = {
   unit: PosUnit;
   unitPrice: number;
   total: number;
+  currentStock?: number;
   priceSource?: "branch" | "customer";
   priceSourceLabel?: string;
 };

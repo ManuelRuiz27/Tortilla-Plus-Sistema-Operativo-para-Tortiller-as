@@ -12,7 +12,7 @@ type PackageQuickButtonProps = {
 };
 
 export function PackageQuickButton({ product, unitPrice, buttonId, onAddItem }: PackageQuickButtonProps) {
-  function addPackage() {
+  function addPackage(quantity: number) {
     if (!product || unitPrice <= 0) {
       return;
     }
@@ -23,26 +23,36 @@ export function PackageQuickButton({ product, unitPrice, buttonId, onAddItem }: 
       productName: product.name,
       productType: "package",
       saleMode: "by_package",
-      quantity: 1,
+      quantity,
       unit: "package",
       unitPrice,
-      total: unitPrice
+      total: Number((unitPrice * quantity).toFixed(2))
     });
   }
 
   return (
-    <Button
-      className="min-h-20 justify-start px-5 text-left"
-      disabled={!product || unitPrice <= 0}
-      id={buttonId}
-      onClick={addPackage}
-      variant="secondary"
-    >
-      <PackagePlus className="h-5 w-5" aria-hidden="true" />
-      <span>
-        Paquete 800g
-        <span className="block text-xs font-medium text-tp-muted">{formatMoney(unitPrice)}</span>
-      </span>
-    </Button>
+    <div className="rounded-md border border-tp-border bg-white p-3">
+      <div className="flex items-center gap-2">
+        <PackagePlus className="h-5 w-5 text-tp-primary" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Paquete 800g</p>
+          <p className="text-xs text-tp-muted">{formatMoney(unitPrice)}</p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {[1, 5, 10].map((quantity) => (
+          <Button
+            className="min-h-10"
+            disabled={!product || unitPrice <= 0}
+            id={quantity === 1 ? buttonId : undefined}
+            key={quantity}
+            onClick={() => addPackage(quantity)}
+            variant="secondary"
+          >
+            +{quantity}
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }

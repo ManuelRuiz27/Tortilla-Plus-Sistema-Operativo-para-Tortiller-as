@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { posProductsRequest } from "../../../api/products.api";
+import { POS_PRODUCT_SKUS } from "../config/pos.config";
 import type { PosProduct, PosSaleMode } from "../types/pos.types";
 
-function byType(products: PosProduct[], type: PosProduct["productType"]): PosProduct | null {
-  return products.find((product) => product.productType === type) ?? null;
+function bySku(products: PosProduct[], sku: string): PosProduct | null {
+  return products.find((product) => product.sku === sku) ?? null;
 }
 
 export function getProductPrice(product: PosProduct, saleMode: PosSaleMode): number {
@@ -23,9 +24,9 @@ export function usePosProducts(branchId: string | null) {
   return {
     ...query,
     products: activeProducts,
-    tortillaProduct: byType(activeProducts, "tortilla"),
-    masaProduct: byType(activeProducts, "masa"),
-    package800gProduct: byType(activeProducts, "package"),
+    tortillaProduct: bySku(activeProducts, POS_PRODUCT_SKUS.tortillaKg),
+    masaProduct: bySku(activeProducts, POS_PRODUCT_SKUS.masaKg),
+    package800gProduct: bySku(activeProducts, POS_PRODUCT_SKUS.package800g),
     retailProducts: activeProducts.filter((product) => product.productType === "retail")
   };
 }

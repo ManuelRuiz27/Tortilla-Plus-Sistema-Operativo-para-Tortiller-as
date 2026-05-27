@@ -286,149 +286,247 @@ async function completeSaleOnce(currentUser: AuthenticatedUser, saleId: string, 
     throw new DomainError(409, "SALE_NOT_DRAFT", "La venta no esta en borrador.");
   }
 
+  return prisma.$transaction((tx) =>
+    completeDraftSaleInTransaction(tx, currentUser, sale, body, payments, customerRequestedInvoice)
+  );
+}
+
+export async function checkoutSale(
+  currentUser: AuthenticatedUser,
+  input: unknown,
+  idempotencyKey?: string | null,
+) {
+  return runIdempotent(
+    currentUser.organizationId,
+    "sales.checkout",
+    idempotencyKey,
+    { input },
+    () => checkoutSaleOnce(currentUser, input),
+  );
+}
+
+async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) {
+  await assertFeatureAvailable(currentUser, "pos_basic");
+  await assertPermission(currentUser.id, "sales.create");
+  await assertPermission(currentUser.id, "payments.create");
+  const body = asRecord(input);
+  const branchId = asString(body.branchId, "branchId");
+  const customerId = optionalString(body.customerId);
+  const clientGeneratedId = optionalString(body.clientGeneratedId);
+  const itemInputs = asSaleItemInputs(body.items);
+  const payments = parseSalePayments(body.payments);
+  const customerRequestedInvoice = optionalBoolean(body.customerRequestedInvoice ?? body.requestInvoice) ?? false;
+
+  await assertBranchAccess(currentUser, branchId);
+
   return prisma.$transaction(async (tx) => {
     const cashSession = await tx.cashSession.findFirst({
       where: {
-        id: sale.cashSessionId,
         organizationId: currentUser.organizationId,
-        branchId: sale.branchId,
+        branchId,
         status: "open",
+      },
+      orderBy: {
+        openedAt: "desc",
       },
     });
 
     if (!cashSession) {
-      throw new DomainError(409, "NO_OPEN_CASH_SESSION", "No hay caja abierta para la venta.");
+      throw new DomainError(409, "NO_OPEN_CASH_SESSION", "No hay caja abierta para la sucursal.");
     }
 
-    const draft = await tx.sale.findFirstOrThrow({
-      where: {
-        id: saleId,
-        organizationId: currentUser.organizationId,
-      },
-      include: {
-        saleItemSale: true,
-      },
-    });
-
-    if (draft.saleItemSale.length === 0) {
-      throw new DomainError(400, "INVALID_REQUEST", "La venta no tiene items.");
+    if (customerId) {
+      await assertCustomer(tx, currentUser.organizationId, customerId);
     }
 
-    assertPaymentTotal(normalizeMoney(draft.total), payments);
-    await assertCreditPayments(tx, currentUser, draft, payments, body);
-    const fiscalClassification = classifyFiscalSale({ payments, customerRequestedInvoice });
-    const invoiceDeadlineAt = fiscalClassification.requiresReceipt ? invoiceDeadlineEndOfMonth(new Date()) : null;
-
-    const createdPayments = [];
-    for (const payment of payments) {
-      const created = await tx.salePayment.create({
-        data: {
-          organizationId: currentUser.organizationId,
-          branchId: sale.branchId,
-          saleId,
-          paymentMethod: payment.paymentMethod,
-          amount: payment.amount,
-          reference: payment.reference,
-          provider: payment.provider,
-          status: "completed",
-          createdByUserId: currentUser.id,
-        },
-      });
-      createdPayments.push(created);
-
-      if (payment.paymentMethod === "card") {
-        await tx.paymentTerminalReference.create({
-          data: {
-            organizationId: currentUser.organizationId,
-            branchId: sale.branchId,
-            salePaymentId: created.id,
-            reference: payment.reference ?? "",
-            terminalName: payment.provider,
-            amount: payment.amount,
-          },
-        });
-      }
-    }
-
-    const movements = [];
-    for (const item of draft.saleItemSale) {
-      const movement = await createSaleInventoryMovement(tx, currentUser, sale.branchId, item);
-      if (movement) {
-        movements.push(movement);
-      }
-    }
-
-    const completed = await tx.sale.update({
-      where: { id: saleId },
+    const sale = await tx.sale.create({
       data: {
-        status: "completed",
-        fiscalIntent: fiscalClassification.fiscalIntent,
-        fiscalStatus: fiscalClassification.fiscalStatus,
-        invoiceDeadlineAt,
-        updatedAt: new Date(),
-      },
-      include: {
-        saleItemSale: true,
-        salePaymentSale: true,
+        organizationId: currentUser.organizationId,
+        branchId,
+        cashSessionId: cashSession.id,
+        customerId,
+        saleNumber: await nextSaleNumber(tx, branchId),
+        createdByUserId: currentUser.id,
+        clientGeneratedId,
+        status: "draft",
+        saleType: "counter",
       },
     });
 
-    await createBillingReceiptForSale(tx, {
-      organizationId: currentUser.organizationId,
-      branchId: sale.branchId,
-      saleId,
-      payments: createdPayments,
-      requiresReceipt: fiscalClassification.requiresReceipt,
-      expiresAt: invoiceDeadlineAt ?? undefined,
-    });
-
-    for (const payment of payments.filter((item) => item.paymentMethod === "credit")) {
-      const customerId = draft.customerId;
-
-      if (!customerId) {
-        throw new DomainError(400, "CUSTOMER_REQUIRED_FOR_CREDIT", "Credito requiere cliente.");
-      }
-
-      await tx.customerBalanceMovement.create({
-        data: {
-          organizationId: currentUser.organizationId,
-          customerId,
-          movementType: "charge",
-          amount: payment.amount,
-          referenceType: "sale",
-          referenceId: saleId,
-          createdByUserId: currentUser.id,
-        },
-      });
-
-      await tx.customer.update({
-        where: { id: customerId },
-        data: {
-          currentBalance: addMoney((await tx.customer.findUniqueOrThrow({ where: { id: customerId } })).currentBalance, payment.amount),
-          updatedAt: new Date(),
-        },
-      });
+    const items = [];
+    for (const itemInput of itemInputs) {
+      items.push(await createSaleItem(tx, currentUser, sale, itemInput));
     }
+    await recalculateSaleTotals(tx, sale.id);
 
     await tx.auditLog.create({
       data: {
         organizationId: currentUser.organizationId,
-        branchId: sale.branchId,
+        branchId,
         userId: currentUser.id,
-        action: "sale_completed",
+        action: "sale_checkout_created",
         entityType: "sale",
-        entityId: saleId,
+        entityId: sale.id,
         afterSnapshot: {
-          sale: serializeSale(completed),
-          payments: createdPayments.map(serializeSalePayment),
-          fiscalClassification,
-          inventoryMovements: movements.map(serializeInventoryMovement),
+          sale: serializeSale(sale),
+          items: items.map(serializeSaleItem),
         },
       },
     });
 
-    return { data: await getSalePayload(tx, currentUser.organizationId, saleId) };
+    return completeDraftSaleInTransaction(tx, currentUser, sale, body, payments, customerRequestedInvoice);
   });
+}
+
+async function completeDraftSaleInTransaction(
+  tx: Prisma.TransactionClient,
+  currentUser: AuthenticatedUser,
+  sale: Awaited<ReturnType<typeof getSaleOrThrow>>,
+  body: Record<string, unknown>,
+  payments: ReturnType<typeof parseSalePayments>,
+  customerRequestedInvoice: boolean,
+) {
+  const cashSession = await tx.cashSession.findFirst({
+    where: {
+      id: sale.cashSessionId,
+      organizationId: currentUser.organizationId,
+      branchId: sale.branchId,
+      status: "open",
+    },
+  });
+
+  if (!cashSession) {
+    throw new DomainError(409, "NO_OPEN_CASH_SESSION", "No hay caja abierta para la venta.");
+  }
+
+  const draft = await tx.sale.findFirstOrThrow({
+    where: {
+      id: sale.id,
+      organizationId: currentUser.organizationId,
+    },
+    include: {
+      saleItemSale: true,
+    },
+  });
+
+  if (draft.saleItemSale.length === 0) {
+    throw new DomainError(400, "INVALID_REQUEST", "La venta no tiene items.");
+  }
+
+  assertPaymentTotal(normalizeMoney(draft.total), payments);
+  await assertCreditPayments(tx, currentUser, draft, payments, body);
+  const fiscalClassification = classifyFiscalSale({ payments, customerRequestedInvoice });
+  const invoiceDeadlineAt = fiscalClassification.requiresReceipt ? invoiceDeadlineEndOfMonth(new Date()) : null;
+
+  const createdPayments = [];
+  for (const payment of payments) {
+    const created = await tx.salePayment.create({
+      data: {
+        organizationId: currentUser.organizationId,
+        branchId: sale.branchId,
+        saleId: sale.id,
+        paymentMethod: payment.paymentMethod,
+        amount: payment.amount,
+        reference: payment.reference,
+        provider: payment.provider,
+        status: "completed",
+        createdByUserId: currentUser.id,
+      },
+    });
+    createdPayments.push(created);
+
+    if (payment.paymentMethod === "card") {
+      await tx.paymentTerminalReference.create({
+        data: {
+          organizationId: currentUser.organizationId,
+          branchId: sale.branchId,
+          salePaymentId: created.id,
+          reference: payment.reference ?? "",
+          terminalName: payment.provider,
+          amount: payment.amount,
+        },
+      });
+    }
+  }
+
+  const movements = [];
+  for (const item of draft.saleItemSale) {
+    const movement = await createSaleInventoryMovement(tx, currentUser, sale.branchId, item);
+    if (movement) {
+      movements.push(movement);
+    }
+  }
+
+  const completed = await tx.sale.update({
+    where: { id: sale.id },
+    data: {
+      status: "completed",
+      fiscalIntent: fiscalClassification.fiscalIntent,
+      fiscalStatus: fiscalClassification.fiscalStatus,
+      invoiceDeadlineAt,
+      updatedAt: new Date(),
+    },
+    include: {
+      saleItemSale: true,
+      salePaymentSale: true,
+    },
+  });
+
+  await createBillingReceiptForSale(tx, {
+    organizationId: currentUser.organizationId,
+    branchId: sale.branchId,
+    saleId: sale.id,
+    payments: createdPayments,
+    requiresReceipt: fiscalClassification.requiresReceipt,
+    expiresAt: invoiceDeadlineAt ?? undefined,
+  });
+
+  for (const payment of payments.filter((item) => item.paymentMethod === "credit")) {
+    const customerId = draft.customerId;
+
+    if (!customerId) {
+      throw new DomainError(400, "CUSTOMER_REQUIRED_FOR_CREDIT", "Credito requiere cliente.");
+    }
+
+    await tx.customerBalanceMovement.create({
+      data: {
+        organizationId: currentUser.organizationId,
+        customerId,
+        movementType: "charge",
+        amount: payment.amount,
+        referenceType: "sale",
+        referenceId: sale.id,
+        createdByUserId: currentUser.id,
+      },
+    });
+
+    await tx.customer.update({
+      where: { id: customerId },
+      data: {
+        currentBalance: addMoney((await tx.customer.findUniqueOrThrow({ where: { id: customerId } })).currentBalance, payment.amount),
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  await tx.auditLog.create({
+    data: {
+      organizationId: currentUser.organizationId,
+      branchId: sale.branchId,
+      userId: currentUser.id,
+      action: "sale_completed",
+      entityType: "sale",
+      entityId: sale.id,
+      afterSnapshot: {
+        sale: serializeSale(completed),
+        payments: createdPayments.map(serializeSalePayment),
+        fiscalClassification,
+        inventoryMovements: movements.map(serializeInventoryMovement),
+      },
+    },
+  });
+
+  return { data: await getSalePayload(tx, currentUser.organizationId, sale.id) };
 }
 
 export async function cancelDraftSale(currentUser: AuthenticatedUser, saleId: string, input: unknown) {

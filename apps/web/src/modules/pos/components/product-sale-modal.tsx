@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "../../../shared/components/button";
 import { createId } from "../../../shared/utils/id";
+import { parseKgInput, parseMoneyInput } from "../../../shared/utils/decimal-input";
+import { POS_OPERATION_LIMITS } from "../config/pos.config";
 import type { PosCartItem, PosProduct, PosSaleMode } from "../types/pos.types";
 import { formatMoney, formatQuantity } from "../utils/money";
 
@@ -62,11 +64,14 @@ export function ProductSaleModal({
   }
 
   const activeProduct = product;
-  const numericValue = Number(value);
   const isAmountMode = mode === "by_amount";
+  const parsedValue = isAmountMode
+    ? parseMoneyInput(value, { ...POS_OPERATION_LIMITS.saleMoney, fieldLabel: "El monto" })
+    : parseKgInput(value, { ...POS_OPERATION_LIMITS.itemKg, fieldLabel: "La cantidad" });
+  const numericValue = parsedValue.ok ? parsedValue.value : 0;
   const quantityKg = isAmountMode && pricePerKg > 0 ? numericValue / pricePerKg : numericValue;
   const total = isAmountMode ? numericValue : numericValue * pricePerKg;
-  const canAdd = numericValue > 0 && pricePerKg > 0 && Number.isFinite(total);
+  const canAdd = parsedValue.ok && pricePerKg > 0 && Number.isFinite(total);
   const presets = isAmountMode ? amountPresets : kgPresets;
 
   function submit() {
@@ -155,6 +160,7 @@ export function ProductSaleModal({
             </Button>
           ))}
         </div>
+        {value && !parsedValue.ok ? <p className="mt-3 text-sm text-tp-danger">{parsedValue.reason}</p> : null}
 
         <div className="mt-5 grid grid-cols-2 gap-3 rounded-md bg-tp-soft p-3">
           <div>

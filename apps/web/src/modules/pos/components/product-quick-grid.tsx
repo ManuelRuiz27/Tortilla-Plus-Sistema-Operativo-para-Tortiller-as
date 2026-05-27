@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { createId } from "../../../shared/utils/id";
 import type { PosCartItem, PosProduct } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
@@ -11,6 +12,7 @@ type ProductQuickGridProps = {
 };
 
 export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddItem }: ProductQuickGridProps) {
+  const lastBarcodeRef = useRef<string | null>(null);
   const filteredProducts = products.filter((product) => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) {
@@ -24,7 +26,7 @@ export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddIt
 
   function addRetailProduct(product: PosProduct) {
     const unitPrice = product.prices.find((price) => price.saleMode === "by_unit")?.price ?? 0;
-    if (unitPrice <= 0) {
+    if (unitPrice <= 0 || product.isStockTracked && (product.currentStock ?? 0) < 1) {
       return;
     }
 
@@ -37,9 +39,31 @@ export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddIt
       quantity: 1,
       unit: product.unit,
       unitPrice,
-      total: unitPrice
+      total: unitPrice,
+      currentStock: product.currentStock
     });
   }
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (!term || term === lastBarcodeRef.current) {
+      return;
+    }
+
+    const exactMatch = products.find((product) => product.barcode === term);
+    if (!exactMatch) {
+      return;
+    }
+
+    lastBarcodeRef.current = term;
+    addRetailProduct(exactMatch);
+    onSearchChange("");
+    window.setTimeout(() => {
+      if (lastBarcodeRef.current === term) {
+        lastBarcodeRef.current = null;
+      }
+    }, 250);
+  }, [onSearchChange, products, searchTerm]);
 
   return (
     <div className="mt-6">
@@ -59,16 +83,20 @@ export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddIt
       <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-3">
         {filteredProducts.map((product) => {
           const price = product.prices.find((item) => item.saleMode === "by_unit")?.price ?? 0;
+          const priceBlocked = price <= 0;
+          const stockBlocked = product.isStockTracked && (product.currentStock ?? 0) < 1;
           return (
             <button
               className="min-h-20 rounded-md border border-tp-border bg-white p-3 text-left transition hover:border-tp-primary hover:bg-tp-soft disabled:opacity-50"
-              disabled={price <= 0}
+              disabled={priceBlocked || stockBlocked}
               key={product.id}
               onClick={() => addRetailProduct(product)}
               type="button"
             >
               <span className="block text-sm font-semibold">{product.name}</span>
-              <span className="mt-1 block text-xs text-tp-muted">{formatMoney(price)}</span>
+              <span className="mt-1 block text-xs text-tp-muted">{priceBlocked ? "Sin precio" : formatMoney(price)}</span>
+              {priceBlocked ? <span className="mt-1 block text-xs font-semibold text-tp-danger">Configura precio</span> : null}
+              {stockBlocked ? <span className="mt-1 block text-xs font-semibold text-tp-danger">Sin stock</span> : null}
             </button>
           );
         })}

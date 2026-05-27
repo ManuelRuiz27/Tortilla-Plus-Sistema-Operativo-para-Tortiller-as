@@ -69,7 +69,7 @@ export function LoginForm() {
   }
 
   return (
-    <form className="space-y-5 rounded-md border border-tp-border bg-white p-6 shadow-sm" onSubmit={handleSubmit}>
+    <form className="w-full space-y-5 rounded-md border border-tp-border bg-white p-6 shadow-sm" onSubmit={handleSubmit}>
       <div>
         <h2 className="text-xl font-semibold">Iniciar sesion</h2>
         <p className="mt-1 text-sm text-tp-muted">Usa el correo y contrasena de tu negocio.</p>

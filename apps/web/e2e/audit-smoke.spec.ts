@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, test } from "@playwright/test";
+import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
 
 const apiBaseUrl = "http://127.0.0.1:3199/api/v1";
 
@@ -54,13 +54,29 @@ async function createAutofacturaReceiptToken(api: APIRequestContext) {
   return receiptPayload.data.token as string;
 }
 
-test("manager can enter operational routes with mocks disabled", async ({ page, request }) => {
-  await page.goto("/login");
+async function loginApi(api: APIRequestContext, email = "owner.demo@tortillaplus.mx") {
+  const login = await api.post(`${apiBaseUrl}/auth/login`, {
+    data: { email, password: "Demo1234!" }
+  });
+  expect(login.ok(), await login.text()).toBeTruthy();
+  const session = await login.json();
+  const loginData = session.data ?? session;
+  return {
+    token: loginData.accessToken as string,
+    branchId: loginData.user.branches[0].branchId as string
+  };
+}
 
+async function loginPage(page: Page) {
+  await page.goto("/login");
   await page.getByLabel("Correo").fill("owner.demo@tortillaplus.mx");
   await page.getByLabel("Contrasena").fill("Demo1234!");
   await page.getByRole("button", { name: "Entrar a mi sucursal" }).click();
   await page.waitForURL(/\/app\//);
+}
+
+test("manager can enter operational routes with mocks disabled", async ({ page, request }) => {
+  await loginPage(page);
 
   await page.goto("/app/manager/dashboard");
   await expect(page.getByRole("heading", { name: "Resumen de hoy" })).toBeVisible();
@@ -102,6 +118,161 @@ test("manager can enter operational routes with mocks disabled", async ({ page, 
   expect(exportResponse.ok(), await exportResponse.text()).toBeTruthy();
   expect(exportResponse.headers()["content-type"]).toContain("text/csv");
   expect(await exportResponse.text()).toContain("reporte,etiqueta,valor");
+});
+
+test("POS blocks sale without cash session and rejects destructive numeric input", async ({ page, request }) => {
+  const { token, branchId } = await loginApi(request);
+
+  await loginPage(page);
+
+  await page.route(`**/api/v1/cash-sessions/open?branchId=${branchId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: null })
+    });
+  });
+  await page.goto("/app/pos/sale");
+  await expect(page).toHaveURL(/\/app\/pos\/cash\/open/);
+  await expect(page.getByLabel("Efectivo contado")).toBeVisible();
+
+  await page.getByLabel("Efectivo contado").fill("1e3");
+  await page.getByRole("button", { name: "Abrir caja" }).click();
+  await expect(page.getByText("El efectivo contado debe tener formato decimal valido.")).toBeVisible();
+
+  await page.unroute(`**/api/v1/cash-sessions/open?branchId=${branchId}`);
+  const openCash = await request.post(`${apiBaseUrl}/cash-sessions/open`, {
+    data: { branchId, openingAmountCounted: "500.00", openingNote: "POS numeric E2E" },
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  expect([200, 201, 409]).toContain(openCash.status());
+
+  await page.goto("/app/pos/sale");
+  await page.waitForURL(/\/app\/pos\/sale/);
+
+  await page.getByRole("button", { name: /Tortilla/ }).click();
+  await page.getByLabel("Cantidad").fill("1e3");
+  await expect(page.getByText("La cantidad debe tener formato decimal valido.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Agregar" })).toBeDisabled();
+});
+
+test("manager creates customer special price and POS completes sale with that price", async ({ page, request }) => {
+  const { token, branchId } = await loginApi(request);
+  const auth = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now();
+
+  const openCash = await request.post(`${apiBaseUrl}/cash-sessions/open`, {
+    data: { branchId, openingAmountCounted: "500.00", openingNote: "Customer special price E2E" },
+    headers: auth
+  });
+  expect([200, 201, 409]).toContain(openCash.status());
+
+  const products = await request.get(`${apiBaseUrl}/products`, { headers: auth });
+  expect(products.ok(), await products.text()).toBeTruthy();
+  const productsPayload = await products.json();
+  const tortilla = productsPayload.data.find((product: { sku: string }) => product.sku === "TORTILLA-KG");
+  expect(tortilla).toBeTruthy();
+
+  const customerName = `Cliente E2E ${suffix}`;
+  const customerResponse = await request.post(`${apiBaseUrl}/customers`, {
+    data: {
+      name: customerName,
+      phone: `81${String(suffix).slice(-8)}`,
+      customerType: "cliente_frecuente",
+      creditEnabled: true,
+      creditLimit: "500.00"
+    },
+    headers: auth
+  });
+  expect(customerResponse.ok(), await customerResponse.text()).toBeTruthy();
+  const customerPayload = await customerResponse.json();
+  const customerId = customerPayload.data.id as string;
+
+  const customerPrice = await request.post(`${apiBaseUrl}/customers/${customerId}/prices`, {
+    data: { branchId, productId: tortilla.id, saleMode: "by_kg", price: "19.00" },
+    headers: auth
+  });
+  expect(customerPrice.ok(), await customerPrice.text()).toBeTruthy();
+
+  await loginPage(page);
+  await page.goto(`/app/pos/sale?customerId=${customerId}`);
+  await expect(page.getByText(customerName)).toBeVisible();
+
+  await page.getByRole("button", { name: /Tortilla/ }).click();
+  await page.getByLabel("Cantidad").fill("1");
+  await page.getByRole("button", { name: "Agregar" }).click();
+
+  await expect(page.getByText("Precio cliente")).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("$19.00").last()).toBeVisible();
+
+  await page.getByRole("button", { name: "Cobrar" }).click();
+  await expect(page.getByRole("heading", { name: "$19.00" })).toBeVisible();
+  await page.getByRole("button", { name: "Completar venta" }).click();
+
+  await expect(page.getByRole("heading", { name: "Venta completada" })).toBeVisible();
+});
+
+test("new retail product can receive initial stock and be sold in POS", async ({ page, request }) => {
+  const { token, branchId } = await loginApi(request);
+  const auth = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now();
+  const productName = `Salsa E2E ${suffix}`;
+
+  const openCash = await request.post(`${apiBaseUrl}/cash-sessions/open`, {
+    data: { branchId, openingAmountCounted: "500.00", openingNote: "Retail product E2E" },
+    headers: auth
+  });
+  expect([200, 201, 409]).toContain(openCash.status());
+
+  const productResponse = await request.post(`${apiBaseUrl}/products`, {
+    data: {
+      name: productName,
+      sku: `SAL-E2E-${suffix}`,
+      productType: "retail",
+      unit: "piece",
+      isSellable: true,
+      isStockTracked: true,
+      requiresProduction: false
+    },
+    headers: auth
+  });
+  expect(productResponse.ok(), await productResponse.text()).toBeTruthy();
+  const productPayload = await productResponse.json();
+  const productId = productPayload.data.id as string;
+
+  const priceResponse = await request.post(`${apiBaseUrl}/prices/branch`, {
+    data: { branchId, productId, saleMode: "by_unit", price: "18.00" },
+    headers: auth
+  });
+  expect(priceResponse.ok(), await priceResponse.text()).toBeTruthy();
+
+  const inventoryBefore = await request.get(`${apiBaseUrl}/inventory/branch/${branchId}`, { headers: auth });
+  expect(inventoryBefore.ok(), await inventoryBefore.text()).toBeTruthy();
+  const inventoryBeforePayload = await inventoryBefore.json();
+  expect(inventoryBeforePayload.data.find((item: { productId: string; quantity: string }) => item.productId === productId)?.quantity).toBe("0.000");
+
+  const stockResponse = await request.post(`${apiBaseUrl}/inventory/adjustments`, {
+    data: { branchId, productId, direction: "in", quantity: "2.000", reason: "Inventario inicial E2E" },
+    headers: auth
+  });
+  expect(stockResponse.ok(), await stockResponse.text()).toBeTruthy();
+
+  await loginPage(page);
+  await page.goto("/app/pos/sale");
+  await page.getByPlaceholder("Buscar producto").fill(productName);
+
+  const productButton = page.getByRole("button", { name: new RegExp(productName) });
+  await expect(productButton).toBeVisible();
+  await expect(productButton).toBeEnabled();
+  await productButton.click();
+
+  await expect(page.getByText(productName).last()).toBeVisible();
+  await expect(page.getByRole("complementary").getByText("$18.00").last()).toBeVisible();
+
+  await page.getByRole("button", { name: "Cobrar" }).click();
+  await expect(page.getByRole("heading", { name: "$18.00" })).toBeVisible();
+  await page.getByRole("button", { name: "Completar venta" }).click();
+
+  await expect(page.getByRole("heading", { name: "Venta completada" })).toBeVisible();
 });
 
 test("public autofactura portal invoices a card receipt token", async ({ page, request }) => {
