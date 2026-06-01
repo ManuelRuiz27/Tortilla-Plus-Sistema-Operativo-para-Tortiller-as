@@ -38,6 +38,12 @@ export async function getSettingsSummary(currentUser: AuthenticatedUser, input: 
             "cash_session_closed",
             "delivery_settlement_deposited",
             "mercadopago_terminal_payment_created",
+            "mercadopago_oauth_completed",
+            "mercadopago_terminals_synced",
+            "mercadopago_terminal_bound_to_pos",
+            "mercadopago_terminal_order_created",
+            "mercadopago_terminal_checkout_completed",
+            "manual_card_reference_used",
             "clip_terminal_payment_created",
             "scale_read",
           ],
@@ -53,6 +59,7 @@ export async function getSettingsSummary(currentUser: AuthenticatedUser, input: 
     data: {
       posDevices: posDevices.map((device) => ({
         id: device.id,
+        branchId: device.branchId,
         name: device.deviceName,
         status: device.status,
         lastSeen: (device.lastSeenAt ?? device.updatedAt).toISOString(),

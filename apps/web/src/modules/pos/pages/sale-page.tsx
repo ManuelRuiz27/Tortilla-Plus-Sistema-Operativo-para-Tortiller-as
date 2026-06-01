@@ -3,14 +3,19 @@ import { CreditCard, Scale, Wheat } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
-import { managerCustomersRequest } from "../../../api/manager.api";
+import { managerCustomersRequest, mercadoPagoTerminalsRequest } from "../../../api/manager.api";
 import {
   cancelDraftSaleRequest,
+  cancelTerminalOrderRequest,
+  confirmTerminalOrderCheckoutRequest,
+  createTerminalOrderRequest,
   checkoutSaleRequest,
+  terminalOrderStatusRequest,
   quoteSaleRequest
 } from "../../../api/sales.api";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { useAuthStore } from "../../../shared/stores/auth.store";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { createId } from "../../../shared/utils/id";
 import { CartPanel } from "../components/cart-panel";
@@ -23,7 +28,7 @@ import { ProductQuickGrid } from "../components/product-quick-grid";
 import { SaleSuccessModal } from "../components/sale-success-modal";
 import { getProductPrice, usePosProducts } from "../hooks/use-pos-products";
 import { usePosCartStore } from "../stores/pos-cart.store";
-import type { CompletedSale, PosPayment } from "../types/payment.types";
+import type { CompletedSale, PosPayment, TerminalOrder } from "../types/payment.types";
 import type { PosCartItem, PosProduct, PosSaleMode } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
@@ -62,7 +67,10 @@ export function SalePage() {
   const [isQuoting, setIsQuoting] = useState(false);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const [checkoutDraft, setCheckoutDraft] = useState<CheckoutDraft | null>(null);
+  const [terminalOrder, setTerminalOrder] = useState<TerminalOrder | null>(null);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
   const [quickSaleProduct, setQuickSaleProduct] = useState<QuickSaleProduct | null>(null);
+  const user = useAuthStore((state) => state.user);
   const items = usePosCartStore((state) => state.items);
   const subtotal = usePosCartStore((state) => state.subtotal);
   const total = usePosCartStore((state) => state.total);
@@ -81,6 +89,12 @@ export function SalePage() {
     queryFn: managerCustomersRequest,
     queryKey: ["manager-customers"]
   });
+  const terminalsQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => mercadoPagoTerminalsRequest(branchId),
+    queryKey: ["mercadopago-terminals-pos", branchId]
+  });
+  const assignedTerminal = terminalsQuery.data?.find((terminal) => terminal.binding?.status === "active") ?? null;
   const tortillaKgPrice = tortillaProduct ? getProductPrice(tortillaProduct, "by_kg") : 0;
   const masaKgPrice = masaProduct ? getProductPrice(masaProduct, "by_kg") : 0;
   const packagePrice = package800gProduct ? getProductPrice(package800gProduct, "by_package") : 0;
@@ -132,6 +146,52 @@ export function SalePage() {
       setIsPaymentOpen(false);
       setPaymentError(null);
     }
+  });
+  const createTerminalOrderMutation = useMutation({
+    mutationFn: async (payload: { amount: string; payments?: PosPayment[]; authorizationPin?: string }) => {
+      if (!branchId) {
+        throw new Error("Sucursal no seleccionada.");
+      }
+      const checkoutItems = checkoutDraft?.items ?? items;
+      return createTerminalOrderRequest({
+        branchId,
+        amount: payload.amount,
+        saleDraft: {
+          customerId: selectedCustomer?.id,
+          clientGeneratedId: checkoutDraft?.clientGeneratedId,
+          items: checkoutItems
+        },
+        payments: payload.payments,
+        authorizationPin: payload.authorizationPin
+      }, createId());
+    },
+    onError: (error) => {
+      setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo enviar el cobro a terminal.");
+    },
+    onSuccess: (order) => {
+      setTerminalError(null);
+      setTerminalOrder(order);
+    }
+  });
+  const confirmTerminalCheckoutMutation = useMutation({
+    mutationFn: (orderId: string) => confirmTerminalOrderCheckoutRequest(orderId, createId()),
+    onError: (error) => {
+      setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo confirmar la venta con terminal.");
+    },
+    onSuccess: (sale) => {
+      clearCart();
+      clearSaleDraftId();
+      clearSelectedCustomer();
+      setCheckoutDraft(null);
+      setTerminalOrder(null);
+      setTerminalError(null);
+      setIsPaymentOpen(false);
+      setCompletedSale(sale);
+    }
+  });
+  const cancelTerminalOrderMutation = useMutation({
+    mutationFn: (orderId: string) => cancelTerminalOrderRequest(orderId, createId()),
+    onSuccess: setTerminalOrder
   });
 
   async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer, failOnError = false): Promise<PosCartItem[]> {
@@ -245,6 +305,8 @@ export function SalePage() {
     clearSelectedCustomer();
     setCheckoutDraft(null);
     setQuoteError(null);
+    setTerminalOrder(null);
+    setTerminalError(null);
   }
 
   function openQuickSale(
@@ -276,6 +338,29 @@ export function SalePage() {
       void applyQuote(items, null);
     }
   }
+
+  useEffect(() => {
+    if (
+      !terminalOrder ||
+      ["approved", "rejected", "expired", "canceled", "failed", "refunded"].includes(terminalOrder.status)
+    ) {
+      return;
+    }
+
+    const interval = window.setInterval(async () => {
+      try {
+        const next = await terminalOrderStatusRequest(terminalOrder.id);
+        setTerminalOrder(next);
+        if (next.status === "approved") {
+          confirmTerminalCheckoutMutation.mutate(next.id);
+        }
+      } catch (error) {
+        setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo consultar la terminal.");
+      }
+    }, 2500);
+
+    return () => window.clearInterval(interval);
+  }, [confirmTerminalCheckoutMutation, terminalOrder]);
 
   useEffect(() => {
     if (!queryCustomerId || !customersQuery.data || selectedCustomer?.id === queryCustomerId) {
@@ -416,9 +501,9 @@ export function SalePage() {
             <Scale className="h-5 w-5" aria-hidden="true" />
             Bascula futura
           </Button>
-          <Button className="min-h-14 justify-start px-5 text-left" disabled variant="secondary">
+          <Button className="min-h-14 justify-start px-5 text-left" disabled={!assignedTerminal} variant="secondary">
             <CreditCard className="h-5 w-5" aria-hidden="true" />
-            Cobro con terminal
+            {assignedTerminal ? "Terminal Mercado Pago lista" : "Cobro con terminal"}
           </Button>
         </div>
 
@@ -446,16 +531,49 @@ export function SalePage() {
 
       <PaymentModal
         error={paymentError}
-        isSubmitting={checkoutMutation.isPending || isQuoting}
+        canUseManualCard={Boolean(user?.permissions.includes("payments.manual_card_reference"))}
+        isSubmitting={checkoutMutation.isPending || isQuoting || createTerminalOrderMutation.isPending || confirmTerminalCheckoutMutation.isPending}
         onClose={() => {
           setCheckoutDraft(null);
           setIsPaymentOpen(false);
         }}
+        onMercadoPagoSubmit={(payload) => createTerminalOrderMutation.mutate(payload)}
         onSubmit={(payload) => checkoutMutation.mutate(payload)}
         open={isPaymentOpen}
         selectedCustomer={selectedCustomer}
+        terminalName={assignedTerminal?.terminalName ?? assignedTerminal?.terminalId ?? null}
         total={checkoutDraft?.total ?? total}
       />
+      {terminalOrder ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+          <section className="w-full max-w-md rounded-md bg-white p-5 text-tp-text shadow-xl">
+            <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Mercado Pago</p>
+            <h2 className="mt-2 text-xl font-semibold">
+              {terminalOrder.status === "approved" ? "Pago aprobado" : "Esperando pago en terminal"}
+            </h2>
+            <p className="mt-2 text-sm text-tp-muted">
+              {assignedTerminal?.terminalName ?? assignedTerminal?.terminalId ?? "Terminal asignada"} - {terminalOrder.amount} {terminalOrder.currency}
+            </p>
+            <p className="mt-3 rounded-md bg-tp-soft p-3 text-sm">Estado: {terminalOrder.status}</p>
+            {terminalError ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-tp-danger">{terminalError}</p> : null}
+            <div className="mt-4 flex gap-2">
+              <Button
+                disabled={cancelTerminalOrderMutation.isPending || confirmTerminalCheckoutMutation.isPending || terminalOrder.status === "approved"}
+                onClick={() => cancelTerminalOrderMutation.mutate(terminalOrder.id)}
+                variant="secondary"
+              >
+                Cancelar orden
+              </Button>
+              <Button
+                disabled={confirmTerminalCheckoutMutation.isPending || terminalOrder.status !== "approved"}
+                onClick={() => confirmTerminalCheckoutMutation.mutate(terminalOrder.id)}
+              >
+                Confirmar venta
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <ProductSaleModal
         initialMode={quickSaleProduct?.initialMode ?? "by_kg"}
         onAddItem={handleAddItem}

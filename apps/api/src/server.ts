@@ -107,6 +107,7 @@ import {
 } from "./services/public-autofactura-service.js";
 import {
   addReconciliationItem,
+  addTerminalReconciliationIncidents,
   createReconciliationBatch,
   listReconciliationBatches,
   reviewReconciliationBatch,
@@ -133,6 +134,28 @@ import {
   readScale,
 } from "./services/physical-integration-service.js";
 import { getSettingsSummary } from "./services/settings-service.js";
+import {
+  disconnectMercadoPago,
+  getMercadoPagoConnection,
+  healthCheckMercadoPago,
+} from "./services/payment-provider-connection-service.js";
+import {
+  completeMercadoPagoOAuthCallback,
+  startMercadoPagoOAuth,
+} from "./services/mercadopago-oauth-service.js";
+import {
+  bindMercadoPagoTerminalToPos,
+  listMercadoPagoTerminalsForManager,
+  syncMercadoPagoTerminals,
+  unbindMercadoPagoTerminalFromPos,
+} from "./services/payment-terminal-service.js";
+import {
+  cancelTerminalOrder,
+  confirmTerminalOrderAndCheckout,
+  createTerminalOrder,
+  getTerminalOrderStatus,
+  processMercadoPagoTerminalWebhook,
+} from "./services/payment-terminal-order-service.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -192,6 +215,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/integrations/mercadopago/oauth/callback") {
+    sendJson(response, 200, await completeMercadoPagoOAuthCallback({
+      code: url.searchParams.get("code"),
+      state: url.searchParams.get("state"),
+    }));
+    return;
+  }
+
   if (method === "GET" && path === "/api/v1/subscriptions/current") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await getCurrentSubscription(currentUser));
@@ -209,6 +240,90 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     sendJson(response, 200, await getSettingsSummary(currentUser, {
       branchId: url.searchParams.get("branchId"),
     }));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/integrations/mercadopago/connection") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getMercadoPagoConnection(currentUser));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/integrations/mercadopago/oauth/start") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await startMercadoPagoOAuth(currentUser));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/integrations/mercadopago/disconnect") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await disconnectMercadoPago(currentUser));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/integrations/mercadopago/health-check") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await healthCheckMercadoPago(currentUser));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/integrations/mercadopago/terminals") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listMercadoPagoTerminalsForManager(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+    }));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/integrations/mercadopago/terminals/sync") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await syncMercadoPagoTerminals(currentUser, await readJson(request)));
+    return;
+  }
+
+  const terminalBindingMatch = path.match(/^\/api\/v1\/pos-devices\/([^/]+)\/terminal-bindings$/);
+  if (method === "POST" && terminalBindingMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await bindMercadoPagoTerminalToPos(currentUser, terminalBindingMatch[1], await readJson(request)));
+    return;
+  }
+
+  const terminalBindingDeleteMatch = path.match(/^\/api\/v1\/pos-devices\/([^/]+)\/terminal-bindings\/([^/]+)$/);
+  if (method === "DELETE" && terminalBindingDeleteMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await unbindMercadoPagoTerminalFromPos(currentUser, terminalBindingDeleteMatch[1], terminalBindingDeleteMatch[2]));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/pos/terminal-orders") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createTerminalOrder(currentUser, await readJson(request), getIdempotencyKey(request)));
+    return;
+  }
+
+  const terminalOrderMatch = path.match(/^\/api\/v1\/pos\/terminal-orders\/([^/]+)$/);
+  if (method === "GET" && terminalOrderMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getTerminalOrderStatus(currentUser, terminalOrderMatch[1]));
+    return;
+  }
+
+  const terminalOrderCancelMatch = path.match(/^\/api\/v1\/pos\/terminal-orders\/([^/]+)\/cancel$/);
+  if (method === "POST" && terminalOrderCancelMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await cancelTerminalOrder(currentUser, terminalOrderCancelMatch[1], getIdempotencyKey(request)));
+    return;
+  }
+
+  const terminalOrderCheckoutMatch = path.match(/^\/api\/v1\/pos\/terminal-orders\/([^/]+)\/confirm-and-checkout$/);
+  if (method === "POST" && terminalOrderCheckoutMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await confirmTerminalOrderAndCheckout(currentUser, terminalOrderCheckoutMatch[1], getIdempotencyKey(request)));
+    return;
+  }
+
+  if (method === "POST" && (path === "/api/v1/webhooks/mercadopago/terminal" || path === "/api/v1/webhooks/mercadopago/orders")) {
+    sendJson(response, 200, await processMercadoPagoTerminalWebhook(await readJson(request)));
     return;
   }
 
@@ -608,6 +723,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && reconciliationReviewMatch) {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await reviewReconciliationBatch(currentUser, reconciliationReviewMatch[1], await readJson(request)));
+    return;
+  }
+
+  const reconciliationTerminalIncidentsMatch = path.match(/^\/api\/v1\/reconciliation\/batches\/([^/]+)\/terminal-incidents$/);
+  if (method === "POST" && reconciliationTerminalIncidentsMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await addTerminalReconciliationIncidents(currentUser, reconciliationTerminalIncidentsMatch[1]));
     return;
   }
 

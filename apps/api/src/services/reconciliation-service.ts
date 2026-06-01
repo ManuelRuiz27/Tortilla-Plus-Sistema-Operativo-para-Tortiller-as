@@ -149,6 +149,83 @@ export async function reviewReconciliationBatch(currentUser: AuthenticatedUser, 
   });
 }
 
+export async function addTerminalReconciliationIncidents(currentUser: AuthenticatedUser, batchId: string) {
+  await assertPermission(currentUser.id, "reports.basic.view");
+
+  return prisma.$transaction(async (tx) => {
+    const batch = await tx.reconciliationBatch.findFirst({
+      where: { id: batchId, organizationId: currentUser.organizationId },
+    });
+    if (!batch) {
+      throw new DomainError(404, "RECONCILIATION_BATCH_NOT_FOUND", "Conciliacion no encontrada.");
+    }
+    await assertBranchAccess(currentUser, batch.branchId);
+    if (batch.status === "reviewed" || batch.status === "cancelled") {
+      throw new DomainError(409, "RECONCILIATION_BATCH_CLOSED", "Conciliacion cerrada.");
+    }
+
+    const orders = await tx.paymentTerminalOrder.findMany({
+      where: {
+        organizationId: currentUser.organizationId,
+        branchId: batch.branchId,
+        provider: "mercadopago",
+        status: { in: ["approved", "rejected", "expired", "canceled", "failed"] },
+      },
+      include: { salePayment: true },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+    });
+
+    for (const order of orders) {
+      const providerReference = order.externalPaymentId ?? order.externalOrderId ?? order.externalReference;
+      const existing = await tx.reconciliationItem.findFirst({
+        where: {
+          reconciliationBatchId: batch.id,
+          OR: [
+            { providerReference },
+            ...(order.salePaymentId ? [{ salePaymentId: order.salePaymentId }] : []),
+          ],
+        },
+      });
+      if (existing) continue;
+
+      const providerAmount = order.status === "approved" ? normalizeMoney(order.amount) : "0.00";
+      const posAmount = order.salePayment ? normalizeMoney(order.salePayment.amount) : "0.00";
+      const status =
+        order.status === "approved" && !order.salePaymentId ? "missing_in_pos"
+        : order.status !== "approved" && order.salePaymentId ? "missing_in_provider"
+        : toCents(posAmount) !== toCents(providerAmount) ? "amount_mismatch"
+        : "matched";
+
+      await tx.reconciliationItem.create({
+        data: {
+          reconciliationBatchId: batch.id,
+          salePaymentId: order.salePaymentId,
+          providerReference,
+          posAmount,
+          providerAmount,
+          status,
+          notes: `Mercado Pago terminal order ${order.status}`,
+        },
+      });
+    }
+
+    const updated = await recalculateBatch(tx, batch.id);
+    await tx.auditLog.create({
+      data: {
+        organizationId: currentUser.organizationId,
+        branchId: batch.branchId,
+        userId: currentUser.id,
+        action: "reconciliation_terminal_incidents_generated",
+        entityType: "reconciliation_batch",
+        entityId: batch.id,
+        afterSnapshot: serializeBatch(updated) as Prisma.InputJsonValue,
+      },
+    });
+    return { data: serializeBatch(updated) };
+  });
+}
+
 export async function listReconciliationBatches(currentUser: AuthenticatedUser, input: unknown) {
   await assertPermission(currentUser.id, "reports.basic.view");
   const query = asLooseRecord(input);

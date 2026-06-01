@@ -500,8 +500,8 @@ export function buildDemoReportsSummary(): ReportsSummary {
 export function buildDemoSettingsSummary(): SettingsSummary {
   return {
     posDevices: [
-      { id: "pos-1", name: "Caja principal", status: "active", lastSeen: "Hace 2 min" },
-      { id: "pos-2", name: "Caja mercado", status: "inactive", lastSeen: "Ayer 18:12" }
+      { id: "pos-1", branchId: "branch-1", name: "Caja principal", status: "active", lastSeen: "Hace 2 min" },
+      { id: "pos-2", branchId: "branch-1", name: "Caja mercado", status: "inactive", lastSeen: "Ayer 18:12" }
     ],
     withdrawalReasons: [
       { id: "reason-1", name: "Compra menor", direction: "out", requiresAuthorization: true },

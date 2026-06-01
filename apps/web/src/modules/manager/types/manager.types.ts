@@ -253,7 +253,7 @@ export type ReportsSummary = {
 };
 
 export type SettingsSummary = {
-  posDevices: Array<{ id: string; name: string; status: "active" | "inactive"; lastSeen: string }>;
+  posDevices: Array<{ id: string; branchId: string; name: string; status: "active" | "inactive"; lastSeen: string }>;
   withdrawalReasons: Array<{ id: string; name: string; direction: "in" | "out"; requiresAuthorization: boolean }>;
   packageConfig: Array<{ productName: string; baseProductName: string; packageWeightGrams: number }>;
   auditLogs: Array<{
@@ -265,6 +265,38 @@ export type SettingsSummary = {
     userName: string | null;
     createdAt: string;
   }>;
+};
+
+export type MercadoPagoConnection = {
+  id: string;
+  provider: "mercadopago";
+  connectionName: string;
+  status: "pending" | "active" | "expired" | "revoked" | "error";
+  mpUserId: string | null;
+  tokenExpiresAt: string | null;
+  connectedAt: string | null;
+  lastHealthCheckAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  authUrl?: string | null;
+};
+
+export type MercadoPagoTerminal = {
+  id: string;
+  branchId: string | null;
+  providerConnectionId: string;
+  terminalId: string;
+  terminalName: string | null;
+  externalStoreId: string | null;
+  externalPosId: string | null;
+  status: "active" | "inactive" | "unassigned" | "error";
+  lastSeenAt: string | null;
+  binding: {
+    id: string;
+    posDeviceId: string;
+    posDeviceName: string;
+    status: "active" | "inactive";
+  } | null;
 };
 
 export type CashMovement = {

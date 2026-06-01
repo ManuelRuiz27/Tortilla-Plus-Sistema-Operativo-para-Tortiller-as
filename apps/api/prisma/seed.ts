@@ -121,6 +121,10 @@ async function main() {
     ["sales.cancel_before_payment", "Cancelar ticket antes de pago"],
     ["sales.cancel_after_payment", "Cancelar venta cobrada"],
     ["payments.create", "Registrar pagos"],
+    ["payments.cancel_terminal_order", "Cancelar cobros con terminal"],
+    ["payments.manual_card_reference", "Usar folio manual de tarjeta"],
+    ["integrations.view", "Ver integraciones"],
+    ["integrations.manage", "Gestionar integraciones"],
     ["cash.open", "Abrir caja"],
     ["cash.close", "Cerrar caja"],
     ["cash.movements.view", "Ver movimientos de caja"],
@@ -178,6 +182,7 @@ async function main() {
     "sales.view",
     "sales.cancel_before_payment",
     "payments.create",
+    "payments.cancel_terminal_order",
     "cash.open",
     "cash.close",
     "cash.movements.view",
@@ -196,6 +201,7 @@ async function main() {
     "sales.view",
     "sales.cancel_before_payment",
     "payments.create",
+    "payments.cancel_terminal_order",
     "cash.open",
     "cash.close",
     "cash.movements.view",
@@ -249,6 +255,29 @@ async function main() {
         timezone: "America/Mexico_City",
       },
     }));
+
+  await prisma.posDevice.upsert({
+    where: { deviceCode: "DEMO-POS-PRINCIPAL" },
+    update: {
+      organizationId: organization.id,
+      branchId: branch.id,
+      deviceName: "Caja principal",
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId: organization.id,
+      branchId: branch.id,
+      deviceName: "Caja principal",
+      deviceCode: "DEMO-POS-PRINCIPAL",
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
 
   const cashReasons = [
     ["Retiro operativo", "out_", true],

@@ -141,6 +141,21 @@ export async function closeCashSession(currentUser: AuthenticatedUser, cashSessi
       throw new DomainError(409, "PENDING_CASH_MOVEMENTS", "Hay retiros pendientes por autorizar.");
     }
 
+    const pendingTerminalOrders = await tx.paymentTerminalOrder.count({
+      where: {
+        organizationId: currentUser.organizationId,
+        branchId: session.branchId,
+        status: { in: ["created", "sent_to_terminal", "pending"] },
+        createdAt: {
+          gte: session.openedAt,
+        },
+      },
+    });
+
+    if (pendingTerminalOrders > 0) {
+      throw new DomainError(409, "PENDING_TERMINAL_ORDERS", "Hay cobros de terminal pendientes por resolver.");
+    }
+
     const summary = await buildSummary(tx, cashSessionId);
     const differenceAmount = subtractMoney(countedCashAmount, summary.expectedCashAmount);
     const differenceType = getDifferenceType(differenceAmount);

@@ -9,6 +9,7 @@ import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 import { classifyFiscalSale, invoiceDeadlineEndOfMonth } from "./billing-fiscal-classifier.js";
 import { createBillingReceiptForSale } from "./public-autofactura-service.js";
+import { assertApprovedTerminalOrderForPayment } from "./payment-terminal-order-service.js";
 
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
 const paymentMethods = ["cash", "card", "transfer", "credit"] as const;
@@ -414,6 +415,25 @@ async function completeDraftSaleInTransaction(
   }
 
   assertPaymentTotal(normalizeMoney(draft.total), payments);
+  const approvedTerminalOrders = new Map<string, Awaited<ReturnType<typeof assertApprovedTerminalOrderForPayment>>>();
+  for (const payment of payments) {
+    if (payment.paymentMethod !== "card") continue;
+    if (payment.provider === "mercadopago") {
+      if (!payment.terminalOrderId) {
+        throw new DomainError(409, "TERMINAL_ORDER_REQUIRED", "Tarjeta Mercado Pago requiere orden aprobada.");
+      }
+      const terminalOrder = await assertApprovedTerminalOrderForPayment({
+        organizationId: currentUser.organizationId,
+        branchId: sale.branchId,
+        amount: payment.amount,
+        terminalOrderId: payment.terminalOrderId,
+      });
+      approvedTerminalOrders.set(payment.terminalOrderId, terminalOrder);
+      continue;
+    }
+
+    await assertPermission(currentUser.id, "payments.manual_card_reference");
+  }
   await assertCreditPayments(tx, currentUser, draft, payments, body);
   const fiscalClassification = classifyFiscalSale({ payments, customerRequestedInvoice });
   const invoiceDeadlineAt = fiscalClassification.requiresReceipt ? invoiceDeadlineEndOfMonth(new Date()) : null;
@@ -446,6 +466,31 @@ async function completeDraftSaleInTransaction(
           amount: payment.amount,
         },
       });
+
+      if (payment.provider === "mercadopago" && payment.terminalOrderId) {
+        await tx.paymentTerminalOrder.update({
+          where: { id: payment.terminalOrderId },
+          data: {
+            saleId: sale.id,
+            salePaymentId: created.id,
+            updatedAt: new Date(),
+          },
+        });
+      }
+
+      if (payment.provider !== "mercadopago") {
+        await tx.auditLog.create({
+          data: {
+            organizationId: currentUser.organizationId,
+            branchId: sale.branchId,
+            userId: currentUser.id,
+            action: "manual_card_reference_used",
+            entityType: "sale_payment",
+            entityId: created.id,
+            afterSnapshot: serializeSalePayment(created),
+          },
+        });
+      }
     }
   }
 
@@ -1363,6 +1408,7 @@ export function parseSalePayments(value: unknown) {
     const amount = asMoney(body.amount, "amount");
     const reference = optionalString(body.reference);
     const provider = optionalString(body.provider);
+    const terminalOrderId = optionalString(body.terminalOrderId);
 
     if (paymentMethod === "card" && !reference) {
       throw new DomainError(400, "CARD_REFERENCE_REQUIRED", "Pago con tarjeta requiere referencia.");
@@ -1377,6 +1423,7 @@ export function parseSalePayments(value: unknown) {
       amount,
       reference,
       provider,
+      terminalOrderId,
     };
   });
 }

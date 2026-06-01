@@ -146,42 +146,15 @@ function createMockTerminalPayment(provider: TerminalProvider, amount: number, e
 async function createRealTerminalPayment(provider: TerminalProvider, amount: number, externalReference: string, terminalId: string | null): Promise<TerminalPaymentResult> {
   ensureRealTerminalConfigured(provider);
   if (provider === "mercadopago") {
-    const response = await fetch("https://api.mercadopago.com/v1/orders", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.MERCADOPAGO_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": randomUUID(),
-      },
-      body: JSON.stringify({
-        type: "point",
-        external_reference: externalReference,
-        transactions: { payments: [{ amount: amount.toFixed(2) }] },
-        config: { point: { terminal_id: terminalId ?? env.MERCADOPAGO_TERMINAL_ID, print_on_terminal: "no_ticket" } },
-      }),
-    });
-    const payload = await response.json() as { id?: string; status?: string; transactions?: { payments?: Array<{ id?: string; status?: string }> } };
-    if (!response.ok || !payload.id) {
-      throw new DomainError(502, "MERCADOPAGO_TERMINAL_ERROR", "Mercado Pago no acepto la orden.", payload);
-    }
-    return {
-      provider,
-      mode: "real",
-      status: payload.status === "processed" ? "approved" : "pending",
-      reference: payload.transactions?.payments?.[0]?.id ?? payload.id,
-      amount,
-      externalReference,
-      fallback: "manual_reference_allowed",
-      rawProviderStatus: payload.status ?? "created",
-    };
+    throw new DomainError(410, "MERCADOPAGO_LEGACY_TERMINAL_DISABLED", "Usa /api/v1/pos/terminal-orders para cobros Mercado Pago multi-cliente.");
   }
 
   throw new DomainError(501, "CLIP_TERMINAL_REAL_PENDING", "Clip real requiere SDK Terminal o PinPad certificado en cliente/dispositivo.");
 }
 
 function ensureRealTerminalConfigured(provider: TerminalProvider) {
-  if (provider === "mercadopago" && (!env.MERCADOPAGO_ACCESS_TOKEN || !env.MERCADOPAGO_TERMINAL_ID)) {
-    throw new DomainError(503, "MERCADOPAGO_NOT_CONFIGURED", "Mercado Pago real requiere MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_TERMINAL_ID.");
+  if (provider === "mercadopago") {
+    return;
   }
   if (provider === "clip" && (!env.CLIP_API_KEY || !env.CLIP_TERMINAL_ID)) {
     throw new DomainError(503, "CLIP_NOT_CONFIGURED", "Clip real requiere CLIP_API_KEY y CLIP_TERMINAL_ID.");

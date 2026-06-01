@@ -6,7 +6,7 @@ import type { PosPayment } from "../types/payment.types";
 import type { PosSelectedCustomer } from "../types/pos.types";
 import { formatMoney } from "../utils/money";
 
-type PaymentMode = "cash" | "card" | "transfer" | "mixed" | "credit";
+type PaymentMode = "cash" | "card_mp" | "card_manual" | "transfer" | "mixed" | "credit";
 
 type PaymentModalProps = {
   open: boolean;
@@ -14,11 +14,14 @@ type PaymentModalProps = {
   isSubmitting: boolean;
   error?: string | null;
   selectedCustomer: PosSelectedCustomer | null;
+  canUseManualCard: boolean;
+  terminalName?: string | null;
   onClose: () => void;
   onSubmit: (payload: { payments: PosPayment[]; changeAmount?: number; authorizationPin?: string }) => void;
+  onMercadoPagoSubmit: (payload: { amount: string; payments?: PosPayment[]; authorizationPin?: string }) => void;
 };
 
-export function PaymentModal({ open, total, isSubmitting, error, selectedCustomer, onClose, onSubmit }: PaymentModalProps) {
+export function PaymentModal({ open, total, isSubmitting, error, selectedCustomer, canUseManualCard, terminalName, onClose, onSubmit, onMercadoPagoSubmit }: PaymentModalProps) {
   const [mode, setMode] = useState<PaymentMode>("cash");
   const [cashAmount, setCashAmount] = useState(String(total));
   const [cardAmount, setCardAmount] = useState(String(total));
@@ -62,7 +65,6 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
   const canUseCredit = Boolean(selectedCustomer?.creditEnabled);
   const creditExceedsLimit = credit > Math.max(0, availableCredit);
   const isCashValid = cashParsed.ok && cash >= total;
-  const isCardValid = Boolean(reference.trim());
   const isTransferValid = Boolean(transferReference.trim());
   const isCreditValid = canUseCredit && (!creditExceedsLimit || Boolean(authorizationPin.trim()));
   const isMixedValid =
@@ -71,7 +73,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
     transferParsed.ok &&
     creditParsed.ok &&
     Math.abs(mixedDifference) <= 0.009 &&
-    (card <= 0 || isCardValid) &&
+    (card <= 0 || Boolean(terminalName)) &&
     (transfer <= 0 || isTransferValid) &&
     (credit <= 0 || isCreditValid);
 
@@ -97,10 +99,14 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
           paymentMethod: "card",
           amount: total.toFixed(2),
           reference: reference.trim(),
-          provider: "terminal-demo"
+          provider: "manual_card_reference"
         }
       ]
     });
+  }
+
+  function submitMercadoPagoCard() {
+    onMercadoPagoSubmit({ amount: total.toFixed(2) });
   }
 
   function submitTransfer() {
@@ -143,12 +149,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
       payments.push({ paymentMethod: "cash", amount: cash.toFixed(2) });
     }
     if (card > 0) {
-      payments.push({
-        paymentMethod: "card",
-        amount: card.toFixed(2),
-        reference: reference.trim(),
-        provider: "terminal-demo"
-      });
+      // Mercado Pago integrated card portion is appended after provider approval.
     }
     if (transfer > 0) {
       payments.push({
@@ -160,6 +161,15 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
     }
     if (credit > 0) {
       payments.push({ paymentMethod: "credit", amount: credit.toFixed(2) });
+    }
+
+    if (card > 0) {
+      onMercadoPagoSubmit({
+        amount: card.toFixed(2),
+        payments,
+        authorizationPin: credit > availableCredit ? authorizationPin.trim() || undefined : undefined
+      });
+      return;
     }
 
     onSubmit({ payments, authorizationPin: credit > availableCredit ? authorizationPin.trim() || undefined : undefined });
@@ -178,15 +188,15 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
           </Button>
         </div>
 
-        <div className="mt-5 grid grid-cols-5 gap-2">
-          {(["cash", "card", "transfer", "mixed", "credit"] as PaymentMode[]).map((item) => (
+        <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {(["cash", "card_mp", "card_manual", "transfer", "mixed", "credit"] as PaymentMode[]).map((item) => (
             <Button
-              disabled={isSubmitting || item === "credit" && !canUseCredit}
+              disabled={isSubmitting || item === "credit" && !canUseCredit || item === "card_manual" && !canUseManualCard}
               key={item}
               onClick={() => setMode(item)}
               variant={mode === item ? "primary" : "secondary"}
             >
-              {item === "cash" ? "Efectivo" : item === "card" ? "Tarjeta" : item === "transfer" ? "Transfer." : item === "credit" ? "Fiado" : "Mixto"}
+              {item === "cash" ? "Efectivo" : item === "card_mp" ? "MP" : item === "card_manual" ? "Manual" : item === "transfer" ? "Transfer." : item === "credit" ? "Fiado" : "Mixto"}
             </Button>
           ))}
         </div>
@@ -213,7 +223,19 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
             </>
           ) : null}
 
-          {mode === "card" ? (
+          {mode === "card_mp" ? (
+            <>
+              <div className="rounded-md bg-tp-soft p-3 text-sm">
+                <p className="font-semibold">Tarjeta Mercado Pago</p>
+                <p className="mt-1 text-tp-muted">{terminalName ? `Terminal: ${terminalName}` : "Sin terminal asignada"}</p>
+              </div>
+              <Button className="w-full" disabled={!terminalName || isSubmitting} onClick={submitMercadoPagoCard}>
+                Enviar cobro a terminal
+              </Button>
+            </>
+          ) : null}
+
+          {mode === "card_manual" ? (
             <>
               <label className="block text-sm font-semibold" htmlFor="card-reference">
                 Folio de la terminal
@@ -225,7 +247,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
                 onChange={(event) => setReference(event.target.value)}
                 value={reference}
               />
-              <Button className="w-full" disabled={!reference.trim() || isSubmitting} onClick={submitCard}>
+              <Button className="w-full" disabled={!reference.trim() || isSubmitting || !canUseManualCard} onClick={submitCard}>
                 Completar venta
               </Button>
             </>
@@ -338,10 +360,8 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
               </div>
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
-                disabled={isSubmitting}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="Folio de tarjeta"
-                value={reference}
+                disabled
+                value={card > 0 ? `Mercado Pago: ${terminalName ?? "sin terminal"}` : "Sin tarjeta"}
               />
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"

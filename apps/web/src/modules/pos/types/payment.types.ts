@@ -8,6 +8,7 @@ export type PosPayment =
       amount: string;
       reference: string;
       provider?: string;
+      terminalOrderId?: string;
     }
   | {
       paymentMethod: "transfer";
@@ -27,4 +28,21 @@ export type CompletedSale = {
   total: number;
   paymentSummary: string;
   changeAmount?: number;
+};
+
+export type TerminalOrder = {
+  id: string;
+  provider: "mercadopago";
+  externalOrderId: string | null;
+  externalPaymentId: string | null;
+  externalReference: string;
+  amount: string;
+  currency: "MXN";
+  status: "created" | "sent_to_terminal" | "pending" | "approved" | "rejected" | "expired" | "canceled" | "failed" | "refunded";
+  statusDetail: string | null;
+  paymentTerminalId: string;
+  expiresAt: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };

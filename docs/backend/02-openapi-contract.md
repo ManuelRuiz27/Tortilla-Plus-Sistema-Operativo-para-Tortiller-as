@@ -77,6 +77,8 @@ Notas transaccionales:
 | POST | `/pos-devices` | Crear POS. |
 | PATCH | `/pos-devices/{id}/activate` | Activar POS validando plan. |
 | PATCH | `/pos-devices/{id}/block` | Bloquear POS. |
+| POST | `/pos-devices/{id}/terminal-bindings` | Asignar terminal Mercado Pago a POS. |
+| DELETE | `/pos-devices/{id}/terminal-bindings/{bindingId}` | Desactivar asignacion de terminal. |
 
 ## Products / Prices / Inventory
 
@@ -114,6 +116,10 @@ Notas transaccionales:
 |---|---|---|
 | POST | `/sales` | Crear venta draft con items. |
 | POST | `/sales/quote` | Cotizar venta sin crear draft ni mover inventario. |
+| POST | `/pos/terminal-orders` | Crear cobro Mercado Pago Point integrado. |
+| GET | `/pos/terminal-orders/{id}` | Consultar estado de cobro en terminal. |
+| POST | `/pos/terminal-orders/{id}/cancel` | Cancelar cobro pendiente en terminal. |
+| POST | `/pos/terminal-orders/{id}/confirm-and-checkout` | Cerrar venta solo si terminal esta aprobada. |
 | POST | `/sales/{id}/items` | Agregar item. |
 | POST | `/sales/{id}/complete` | Completar/cobrar venta. |
 | POST | `/sales/{id}/cancel-draft` | Cancelar ticket sin cobrar. |
@@ -166,6 +172,7 @@ Notas transaccionales:
 |---|---|---|
 | POST | `/reconciliation/batches` | Crear conciliación. |
 | POST | `/reconciliation/batches/{id}/items` | Agregar item. |
+| POST | `/reconciliation/batches/{id}/terminal-incidents` | Generar incidencias desde ordenes de terminal. |
 | POST | `/reconciliation/batches/{id}/review` | Revisar conciliación. |
 | POST | `/billing/invoices/individual` | Factura individual. |
 | POST | `/billing/invoices/global-daily` | Factura global diaria por sucursal. |
@@ -173,6 +180,8 @@ Notas transaccionales:
 | POST | `/billing/invoices/{id}/cancel` | Cancelar CFDI. |
 | GET | `/billing/invoices/{id}/documents` | PDF/XML. |
 | POST | `/webhooks/pac` | Webhook PAC. |
+| POST | `/webhooks/mercadopago/terminal` | Webhook de ordenes Point. |
+| POST | `/webhooks/mercadopago/orders` | Alias webhook de ordenes Point. |
 | GET | `/reports/sales-by-day` | Ventas por día. |
 | GET | `/reports/sales-by-branch` | Ventas por sucursal. |
 | GET | `/reports/sales-by-product` | Ventas por producto. |
@@ -188,11 +197,15 @@ Notas transaccionales:
 - Misma `Idempotency-Key` con payload distinto: `IDEMPOTENCY_PAYLOAD_MISMATCH`.
 - Venta sin caja abierta: `NO_OPEN_CASH_SESSION`.
 - Cierre con retiro pendiente: `PENDING_CASH_MOVEMENTS`.
+- Cierre con cobro de terminal pendiente: `PENDING_TERMINAL_ORDERS`.
 - Crédito sin cliente: `CUSTOMER_REQUIRED_FOR_CREDIT`.
 - Plan sin feature: `FEATURE_NOT_AVAILABLE`.
 - Acceso a sucursal inválido: `BRANCH_ACCESS_DENIED`.
 - Venta facturada no cancela directo: `INVOICED_SALE_CANNOT_BE_CANCELLED_DIRECTLY`.
 - Liquidacion ya depositada: `SETTLEMENT_ALREADY_DEPOSITED`.
+- Tarjeta Mercado Pago sin orden aprobada: `TERMINAL_PAYMENT_NOT_APPROVED`.
+- POS sin terminal asignada: `TERMINAL_NOT_ASSIGNED`.
+- Conexion Mercado Pago inactiva: `MERCADOPAGO_CONNECTION_INACTIVE`.
 
 ## Detalle implementado Sprint 1
 
@@ -746,3 +759,90 @@ Para merma:
 - `DELIVERY_SETTLEMENT_NOT_FOUND`: liquidacion inexistente.
 - `INVALID_DELIVERY_STATUS`: estado invalido para la accion solicitada.
 - `RETURN_ALREADY_REVIEWED`: devolucion ya revisada.
+
+## Detalle implementado Mercado Pago Terminal
+
+Todos los endpoints de configuracion requieren `Authorization: Bearer <accessToken>`.
+
+| Metodo | Endpoint | Permiso | Uso |
+|---|---|---|---|
+| GET | `/integrations/mercadopago/connection` | `integrations.view` | Consultar estado de conexion OAuth. |
+| POST | `/integrations/mercadopago/oauth/start` | `integrations.manage` | Iniciar OAuth o conexion mock local. |
+| GET | `/integrations/mercadopago/oauth/callback` | Publico con `state` | Completar OAuth Mercado Pago. |
+| POST | `/integrations/mercadopago/disconnect` | `integrations.manage` | Revocar conexion local y desactivar bindings. |
+| POST | `/integrations/mercadopago/health-check` | `integrations.manage` | Validar/renovar credencial. |
+| GET | `/integrations/mercadopago/terminals?branchId=` | `integrations.view` | Listar terminales sincronizadas. |
+| POST | `/integrations/mercadopago/terminals/sync` | `integrations.manage` | Sincronizar terminales desde Mercado Pago. |
+| POST | `/pos-devices/{id}/terminal-bindings` | `integrations.manage` | Asignar una terminal a un POS. |
+| DELETE | `/pos-devices/{id}/terminal-bindings/{bindingId}` | `integrations.manage` | Desactivar asignacion. |
+| POST | `/pos/terminal-orders` | `payments.create` | Enviar cobro a terminal. |
+| GET | `/pos/terminal-orders/{id}` | `payments.create` | Consultar estado y refrescar proveedor. |
+| POST | `/pos/terminal-orders/{id}/cancel` | `payments.cancel_terminal_order` | Cancelar orden pendiente. |
+| POST | `/pos/terminal-orders/{id}/confirm-and-checkout` | `payments.create` | Cerrar venta atomica si la orden esta aprobada. |
+| POST | `/webhooks/mercadopago/terminal` | No requerida | Registrar evento de orden Point. |
+| POST | `/reconciliation/batches/{id}/terminal-incidents` | `reports.basic.view` | Generar conciliacion POS/proveedor desde ordenes terminal. |
+
+`POST /pos/terminal-orders` recibe:
+
+```json
+{
+  "branchId": "<uuid>",
+  "posDeviceId": "<uuid opcional>",
+  "amount": "24.00",
+  "saleDraft": {
+    "customerId": null,
+    "clientGeneratedId": "<uuid opcional>",
+    "items": [
+      {
+        "productId": "<uuid>",
+        "saleMode": "by_kg",
+        "quantity": "1.000"
+      }
+    ]
+  },
+  "payments": [
+    {
+      "paymentMethod": "cash",
+      "amount": "10.00"
+    }
+  ]
+}
+```
+
+Respuesta:
+
+```json
+{
+  "data": {
+    "id": "<uuid>",
+    "provider": "mercadopago",
+    "externalOrderId": "ORD...",
+    "externalPaymentId": null,
+    "externalReference": "TP_...",
+    "amount": "24.00",
+    "currency": "MXN",
+    "status": "sent_to_terminal",
+    "paymentTerminalId": "<uuid>",
+    "expiresAt": "2026-06-01T20:00:00.000Z"
+  }
+}
+```
+
+### Reglas Mercado Pago Terminal
+
+- Produccion no usa `MERCADOPAGO_ACCESS_TOKEN` ni `MERCADOPAGO_TERMINAL_ID` globales para clientes.
+- Las credenciales OAuth se guardan cifradas y no se devuelven al frontend.
+- `Tarjeta Mercado Pago` requiere `PaymentTerminalOrder.approved`.
+- `Tarjeta manual` requiere `payments.manual_card_reference` y genera auditoria `manual_card_reference_used`.
+- Cierre de caja bloquea si existen ordenes `created`, `sent_to_terminal` o `pending`.
+- Conciliacion detecta pago aprobado sin venta, venta sin pago proveedor y monto distinto.
+
+### Errores Mercado Pago Terminal
+
+- `MERCADOPAGO_NOT_CONNECTED`: no existe conexion activa.
+- `MERCADOPAGO_CONNECTION_INACTIVE`: conexion no activa o expirada.
+- `TERMINAL_NOT_ASSIGNED`: POS sin terminal Mercado Pago activa.
+- `TERMINAL_PAYMENT_NOT_APPROVED`: orden no aprobada.
+- `TERMINAL_PAYMENT_AMOUNT_MISMATCH`: monto aprobado distinto al pago POS.
+- `TERMINAL_ORDER_ALREADY_CHECKED_OUT`: orden ya ligada a una venta.
+- `PENDING_TERMINAL_ORDERS`: caja con ordenes terminal pendientes.

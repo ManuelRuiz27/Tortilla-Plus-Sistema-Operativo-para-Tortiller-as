@@ -38,7 +38,9 @@ import type {
   ProductionBatch,
   ReconciliationBatch,
   ReportsSummary,
-  SettingsSummary
+  SettingsSummary,
+  MercadoPagoConnection,
+  MercadoPagoTerminal
 } from "../modules/manager/types/manager.types";
 
 type ApiInventoryStock = {
@@ -1151,6 +1153,105 @@ export function settingsSummaryRequest(): Promise<SettingsSummary> {
   }
 
   return Promise.resolve(buildDemoSettingsSummary());
+}
+
+export function mercadoPagoConnectionRequest(): Promise<MercadoPagoConnection | null> {
+  if (useMocks) {
+    return Promise.resolve(null);
+  }
+
+  return httpClient<MercadoPagoConnection | null>("/integrations/mercadopago/connection");
+}
+
+export function mercadoPagoOAuthStartRequest(): Promise<MercadoPagoConnection> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: "mp-connection-demo",
+      provider: "mercadopago",
+      connectionName: "Mercado Pago Demo",
+      status: "active",
+      mpUserId: "mock-mp-user",
+      tokenExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+      connectedAt: new Date().toISOString(),
+      lastHealthCheckAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      authUrl: null
+    });
+  }
+
+  return httpClient<MercadoPagoConnection>("/integrations/mercadopago/oauth/start", {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoDisconnectRequest(): Promise<MercadoPagoConnection | null> {
+  if (useMocks) {
+    return Promise.resolve(null);
+  }
+
+  return httpClient<MercadoPagoConnection | null>("/integrations/mercadopago/disconnect", {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoHealthCheckRequest(): Promise<MercadoPagoConnection> {
+  if (useMocks) {
+    return mercadoPagoOAuthStartRequest();
+  }
+
+  return httpClient<MercadoPagoConnection>("/integrations/mercadopago/health-check", {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoTerminalsRequest(branchId?: string | null): Promise<MercadoPagoTerminal[]> {
+  if (useMocks) {
+    return Promise.resolve([
+      {
+        id: "mp-terminal-demo",
+        branchId: branchId ?? "branch-1",
+        providerConnectionId: "mp-connection-demo",
+        terminalId: "NEWLAND_N950__TPDEMO01",
+        terminalName: "Mercado Pago Point Mostrador",
+        externalStoreId: "store-demo",
+        externalPosId: "pos-demo",
+        status: "active",
+        lastSeenAt: new Date().toISOString(),
+        binding: null
+      }
+    ]);
+  }
+
+  const params = new URLSearchParams();
+  if (branchId) params.set("branchId", branchId);
+  const query = params.toString();
+  return httpClient<MercadoPagoTerminal[]>(`/integrations/mercadopago/terminals${query ? `?${query}` : ""}`);
+}
+
+export function mercadoPagoSyncTerminalsRequest(branchId?: string | null): Promise<MercadoPagoTerminal[]> {
+  if (useMocks) {
+    return mercadoPagoTerminalsRequest(branchId);
+  }
+
+  return httpClient<MercadoPagoTerminal[]>("/integrations/mercadopago/terminals/sync", {
+    method: "POST",
+    body: { branchId }
+  });
+}
+
+export function mercadoPagoBindTerminalRequest(payload: { posDeviceId: string; paymentTerminalId: string }): Promise<void> {
+  if (useMocks) {
+    return Promise.resolve();
+  }
+
+  return httpClient<void>(`/pos-devices/${payload.posDeviceId}/terminal-bindings`, {
+    method: "POST",
+    body: { paymentTerminalId: payload.paymentTerminalId }
+  });
 }
 
 function demoModuleUnavailable(moduleName: string): ApiErrorException {

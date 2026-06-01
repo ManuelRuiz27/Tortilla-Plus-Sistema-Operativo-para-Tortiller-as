@@ -2,7 +2,7 @@ import { httpClient } from "./http-client";
 import { ApiErrorException } from "./api-error";
 import { useMocks } from "./mock-data";
 import type { PosCartItem, SaleQuote } from "../modules/pos/types/pos.types";
-import type { CompletedSale, PosPayment } from "../modules/pos/types/payment.types";
+import type { CompletedSale, PosPayment, TerminalOrder } from "../modules/pos/types/payment.types";
 
 type CreateSalePayload = {
   branchId: string;
@@ -267,5 +267,110 @@ export function cancelDraftSaleRequest(saleId: string): Promise<void> {
 
   return httpClient<void>(`/sales/${saleId}/cancel-draft`, {
     method: "POST"
+  });
+}
+
+export function createTerminalOrderRequest(payload: {
+  branchId: string;
+  posDeviceId?: string;
+  amount: string;
+  saleDraft: {
+    customerId?: string | null;
+    clientGeneratedId?: string;
+    items: PosCartItem[];
+  };
+  payments?: PosPayment[];
+  authorizationPin?: string;
+}, idempotencyKey: string): Promise<TerminalOrder> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: `terminal-order-${Date.now()}`,
+      provider: "mercadopago",
+      externalOrderId: `mock-order-${Date.now()}`,
+      externalPaymentId: null,
+      externalReference: `TP_${Date.now()}`,
+      amount: payload.amount,
+      currency: "MXN",
+      status: "sent_to_terminal",
+      statusDetail: "mock-awaiting-terminal",
+      paymentTerminalId: "mp-terminal-demo",
+      expiresAt: new Date(Date.now() + 300000).toISOString(),
+      approvedAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  return httpClient<TerminalOrder>("/pos/terminal-orders", {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: {
+      branchId: payload.branchId,
+      posDeviceId: payload.posDeviceId,
+      amount: payload.amount,
+      saleDraft: {
+        ...payload.saleDraft,
+        items: payload.saleDraft.items.map((item) =>
+          item.saleMode === "by_amount"
+            ? { productId: item.productId, saleMode: item.saleMode, amount: item.total.toFixed(2) }
+            : { productId: item.productId, saleMode: item.saleMode, quantity: item.quantity.toFixed(3) }
+        )
+      },
+      payments: payload.payments,
+      authorizationPin: payload.authorizationPin
+    }
+  });
+}
+
+export function terminalOrderStatusRequest(orderId: string): Promise<TerminalOrder> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: orderId,
+      provider: "mercadopago",
+      externalOrderId: `mock-order-${orderId}`,
+      externalPaymentId: `mock-payment-${orderId}`,
+      externalReference: `TP_${orderId}`,
+      amount: "0.00",
+      currency: "MXN",
+      status: "approved",
+      statusDetail: "mock-approved",
+      paymentTerminalId: "mp-terminal-demo",
+      expiresAt: null,
+      approvedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  return httpClient<TerminalOrder>(`/pos/terminal-orders/${orderId}`);
+}
+
+export function cancelTerminalOrderRequest(orderId: string, idempotencyKey: string): Promise<TerminalOrder> {
+  if (useMocks) {
+    return terminalOrderStatusRequest(orderId).then((order) => ({ ...order, status: "canceled", statusDetail: "mock-canceled" }));
+  }
+
+  return httpClient<TerminalOrder>(`/pos/terminal-orders/${orderId}/cancel`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: {}
+  });
+}
+
+export function confirmTerminalOrderCheckoutRequest(orderId: string, idempotencyKey: string): Promise<CompletedSale> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: `sale-${orderId}`,
+      saleNumber: `SUC-${String(Date.now()).slice(-6)}`,
+      status: "completed",
+      total: 0,
+      paymentSummary: "card"
+    });
+  }
+
+  return httpClient<CompletedSale>(`/pos/terminal-orders/${orderId}/confirm-and-checkout`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: {}
   });
 }
