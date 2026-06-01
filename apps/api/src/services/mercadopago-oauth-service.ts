@@ -141,7 +141,7 @@ export async function upsertMockConnection(currentUser: AuthenticatedUser) {
   return prisma.paymentProviderConnection.upsert({
     where: {
       id: (await prisma.paymentProviderConnection.findFirst({
-        where: { organizationId: currentUser.organizationId, provider },
+        where: { organizationId: currentUser.organizationId, provider, mpUserId: "mock-mp-user" },
         select: { id: true },
       }))?.id ?? "00000000-0000-0000-0000-000000000000",
     },

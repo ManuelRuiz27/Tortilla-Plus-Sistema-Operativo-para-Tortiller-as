@@ -3,19 +3,24 @@ import test from "node:test";
 
 import { prisma } from "../../src/lib/prisma.js";
 import { DomainError } from "../../src/lib/domain-error.js";
+import { env } from "../../src/config/env.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import { login } from "../../src/services/auth-service.js";
 import { closeCashSession, getOpenCashSession, openCashSession } from "../../src/services/cash-service.js";
 import { startMercadoPagoOAuth } from "../../src/services/mercadopago-oauth-service.js";
+import { createOrSyncExternalPosForPosDevice, createOrSyncStoreForBranch } from "../../src/services/mercadopago-point-provisioning-service.js";
 import { bindMercadoPagoTerminalToPos, syncMercadoPagoTerminals } from "../../src/services/payment-terminal-service.js";
 import {
   confirmTerminalOrderAndCheckout,
   createTerminalOrder,
+  getOpenTerminalOrder,
   getTerminalOrderStatus,
 } from "../../src/services/payment-terminal-order-service.js";
 import { addTerminalReconciliationIncidents, createReconciliationBatch } from "../../src/services/reconciliation-service.js";
 
 type LoginResult = Awaited<ReturnType<typeof login>>;
+
+env.PHYSICAL_INTEGRATIONS_MODE = "mock";
 
 function asAuthenticatedUser(session: LoginResult): AuthenticatedUser {
   assert.ok(session.user.organizationId, "demo user must have an organization");
@@ -57,6 +62,42 @@ async function ensurePosDevice(organizationId: string, branchId: string) {
   });
 }
 
+async function ensureExtraPosDevice(organizationId: string, branchId: string) {
+  return prisma.posDevice.upsert({
+    where: { deviceCode: `IT-MP-POS-EXTRA-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      deviceName: "Caja integracion MP extra",
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "Caja integracion MP extra",
+      deviceCode: `IT-MP-POS-EXTRA-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+}
+
+async function prepareMercadoPagoPos(manager: AuthenticatedUser, branchId: string, posDeviceId: string) {
+  await createOrSyncStoreForBranch(manager, branchId);
+  await createOrSyncExternalPosForPosDevice(manager, posDeviceId);
+}
+
+function mockTerminal(terminals: Array<{ id: string; terminalId: string }>) {
+  const terminal = terminals.find((item) => item.terminalId.includes("__TP")) ?? terminals[0];
+  assert.ok(terminal, "Mercado Pago mock terminal must be synced");
+  return terminal;
+}
+
 test("Mercado Pago terminal mock order approves and completes POS checkout once", async () => {
   const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
@@ -75,9 +116,10 @@ test("Mercado Pago terminal mock order approves and completes POS checkout once"
 
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
   await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
   const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
   assert.equal(terminals.length > 0, true);
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: terminals[0]?.id });
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
 
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
@@ -107,6 +149,129 @@ test("Mercado Pago terminal mock order approves and completes POS checkout once"
   );
 });
 
+test("Mercado Pago real terminal order requires explicit POS device", async () => {
+  const previousMode = env.PHYSICAL_INTEGRATIONS_MODE;
+  env.PHYSICAL_INTEGRATIONS_MODE = "real";
+  try {
+    const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+    const cashier = asAuthenticatedUser(cashierSession);
+    const branchId = firstBranchId(cashierSession);
+    const tortilla = await prisma.product.findFirstOrThrow({
+      where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+    });
+
+    await assert.rejects(
+      () => createTerminalOrder(cashier, {
+        branchId,
+        amount: "24.00",
+        saleDraft: {
+          items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+        },
+      }, `it-mp-real-pos-required-${Date.now()}`),
+      (error) => error instanceof DomainError && error.code === "POS_DEVICE_REQUIRED",
+    );
+  } finally {
+    env.PHYSICAL_INTEGRATIONS_MODE = previousMode;
+  }
+});
+
+test("Mercado Pago terminal order is restricted to the selected POS binding and PDV mode", async () => {
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const manager = asAuthenticatedUser(managerSession);
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
+  const extraPosDevice = await ensureExtraPosDevice(cashier.organizationId, branchId);
+  await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
+  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  await assert.rejects(
+    () => createTerminalOrder(cashier, {
+      branchId,
+      posDeviceId: extraPosDevice.id,
+      amount: "24.00",
+      saleDraft: {
+        items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+      },
+    }, `it-mp-wrong-pos-${Date.now()}`),
+    (error) => error instanceof DomainError && error.code === "TERMINAL_NOT_ASSIGNED",
+  );
+
+  await prisma.paymentTerminal.update({
+    where: { id: mockTerminal(terminals).id },
+    data: { operatingMode: "STANDALONE" },
+  });
+
+  await assert.rejects(
+    () => createTerminalOrder(cashier, {
+      branchId,
+      posDeviceId: posDevice.id,
+      amount: "24.00",
+      saleDraft: {
+        items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+      },
+    }, `it-mp-not-pdv-${Date.now()}`),
+    (error) => error instanceof DomainError && error.code === "TERMINAL_NOT_PDV",
+  );
+
+  await prisma.paymentTerminal.update({
+    where: { id: mockTerminal(terminals).id },
+    data: { operatingMode: "PDV" },
+  });
+});
+
+test("Mercado Pago open terminal order returns the active POS order only", async () => {
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const manager = asAuthenticatedUser(managerSession);
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
+  await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
+  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prisma.paymentTerminalOrder.updateMany({
+    where: {
+      organizationId: cashier.organizationId,
+      branchId,
+      posDeviceId: posDevice.id,
+      provider: "mercadopago",
+      status: { in: ["created", "sent_to_terminal", "pending"] },
+    },
+    data: { status: "canceled", canceledAt: new Date() },
+  });
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  const order = (await createTerminalOrder(cashier, {
+    branchId,
+    posDeviceId: posDevice.id,
+    amount: "24.00",
+    saleDraft: {
+      items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+    },
+  }, `it-mp-open-order-${Date.now()}`)).data;
+
+  const openOrder = (await getOpenTerminalOrder(cashier, { branchId, posDeviceId: posDevice.id })).data;
+  assert.equal(openOrder?.id, order.id);
+
+  await prisma.paymentTerminalOrder.update({
+    where: { id: order.id },
+    data: { status: "canceled", canceledAt: new Date() },
+  });
+
+  const closedOrder = (await getOpenTerminalOrder(cashier, { branchId, posDeviceId: posDevice.id })).data;
+  assert.equal(closedOrder, null);
+});
+
 test("Mercado Pago rejected terminal order blocks checkout", async () => {
   const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
@@ -115,8 +280,9 @@ test("Mercado Pago rejected terminal order blocks checkout", async () => {
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
   await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
   const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: terminals[0]?.id });
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
   });
@@ -149,8 +315,9 @@ test("cash closing blocks pending Mercado Pago terminal orders", async () => {
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
   await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
   const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: terminals[0]?.id });
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
 
   let cashSession = (await getOpenCashSession(cashier, branchId)).data;
   if (!cashSession) {
@@ -160,6 +327,13 @@ test("cash closing blocks pending Mercado Pago terminal orders", async () => {
       openingNote: "Pending terminal close test",
     })).data;
   }
+  await prisma.cashMovement.updateMany({
+    where: {
+      cashSessionId: cashSession.id,
+      status: "pending_authorization",
+    },
+    data: { status: "cancelled" },
+  });
 
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
@@ -190,8 +364,9 @@ test("terminal reconciliation detects approved order without POS sale", async ()
   const branchId = firstBranchId(managerSession);
   const posDevice = await ensurePosDevice(manager.organizationId, branchId);
   await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
   const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: terminals[0]?.id });
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: manager.organizationId, sku: "TORTILLA-KG" },
   });

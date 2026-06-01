@@ -65,7 +65,9 @@ export async function syncMercadoPagoTerminals(currentUser: AuthenticatedUser, i
         terminalName: terminal.terminalName,
         externalStoreId: terminal.externalStoreId,
         externalPosId: terminal.externalPosId,
-        status: "unassigned",
+        mpStoreId: terminal.mpStoreId,
+        mpPosId: terminal.mpPosId,
+        operatingMode: terminal.operatingMode,
         lastSeenAt: new Date(),
         updatedAt: new Date(),
       },
@@ -78,11 +80,27 @@ export async function syncMercadoPagoTerminals(currentUser: AuthenticatedUser, i
         terminalName: terminal.terminalName,
         externalStoreId: terminal.externalStoreId,
         externalPosId: terminal.externalPosId,
+        mpStoreId: terminal.mpStoreId,
+        mpPosId: terminal.mpPosId,
+        operatingMode: terminal.operatingMode,
         status: "unassigned",
         lastSeenAt: new Date(),
       },
     });
-    synced.push(stored);
+    const activeBindingCount = await prisma.posPaymentTerminalBinding.count({
+      where: {
+        paymentTerminalId: stored.id,
+        provider: "mercadopago",
+        status: "active",
+      },
+    });
+    const terminalWithStatus = activeBindingCount > 0 && stored.status !== "active"
+      ? await prisma.paymentTerminal.update({
+          where: { id: stored.id },
+          data: { status: "active", updatedAt: new Date() },
+        })
+      : stored;
+    synced.push(terminalWithStatus);
   }
 
   await audit(currentUser, branchId, "mercadopago_terminals_synced", "payment_provider_connection", connection.id, {
@@ -226,6 +244,9 @@ function serializeTerminal(terminal: Prisma.PaymentTerminalGetPayload<{
     terminalName: terminal.terminalName,
     externalStoreId: terminal.externalStoreId,
     externalPosId: terminal.externalPosId,
+    mpStoreId: terminal.mpStoreId,
+    mpPosId: terminal.mpPosId,
+    operatingMode: terminal.operatingMode,
     status: terminal.status,
     lastSeenAt: terminal.lastSeenAt?.toISOString() ?? null,
     binding: binding
@@ -258,6 +279,8 @@ function buildMockTerminals(branchId: string | null) {
       terminalName: "Mercado Pago Point Mostrador",
       externalStoreId: branchId ? `store-${suffix}` : null,
       externalPosId: branchId ? `pos-${suffix}-01` : null,
+      mpStoreId: branchId ? `mock-store-${branchId.slice(0, 8)}` : null,
+      mpPosId: null,
       operatingMode: "PDV",
     },
   ];

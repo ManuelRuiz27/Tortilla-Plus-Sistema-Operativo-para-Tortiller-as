@@ -13,6 +13,7 @@ export const env = {
   PORT: Number(process.env.PORT ?? 3000),
   HOST: process.env.HOST ?? "0.0.0.0",
   DATABASE_URL: databaseUrl,
+  DIRECT_URL: process.env.DIRECT_URL ?? databaseUrl,
   JWT_SECRET: process.env.JWT_SECRET ?? "change_me_in_local_development",
   ACCESS_TOKEN_TTL_SECONDS: Number(process.env.ACCESS_TOKEN_TTL_SECONDS ?? 900),
   REFRESH_TOKEN_TTL_DAYS: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
@@ -31,11 +32,23 @@ export const env = {
   MERCADOPAGO_PLATFORM_ID: process.env.MERCADOPAGO_PLATFORM_ID ?? "",
   MERCADOPAGO_INTEGRATOR_ID: process.env.MERCADOPAGO_INTEGRATOR_ID ?? "",
   PAYMENT_SECRET_ENCRYPTION_KEY: process.env.PAYMENT_SECRET_ENCRYPTION_KEY ?? "",
+  CORS_ORIGINS: process.env.CORS_ORIGINS ?? "",
   MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN ?? "",
   MERCADOPAGO_TERMINAL_ID: process.env.MERCADOPAGO_TERMINAL_ID ?? "",
   CLIP_API_KEY: process.env.CLIP_API_KEY ?? "",
   CLIP_TERMINAL_ID: process.env.CLIP_TERMINAL_ID ?? "",
 };
+
+if (env.NODE_ENV === "production") {
+  assertProductionSecret(env.JWT_SECRET, "JWT_SECRET");
+  assertProductionSecret(env.PAYMENT_SECRET_ENCRYPTION_KEY, "PAYMENT_SECRET_ENCRYPTION_KEY");
+}
+
+function assertProductionSecret(value: string, name: string) {
+  if (!value || value === "change_me_in_local_development" || value.startsWith("replace_with_") || value.length < 32) {
+    throw new Error(`${name} must be configured with a strong value in production`);
+  }
+}
 
 function loadDotEnv() {
   if (!existsSync(".env")) {

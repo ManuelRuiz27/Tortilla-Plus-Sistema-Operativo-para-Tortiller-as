@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { DomainError } from "../lib/domain-error.js";
 import type { AuthenticatedUser } from "./auth-service.js";
 import { assertBranchAccess, assertPermission, getBranchAssignments } from "./permission-service.js";
 
@@ -88,6 +89,33 @@ export async function getSettingsSummary(currentUser: AuthenticatedUser, input: 
   };
 }
 
+export async function listOperationalPosDevices(currentUser: AuthenticatedUser, input: unknown) {
+  await assertPermission(currentUser.id, "payments.create");
+  const query = asLooseRecord(input);
+  const branchId = asString(query.branchId, "branchId");
+  await assertBranchAccess(currentUser, branchId);
+
+  const devices = await prisma.posDevice.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+    },
+    orderBy: [{ deviceName: "asc" }, { updatedAt: "desc" }],
+  });
+
+  return {
+    data: devices.map((device) => ({
+      id: device.id,
+      branchId: device.branchId,
+      name: device.deviceName,
+      status: device.status,
+      lastSeen: (device.lastSeenAt ?? device.updatedAt).toISOString(),
+    })),
+  };
+}
+
 async function resolveBranchIds(currentUser: AuthenticatedUser, branchId: string | null) {
   if (branchId) {
     await assertBranchAccess(currentUser, branchId);
@@ -105,5 +133,12 @@ function asLooseRecord(input: unknown): Record<string, unknown> {
 function optionalString(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string") return null;
+  return value.trim();
+}
+
+function asString(value: unknown, field: string) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new DomainError(400, "INVALID_REQUEST", `Campo requerido: ${field}.`);
+  }
   return value.trim();
 }

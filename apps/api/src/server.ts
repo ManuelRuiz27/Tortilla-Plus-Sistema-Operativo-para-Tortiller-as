@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { URL } from "node:url";
 
+import { env } from "./config/env.js";
 import { DomainError, toErrorResponse } from "./lib/domain-error.js";
 import { prisma } from "./lib/prisma.js";
 import { assertRateLimit } from "./lib/rate-limit.js";
@@ -133,7 +134,7 @@ import {
   lookupBarcode,
   readScale,
 } from "./services/physical-integration-service.js";
-import { getSettingsSummary } from "./services/settings-service.js";
+import { getSettingsSummary, listOperationalPosDevices } from "./services/settings-service.js";
 import {
   disconnectMercadoPago,
   getMercadoPagoConnection,
@@ -150,9 +151,17 @@ import {
   unbindMercadoPagoTerminalFromPos,
 } from "./services/payment-terminal-service.js";
 import {
+  activateTerminalPdvMode,
+  createOrSyncExternalPosForPosDevice,
+  createOrSyncStoreForBranch,
+  getMercadoPagoProvisioningSummary,
+  validateTerminalReadyForPosDevice,
+} from "./services/mercadopago-point-provisioning-service.js";
+import {
   cancelTerminalOrder,
   confirmTerminalOrderAndCheckout,
   createTerminalOrder,
+  getOpenTerminalOrder,
   getTerminalOrderStatus,
   processMercadoPagoTerminalWebhook,
 } from "./services/payment-terminal-order-service.js";
@@ -183,8 +192,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   const path = url.pathname;
   const method = request.method ?? "GET";
 
-  if (method === "GET" && path === "/api/v1/health") {
+  if (method === "GET" && (path === "/health" || path === "/api/v1/health")) {
     await handleHealth(response);
+    return;
+  }
+
+  if (method === "GET" && (path === "/health/db" || path === "/api/v1/health/db")) {
+    await handleDbHealth(response);
     return;
   }
 
@@ -243,6 +257,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/pos-devices") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listOperationalPosDevices(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+    }));
+    return;
+  }
+
   if (method === "GET" && path === "/api/v1/integrations/mercadopago/connection") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await getMercadoPagoConnection(currentUser));
@@ -275,9 +297,46 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/integrations/mercadopago/provisioning") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getMercadoPagoProvisioningSummary(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      posDeviceId: url.searchParams.get("posDeviceId"),
+    }));
+    return;
+  }
+
   if (method === "POST" && path === "/api/v1/integrations/mercadopago/terminals/sync") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await syncMercadoPagoTerminals(currentUser, await readJson(request)));
+    return;
+  }
+
+  const mpProvisionStoreMatch = path.match(/^\/api\/v1\/integrations\/mercadopago\/branches\/([^/]+)\/provision-store$/);
+  if (method === "POST" && mpProvisionStoreMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await createOrSyncStoreForBranch(currentUser, mpProvisionStoreMatch[1]));
+    return;
+  }
+
+  const mpProvisionPosMatch = path.match(/^\/api\/v1\/integrations\/mercadopago\/pos-devices\/([^/]+)\/provision-pos$/);
+  if (method === "POST" && mpProvisionPosMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await createOrSyncExternalPosForPosDevice(currentUser, mpProvisionPosMatch[1]));
+    return;
+  }
+
+  const mpActivatePdvMatch = path.match(/^\/api\/v1\/integrations\/mercadopago\/terminals\/([^/]+)\/activate-pdv$/);
+  if (method === "POST" && mpActivatePdvMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await activateTerminalPdvMode(currentUser, mpActivatePdvMatch[1]));
+    return;
+  }
+
+  const mpValidateTerminalMatch = path.match(/^\/api\/v1\/integrations\/mercadopago\/terminals\/([^/]+)\/validate-ready$/);
+  if (method === "POST" && mpValidateTerminalMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await validateTerminalReadyForPosDevice(currentUser, mpValidateTerminalMatch[1]));
     return;
   }
 
@@ -298,6 +357,15 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/pos/terminal-orders") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createTerminalOrder(currentUser, await readJson(request), getIdempotencyKey(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/pos/terminal-orders/open") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getOpenTerminalOrder(currentUser, {
+      branchId: url.searchParams.get("branchId"),
+      posDeviceId: url.searchParams.get("posDeviceId"),
+    }));
     return;
   }
 
@@ -984,12 +1052,20 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 }
 
 async function handleHealth(response: ServerResponse) {
+  sendJson(response, 200, {
+    status: "ok",
+    service: "tortilla-plus-api",
+    version: "0.1.0",
+  });
+}
+
+async function handleDbHealth(response: ServerResponse) {
   try {
     await withTimeout(prisma.$queryRaw`SELECT 1`, 1500);
 
     sendJson(response, 200, {
       status: "ok",
-      service: "tortilla-plus-backend",
+      db: "ok",
     });
   } catch {
     sendJson(response, 503, {
@@ -1055,15 +1131,19 @@ function sendDocument(
 
 function applyCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   const origin = request.headers.origin;
-  const allowedOrigins = new Set([
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ]);
-
-  response.setHeader(
-    "access-control-allow-origin",
-    origin && allowedOrigins.has(origin) ? origin : "*",
+  const configuredOrigins = env.CORS_ORIGINS.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const allowedOrigins = new Set(
+    configuredOrigins.length > 0 || env.NODE_ENV === "production"
+      ? configuredOrigins
+      : ["http://localhost:5173", "http://127.0.0.1:5173"],
   );
+
+  if (origin && allowedOrigins.has(origin)) {
+    response.setHeader("access-control-allow-origin", origin);
+  }
+
   response.setHeader("vary", "Origin");
   response.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
   response.setHeader(

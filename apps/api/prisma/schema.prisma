@@ -3,65 +3,68 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Organization {
-  id                                   String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                                 String                     @db.VarChar(160)
-  legalName                            String?                    @map("legal_name") @db.VarChar(200)
-  taxId                                String?                    @map("tax_id") @db.VarChar(30)
-  contactEmail                         String                     @map("contact_email") @db.VarChar(180)
-  contactPhone                         String?                    @map("contact_phone") @db.VarChar(30)
-  status                               OrganizationStatus         @default(active)
-  createdAt                            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                            DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  analyticsSnapshotOrganization        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_organization")
-  auditLogOrganization                 AuditLog[]                 @relation("AuditLog_organization")
-  billingInvoiceRequestOrganization    BillingInvoiceRequest[]    @relation("BillingInvoiceRequest_organization")
-  billingProfileOrganization           BillingProfile[]           @relation("BillingProfile_organization")
-  billingReceiptOrganization           BillingReceipt[]           @relation("BillingReceipt_organization")
-  branchProductPriceOrganization       BranchProductPrice[]       @relation("BranchProductPrice_organization")
-  branchOrganization                   Branch[]                   @relation("Branch_organization")
-  businessUnitOrganization             BusinessUnit[]             @relation("BusinessUnit_organization")
-  cashClosingOrganization              CashClosing[]              @relation("CashClosing_organization")
-  cashMovementReasonOrganization       CashMovementReason[]       @relation("CashMovementReason_organization")
-  cashMovementOrganization             CashMovement[]             @relation("CashMovement_organization")
-  cashSessionOrganization              CashSession[]              @relation("CashSession_organization")
-  customerBalanceMovementOrganization  CustomerBalanceMovement[]  @relation("CustomerBalanceMovement_organization")
-  customerProductPriceOrganization     CustomerProductPrice[]     @relation("CustomerProductPrice_organization")
-  customerOrganization                 Customer[]                 @relation("Customer_organization")
-  deliveryDriverOrganization           DeliveryDriver[]           @relation("DeliveryDriver_organization")
-  deliveryOrderOrganization            DeliveryOrder[]            @relation("DeliveryOrder_organization")
-  deliveryPaymentOrganization          DeliveryPayment[]          @relation("DeliveryPayment_organization")
-  deliveryReturnOrganization           DeliveryReturn[]           @relation("DeliveryReturn_organization")
-  deliveryRouteOrganization            DeliveryRoute[]            @relation("DeliveryRoute_organization")
-  deliverySettlementOrganization       DeliverySettlement[]       @relation("DeliverySettlement_organization")
-  inventoryMovementOrganization        InventoryMovement[]        @relation("InventoryMovement_organization")
-  inventoryStockOrganization           InventoryStock[]           @relation("InventoryStock_organization")
-  invoiceOrganization                  Invoice[]                  @relation("Invoice_organization")
-  idempotencyRecordOrganization        IdempotencyRecord[]        @relation("IdempotencyRecord_organization")
+  id                                    String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                  String                      @db.VarChar(160)
+  legalName                             String?                     @map("legal_name") @db.VarChar(200)
+  taxId                                 String?                     @map("tax_id") @db.VarChar(30)
+  contactEmail                          String                      @map("contact_email") @db.VarChar(180)
+  contactPhone                          String?                     @map("contact_phone") @db.VarChar(30)
+  status                                OrganizationStatus          @default(active)
+  createdAt                             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                             DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  analyticsSnapshotOrganization         AnalyticsSnapshot[]         @relation("AnalyticsSnapshot_organization")
+  auditLogOrganization                  AuditLog[]                  @relation("AuditLog_organization")
+  billingInvoiceRequestOrganization     BillingInvoiceRequest[]     @relation("BillingInvoiceRequest_organization")
+  billingProfileOrganization            BillingProfile[]            @relation("BillingProfile_organization")
+  billingReceiptOrganization            BillingReceipt[]            @relation("BillingReceipt_organization")
+  branchProductPriceOrganization        BranchProductPrice[]        @relation("BranchProductPrice_organization")
+  branchOrganization                    Branch[]                    @relation("Branch_organization")
+  businessUnitOrganization              BusinessUnit[]              @relation("BusinessUnit_organization")
+  cashClosingOrganization               CashClosing[]               @relation("CashClosing_organization")
+  cashMovementReasonOrganization        CashMovementReason[]        @relation("CashMovementReason_organization")
+  cashMovementOrganization              CashMovement[]              @relation("CashMovement_organization")
+  cashSessionOrganization               CashSession[]               @relation("CashSession_organization")
+  customerBalanceMovementOrganization   CustomerBalanceMovement[]   @relation("CustomerBalanceMovement_organization")
+  customerProductPriceOrganization      CustomerProductPrice[]      @relation("CustomerProductPrice_organization")
+  customerOrganization                  Customer[]                  @relation("Customer_organization")
+  deliveryDriverOrganization            DeliveryDriver[]            @relation("DeliveryDriver_organization")
+  deliveryOrderOrganization             DeliveryOrder[]             @relation("DeliveryOrder_organization")
+  deliveryPaymentOrganization           DeliveryPayment[]           @relation("DeliveryPayment_organization")
+  deliveryReturnOrganization            DeliveryReturn[]            @relation("DeliveryReturn_organization")
+  deliveryRouteOrganization             DeliveryRoute[]             @relation("DeliveryRoute_organization")
+  deliverySettlementOrganization        DeliverySettlement[]        @relation("DeliverySettlement_organization")
+  inventoryMovementOrganization         InventoryMovement[]         @relation("InventoryMovement_organization")
+  inventoryStockOrganization            InventoryStock[]            @relation("InventoryStock_organization")
+  invoiceOrganization                   Invoice[]                   @relation("Invoice_organization")
+  idempotencyRecordOrganization         IdempotencyRecord[]         @relation("IdempotencyRecord_organization")
   paymentProviderConnectionOrganization PaymentProviderConnection[] @relation("PaymentProviderConnection_organization")
-  paymentProviderOrganization          PaymentProvider[]          @relation("PaymentProvider_organization")
-  paymentTerminalOrganization          PaymentTerminal[]          @relation("PaymentTerminal_organization")
-  paymentTerminalBindingOrganization   PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_organization")
-  paymentTerminalOrderOrganization     PaymentTerminalOrder[]     @relation("PaymentTerminalOrder_organization")
-  paymentTerminalEventOrganization     PaymentTerminalEvent[]     @relation("PaymentTerminalEvent_organization")
-  paymentTerminalReferenceOrganization PaymentTerminalReference[] @relation("PaymentTerminalReference_organization")
-  posDeviceOrganization                PosDevice[]                @relation("PosDevice_organization")
-  productCategoryOrganization          ProductCategory[]          @relation("ProductCategory_organization")
-  productionBatchOrganization          ProductionBatch[]          @relation("ProductionBatch_organization")
-  productOrganization                  Product[]                  @relation("Product_organization")
-  reconciliationBatchOrganization      ReconciliationBatch[]      @relation("ReconciliationBatch_organization")
-  saasPaymentOrganization              SaasPayment[]              @relation("SaasPayment_organization")
-  salePaymentOrganization              SalePayment[]              @relation("SalePayment_organization")
-  saleReturnOrganization               SaleReturn[]               @relation("SaleReturn_organization")
-  saleOrganization                     Sale[]                     @relation("Sale_organization")
-  subscriptionOrganization             Subscription[]             @relation("Subscription_organization")
-  userRoleOrganization                 UserRole[]                 @relation("UserRole_organization")
-  userOrganization                     User[]                     @relation("User_organization")
-  wasteRecordOrganization              WasteRecord[]              @relation("WasteRecord_organization")
+  mercadoPagoBranchConfigOrganization   MercadoPagoBranchConfig[]   @relation("MercadoPagoBranchConfig_organization")
+  mercadoPagoPosConfigOrganization      MercadoPagoPosConfig[]      @relation("MercadoPagoPosConfig_organization")
+  paymentProviderOrganization           PaymentProvider[]           @relation("PaymentProvider_organization")
+  paymentTerminalOrganization           PaymentTerminal[]           @relation("PaymentTerminal_organization")
+  paymentTerminalBindingOrganization    PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_organization")
+  paymentTerminalOrderOrganization      PaymentTerminalOrder[]      @relation("PaymentTerminalOrder_organization")
+  paymentTerminalEventOrganization      PaymentTerminalEvent[]      @relation("PaymentTerminalEvent_organization")
+  paymentTerminalReferenceOrganization  PaymentTerminalReference[]  @relation("PaymentTerminalReference_organization")
+  posDeviceOrganization                 PosDevice[]                 @relation("PosDevice_organization")
+  productCategoryOrganization           ProductCategory[]           @relation("ProductCategory_organization")
+  productionBatchOrganization           ProductionBatch[]           @relation("ProductionBatch_organization")
+  productOrganization                   Product[]                   @relation("Product_organization")
+  reconciliationBatchOrganization       ReconciliationBatch[]       @relation("ReconciliationBatch_organization")
+  saasPaymentOrganization               SaasPayment[]               @relation("SaasPayment_organization")
+  salePaymentOrganization               SalePayment[]               @relation("SalePayment_organization")
+  saleReturnOrganization                SaleReturn[]                @relation("SaleReturn_organization")
+  saleOrganization                      Sale[]                      @relation("Sale_organization")
+  subscriptionOrganization              Subscription[]              @relation("Subscription_organization")
+  userRoleOrganization                  UserRole[]                  @relation("UserRole_organization")
+  userOrganization                      User[]                      @relation("User_organization")
+  wasteRecordOrganization               WasteRecord[]               @relation("WasteRecord_organization")
 
   @@map("organizations")
 }
@@ -83,48 +86,50 @@ model BusinessUnit {
 }
 
 model Branch {
-  id                             String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                 String                     @map("organization_id") @db.Uuid
-  businessUnitId                 String                     @map("business_unit_id") @db.Uuid
-  name                           String                     @db.VarChar(160)
+  id                             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                 String                      @map("organization_id") @db.Uuid
+  businessUnitId                 String                      @map("business_unit_id") @db.Uuid
+  name                           String                      @db.VarChar(160)
   address                        String?
-  phone                          String?                    @db.VarChar(30)
-  timezone                       String                     @default("America/Mexico_City") @db.VarChar(80)
-  status                         GenericStatus              @default(active)
-  createdAt                      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                      DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  analyticsSnapshotBranch        AnalyticsSnapshot[]        @relation("AnalyticsSnapshot_branch")
-  auditLogBranch                 AuditLog[]                 @relation("AuditLog_branch")
-  billingInvoiceRequestBranch    BillingInvoiceRequest[]    @relation("BillingInvoiceRequest_branch")
-  billingReceiptBranch           BillingReceipt[]           @relation("BillingReceipt_branch")
-  branchProductPriceBranch       BranchProductPrice[]       @relation("BranchProductPrice_branch")
-  businessUnit                   BusinessUnit               @relation("Branch_businessUnit", fields: [businessUnitId], references: [id], onUpdate: NoAction)
-  organization                   Organization               @relation("Branch_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
-  cashClosingBranch              CashClosing[]              @relation("CashClosing_branch")
-  cashMovementBranch             CashMovement[]             @relation("CashMovement_branch")
-  cashSessionBranch              CashSession[]              @relation("CashSession_branch")
-  customerProductPriceBranch     CustomerProductPrice[]     @relation("CustomerProductPrice_branch")
-  deliveryOrderBranch            DeliveryOrder[]            @relation("DeliveryOrder_branch")
-  deliveryPaymentBranch          DeliveryPayment[]          @relation("DeliveryPayment_branch")
-  deliveryReturnBranch           DeliveryReturn[]           @relation("DeliveryReturn_branch")
-  deliveryRouteBranch            DeliveryRoute[]            @relation("DeliveryRoute_branch")
-  deliverySettlementBranch       DeliverySettlement[]       @relation("DeliverySettlement_branch")
-  inventoryMovementBranch        InventoryMovement[]        @relation("InventoryMovement_branch")
-  inventoryStockBranch           InventoryStock[]           @relation("InventoryStock_branch")
-  invoiceBranch                  Invoice[]                  @relation("Invoice_branch")
-  paymentTerminalBranch          PaymentTerminal[]          @relation("PaymentTerminal_branch")
+  phone                          String?                     @db.VarChar(30)
+  timezone                       String                      @default("America/Mexico_City") @db.VarChar(80)
+  status                         GenericStatus               @default(active)
+  createdAt                      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  analyticsSnapshotBranch        AnalyticsSnapshot[]         @relation("AnalyticsSnapshot_branch")
+  auditLogBranch                 AuditLog[]                  @relation("AuditLog_branch")
+  billingInvoiceRequestBranch    BillingInvoiceRequest[]     @relation("BillingInvoiceRequest_branch")
+  billingReceiptBranch           BillingReceipt[]            @relation("BillingReceipt_branch")
+  branchProductPriceBranch       BranchProductPrice[]        @relation("BranchProductPrice_branch")
+  businessUnit                   BusinessUnit                @relation("Branch_businessUnit", fields: [businessUnitId], references: [id], onUpdate: NoAction)
+  organization                   Organization                @relation("Branch_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  cashClosingBranch              CashClosing[]               @relation("CashClosing_branch")
+  cashMovementBranch             CashMovement[]              @relation("CashMovement_branch")
+  cashSessionBranch              CashSession[]               @relation("CashSession_branch")
+  customerProductPriceBranch     CustomerProductPrice[]      @relation("CustomerProductPrice_branch")
+  deliveryOrderBranch            DeliveryOrder[]             @relation("DeliveryOrder_branch")
+  deliveryPaymentBranch          DeliveryPayment[]           @relation("DeliveryPayment_branch")
+  deliveryReturnBranch           DeliveryReturn[]            @relation("DeliveryReturn_branch")
+  deliveryRouteBranch            DeliveryRoute[]             @relation("DeliveryRoute_branch")
+  deliverySettlementBranch       DeliverySettlement[]        @relation("DeliverySettlement_branch")
+  inventoryMovementBranch        InventoryMovement[]         @relation("InventoryMovement_branch")
+  inventoryStockBranch           InventoryStock[]            @relation("InventoryStock_branch")
+  invoiceBranch                  Invoice[]                   @relation("Invoice_branch")
+  paymentTerminalBranch          PaymentTerminal[]           @relation("PaymentTerminal_branch")
+  mercadoPagoBranchConfigBranch  MercadoPagoBranchConfig[]   @relation("MercadoPagoBranchConfig_branch")
+  mercadoPagoPosConfigBranch     MercadoPagoPosConfig[]      @relation("MercadoPagoPosConfig_branch")
   paymentTerminalBindingBranch   PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_branch")
-  paymentTerminalOrderBranch     PaymentTerminalOrder[]     @relation("PaymentTerminalOrder_branch")
-  paymentTerminalEventBranch     PaymentTerminalEvent[]     @relation("PaymentTerminalEvent_branch")
-  paymentTerminalReferenceBranch PaymentTerminalReference[] @relation("PaymentTerminalReference_branch")
-  posDeviceBranch                PosDevice[]                @relation("PosDevice_branch")
-  productionBatchBranch          ProductionBatch[]          @relation("ProductionBatch_branch")
-  reconciliationBatchBranch      ReconciliationBatch[]      @relation("ReconciliationBatch_branch")
-  salePaymentBranch              SalePayment[]              @relation("SalePayment_branch")
-  saleReturnBranch               SaleReturn[]               @relation("SaleReturn_branch")
-  saleBranch                     Sale[]                     @relation("Sale_branch")
-  userBranchAssignmentBranch     UserBranchAssignment[]     @relation("UserBranchAssignment_branch")
-  wasteRecordBranch              WasteRecord[]              @relation("WasteRecord_branch")
+  paymentTerminalOrderBranch     PaymentTerminalOrder[]      @relation("PaymentTerminalOrder_branch")
+  paymentTerminalEventBranch     PaymentTerminalEvent[]      @relation("PaymentTerminalEvent_branch")
+  paymentTerminalReferenceBranch PaymentTerminalReference[]  @relation("PaymentTerminalReference_branch")
+  posDeviceBranch                PosDevice[]                 @relation("PosDevice_branch")
+  productionBatchBranch          ProductionBatch[]           @relation("ProductionBatch_branch")
+  reconciliationBatchBranch      ReconciliationBatch[]       @relation("ReconciliationBatch_branch")
+  salePaymentBranch              SalePayment[]               @relation("SalePayment_branch")
+  saleReturnBranch               SaleReturn[]                @relation("SaleReturn_branch")
+  saleBranch                     Sale[]                      @relation("Sale_branch")
+  userBranchAssignmentBranch     UserBranchAssignment[]      @relation("UserBranchAssignment_branch")
+  wasteRecordBranch              WasteRecord[]               @relation("WasteRecord_branch")
 
   @@index([organizationId], map: "idx_branches_organization")
   @@map("branches")
@@ -246,50 +251,50 @@ model MercadopagoWebhookEvent {
 }
 
 model User {
-  id                                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                       String?                   @map("organization_id") @db.Uuid
-  name                                 String                    @db.VarChar(160)
-  email                                String                    @db.VarChar(180)
-  phone                                String?                   @db.VarChar(30)
-  passwordHash                         String                    @map("password_hash")
-  pinHash                              String?                   @map("pin_hash")
-  status                               UserStatus                @default(active)
-  lastLoginAt                          DateTime?                 @map("last_login_at") @db.Timestamptz(6)
-  createdAt                            DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                            DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
-  auditLogUser                         AuditLog[]                @relation("AuditLog_user")
-  cashClosingClosedByUser              CashClosing[]             @relation("CashClosing_closedByUser")
-  cashMovementAuthorizedByUser         CashMovement[]            @relation("CashMovement_authorizedByUser")
-  cashMovementCancelledByUser          CashMovement[]            @relation("CashMovement_cancelledByUser")
-  cashMovementRejectedByUser           CashMovement[]            @relation("CashMovement_rejectedByUser")
-  cashMovementRequestedByUser          CashMovement[]            @relation("CashMovement_requestedByUser")
-  cashSessionClosedByUser              CashSession[]             @relation("CashSession_closedByUser")
-  cashSessionOpenedByUser              CashSession[]             @relation("CashSession_openedByUser")
-  customerBalanceMovementCreatedByUser CustomerBalanceMovement[] @relation("CustomerBalanceMovement_createdByUser")
-  deliveryOrderCreatedByUser           DeliveryOrder[]           @relation("DeliveryOrder_createdByUser")
-  deliveryOrderPreparedByUser          DeliveryOrder[]           @relation("DeliveryOrder_preparedByUser")
-  deliveryReturnReviewedByUser         DeliveryReturn[]          @relation("DeliveryReturn_reviewedByUser")
-  deliverySettlementReceivedByUser     DeliverySettlement[]      @relation("DeliverySettlement_receivedByUser")
-  inventoryMovementAuthorizedByUser    InventoryMovement[]       @relation("InventoryMovement_authorizedByUser")
-  inventoryMovementCreatedByUser       InventoryMovement[]       @relation("InventoryMovement_createdByUser")
+  id                                       String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                           String?                     @map("organization_id") @db.Uuid
+  name                                     String                      @db.VarChar(160)
+  email                                    String                      @db.VarChar(180)
+  phone                                    String?                     @db.VarChar(30)
+  passwordHash                             String                      @map("password_hash")
+  pinHash                                  String?                     @map("pin_hash")
+  status                                   UserStatus                  @default(active)
+  lastLoginAt                              DateTime?                   @map("last_login_at") @db.Timestamptz(6)
+  createdAt                                DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  auditLogUser                             AuditLog[]                  @relation("AuditLog_user")
+  cashClosingClosedByUser                  CashClosing[]               @relation("CashClosing_closedByUser")
+  cashMovementAuthorizedByUser             CashMovement[]              @relation("CashMovement_authorizedByUser")
+  cashMovementCancelledByUser              CashMovement[]              @relation("CashMovement_cancelledByUser")
+  cashMovementRejectedByUser               CashMovement[]              @relation("CashMovement_rejectedByUser")
+  cashMovementRequestedByUser              CashMovement[]              @relation("CashMovement_requestedByUser")
+  cashSessionClosedByUser                  CashSession[]               @relation("CashSession_closedByUser")
+  cashSessionOpenedByUser                  CashSession[]               @relation("CashSession_openedByUser")
+  customerBalanceMovementCreatedByUser     CustomerBalanceMovement[]   @relation("CustomerBalanceMovement_createdByUser")
+  deliveryOrderCreatedByUser               DeliveryOrder[]             @relation("DeliveryOrder_createdByUser")
+  deliveryOrderPreparedByUser              DeliveryOrder[]             @relation("DeliveryOrder_preparedByUser")
+  deliveryReturnReviewedByUser             DeliveryReturn[]            @relation("DeliveryReturn_reviewedByUser")
+  deliverySettlementReceivedByUser         DeliverySettlement[]        @relation("DeliverySettlement_receivedByUser")
+  inventoryMovementAuthorizedByUser        InventoryMovement[]         @relation("InventoryMovement_authorizedByUser")
+  inventoryMovementCreatedByUser           InventoryMovement[]         @relation("InventoryMovement_createdByUser")
   paymentProviderConnectionConnectedByUser PaymentProviderConnection[] @relation("PaymentProviderConnection_connectedByUser")
-  paymentTerminalBindingCreatedByUser  PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_createdByUser")
-  paymentTerminalOrderCreatedByUser    PaymentTerminalOrder[]     @relation("PaymentTerminalOrder_createdByUser")
-  productionBatchClosedByUser          ProductionBatch[]         @relation("ProductionBatch_closedByUser")
-  productionBatchCreatedByUser         ProductionBatch[]         @relation("ProductionBatch_createdByUser")
-  reconciliationBatchCreatedByUser     ReconciliationBatch[]     @relation("ReconciliationBatch_createdByUser")
-  reconciliationBatchReviewedByUser    ReconciliationBatch[]     @relation("ReconciliationBatch_reviewedByUser")
-  salePaymentCreatedByUser             SalePayment[]             @relation("SalePayment_createdByUser")
-  saleReturnAuthorizedByUser           SaleReturn[]              @relation("SaleReturn_authorizedByUser")
-  saleReturnCreatedByUser              SaleReturn[]              @relation("SaleReturn_createdByUser")
-  saleCancelledByUser                  Sale[]                    @relation("Sale_cancelledByUser")
-  saleCreatedByUser                    Sale[]                    @relation("Sale_createdByUser")
-  userBranchAssignmentUser             UserBranchAssignment[]    @relation("UserBranchAssignment_user")
-  userRoleUser                         UserRole[]                @relation("UserRole_user")
-  userSessionUser                      UserSession[]             @relation("UserSession_user")
-  organization                         Organization?             @relation("User_organization", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  wasteRecordAuthorizedByUser          WasteRecord[]             @relation("WasteRecord_authorizedByUser")
-  wasteRecordCreatedByUser             WasteRecord[]             @relation("WasteRecord_createdByUser")
+  paymentTerminalBindingCreatedByUser      PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_createdByUser")
+  paymentTerminalOrderCreatedByUser        PaymentTerminalOrder[]      @relation("PaymentTerminalOrder_createdByUser")
+  productionBatchClosedByUser              ProductionBatch[]           @relation("ProductionBatch_closedByUser")
+  productionBatchCreatedByUser             ProductionBatch[]           @relation("ProductionBatch_createdByUser")
+  reconciliationBatchCreatedByUser         ReconciliationBatch[]       @relation("ReconciliationBatch_createdByUser")
+  reconciliationBatchReviewedByUser        ReconciliationBatch[]       @relation("ReconciliationBatch_reviewedByUser")
+  salePaymentCreatedByUser                 SalePayment[]               @relation("SalePayment_createdByUser")
+  saleReturnAuthorizedByUser               SaleReturn[]                @relation("SaleReturn_authorizedByUser")
+  saleReturnCreatedByUser                  SaleReturn[]                @relation("SaleReturn_createdByUser")
+  saleCancelledByUser                      Sale[]                      @relation("Sale_cancelledByUser")
+  saleCreatedByUser                        Sale[]                      @relation("Sale_createdByUser")
+  userBranchAssignmentUser                 UserBranchAssignment[]      @relation("UserBranchAssignment_user")
+  userRoleUser                             UserRole[]                  @relation("UserRole_user")
+  userSessionUser                          UserSession[]               @relation("UserSession_user")
+  organization                             Organization?               @relation("User_organization", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  wasteRecordAuthorizedByUser              WasteRecord[]               @relation("WasteRecord_authorizedByUser")
+  wasteRecordCreatedByUser                 WasteRecord[]               @relation("WasteRecord_createdByUser")
 
   @@unique([organizationId, email], map: "uq_users_org_email")
   @@index([organizationId], map: "idx_users_organization")
@@ -374,24 +379,25 @@ model UserSession {
 }
 
 model PosDevice {
-  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId    String        @map("organization_id") @db.Uuid
-  branchId          String        @map("branch_id") @db.Uuid
-  deviceName        String        @map("device_name") @db.VarChar(160)
-  deviceCode        String        @unique @map("device_code") @db.VarChar(120)
-  deviceType        DeviceType    @map("device_type")
-  status            DeviceStatus  @default(pending_activation)
-  licensed          Boolean       @default(false)
-  lastSeenAt        DateTime?     @map("last_seen_at") @db.Timestamptz(6)
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  auditLogDevice    AuditLog[]    @relation("AuditLog_device")
-  cashSessionDevice CashSession[] @relation("CashSession_device")
+  id                              String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                  String                      @map("organization_id") @db.Uuid
+  branchId                        String                      @map("branch_id") @db.Uuid
+  deviceName                      String                      @map("device_name") @db.VarChar(160)
+  deviceCode                      String                      @unique @map("device_code") @db.VarChar(120)
+  deviceType                      DeviceType                  @map("device_type")
+  status                          DeviceStatus                @default(pending_activation)
+  licensed                        Boolean                     @default(false)
+  lastSeenAt                      DateTime?                   @map("last_seen_at") @db.Timestamptz(6)
+  createdAt                       DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                       DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  auditLogDevice                  AuditLog[]                  @relation("AuditLog_device")
+  cashSessionDevice               CashSession[]               @relation("CashSession_device")
   paymentTerminalBindingPosDevice PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_posDevice")
-  paymentTerminalOrderPosDevice PaymentTerminalOrder[] @relation("PaymentTerminalOrder_posDevice")
-  branch            Branch        @relation("PosDevice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization      Organization  @relation("PosDevice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  saleDevice        Sale[]        @relation("Sale_device")
+  paymentTerminalOrderPosDevice   PaymentTerminalOrder[]      @relation("PaymentTerminalOrder_posDevice")
+  mercadoPagoPosConfigPosDevice   MercadoPagoPosConfig[]      @relation("MercadoPagoPosConfig_posDevice")
+  branch                          Branch                      @relation("PosDevice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                    Organization                @relation("PosDevice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleDevice                      Sale[]                      @relation("Sale_device")
 
   @@index([branchId], map: "idx_pos_devices_branch")
   @@map("pos_devices")
@@ -660,7 +666,7 @@ model CashMovement {
   reason             CashMovementReason? @relation("CashMovement_reason", fields: [reasonId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   rejectedByUser     User?               @relation("CashMovement_rejectedByUser", fields: [rejectedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   requestedByUser    User                @relation("CashMovement_requestedByUser", fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  deliverySettlement DeliverySettlement?  @relation("DeliverySettlement_cashMovement")
+  deliverySettlement DeliverySettlement? @relation("DeliverySettlement_cashMovement")
 
   @@index([cashSessionId], map: "idx_cash_movements_cash_session")
   @@index([status], map: "idx_cash_movements_status")
@@ -768,46 +774,46 @@ model CustomerBalanceMovement {
 }
 
 model Sale {
-  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId     String        @map("organization_id") @db.Uuid
-  branchId           String        @map("branch_id") @db.Uuid
-  cashSessionId      String        @map("cash_session_id") @db.Uuid
-  deviceId           String?       @map("device_id") @db.Uuid
-  customerId         String?       @map("customer_id") @db.Uuid
-  saleNumber         String        @map("sale_number") @db.VarChar(80)
-  status             SaleStatus    @default(draft)
-  saleType           SaleType      @default(counter) @map("sale_type")
-  fiscalIntent       FiscalIntent  @default(no_invoice) @map("fiscal_intent")
-  fiscalStatus       SaleFiscalStatus @default(sale_completed) @map("fiscal_status")
-  invoiceDeadlineAt  DateTime?     @map("invoice_deadline_at") @db.Timestamptz(6)
-  fiscalLockedAt     DateTime?     @map("fiscal_locked_at") @db.Timestamptz(6)
-  subtotal           Decimal       @default(0) @db.Decimal(12, 2)
-  discountTotal      Decimal       @default(0) @map("discount_total") @db.Decimal(12, 2)
-  taxTotal           Decimal       @default(0) @map("tax_total") @db.Decimal(12, 2)
-  total              Decimal       @default(0) @db.Decimal(12, 2)
-  createdByUserId    String        @map("created_by_user_id") @db.Uuid
-  cancelledByUserId  String?       @map("cancelled_by_user_id") @db.Uuid
-  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(6)
-  cancellationReason String?       @map("cancellation_reason")
-  clientGeneratedId  String?       @map("client_generated_id") @db.VarChar(180)
-  syncStatus         String?       @map("sync_status") @db.VarChar(60)
-  syncedAt           DateTime?     @map("synced_at") @db.Timestamptz(6)
-  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
-  invoiceSaleSale    InvoiceSale[] @relation("InvoiceSale_sale")
-  billingReceiptSale BillingReceipt? @relation("BillingReceipt_sale")
+  id                        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId            String                  @map("organization_id") @db.Uuid
+  branchId                  String                  @map("branch_id") @db.Uuid
+  cashSessionId             String                  @map("cash_session_id") @db.Uuid
+  deviceId                  String?                 @map("device_id") @db.Uuid
+  customerId                String?                 @map("customer_id") @db.Uuid
+  saleNumber                String                  @map("sale_number") @db.VarChar(80)
+  status                    SaleStatus              @default(draft)
+  saleType                  SaleType                @default(counter) @map("sale_type")
+  fiscalIntent              FiscalIntent            @default(no_invoice) @map("fiscal_intent")
+  fiscalStatus              SaleFiscalStatus        @default(sale_completed) @map("fiscal_status")
+  invoiceDeadlineAt         DateTime?               @map("invoice_deadline_at") @db.Timestamptz(6)
+  fiscalLockedAt            DateTime?               @map("fiscal_locked_at") @db.Timestamptz(6)
+  subtotal                  Decimal                 @default(0) @db.Decimal(12, 2)
+  discountTotal             Decimal                 @default(0) @map("discount_total") @db.Decimal(12, 2)
+  taxTotal                  Decimal                 @default(0) @map("tax_total") @db.Decimal(12, 2)
+  total                     Decimal                 @default(0) @db.Decimal(12, 2)
+  createdByUserId           String                  @map("created_by_user_id") @db.Uuid
+  cancelledByUserId         String?                 @map("cancelled_by_user_id") @db.Uuid
+  cancelledAt               DateTime?               @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason        String?                 @map("cancellation_reason")
+  clientGeneratedId         String?                 @map("client_generated_id") @db.VarChar(180)
+  syncStatus                String?                 @map("sync_status") @db.VarChar(60)
+  syncedAt                  DateTime?               @map("synced_at") @db.Timestamptz(6)
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  invoiceSaleSale           InvoiceSale[]           @relation("InvoiceSale_sale")
+  billingReceiptSale        BillingReceipt?         @relation("BillingReceipt_sale")
   billingInvoiceRequestSale BillingInvoiceRequest[] @relation("BillingInvoiceRequest_sale")
-  saleItemSale       SaleItem[]    @relation("SaleItem_sale")
-  salePaymentSale    SalePayment[] @relation("SalePayment_sale")
-  paymentTerminalOrderSale PaymentTerminalOrder[] @relation("PaymentTerminalOrder_sale")
-  saleReturnSale     SaleReturn[]  @relation("SaleReturn_sale")
-  branch             Branch        @relation("Sale_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  cancelledByUser    User?         @relation("Sale_cancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  cashSession        CashSession   @relation("Sale_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser      User          @relation("Sale_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  customer           Customer?     @relation("Sale_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  device             PosDevice?    @relation("Sale_device", fields: [deviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization       Organization  @relation("Sale_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleItemSale              SaleItem[]              @relation("SaleItem_sale")
+  salePaymentSale           SalePayment[]           @relation("SalePayment_sale")
+  paymentTerminalOrderSale  PaymentTerminalOrder[]  @relation("PaymentTerminalOrder_sale")
+  saleReturnSale            SaleReturn[]            @relation("SaleReturn_sale")
+  branch                    Branch                  @relation("Sale_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cancelledByUser           User?                   @relation("Sale_cancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession               CashSession             @relation("Sale_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser             User                    @relation("Sale_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer                  Customer?               @relation("Sale_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  device                    PosDevice?              @relation("Sale_device", fields: [deviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization              Organization            @relation("Sale_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([branchId, saleNumber], map: "uq_sale_branch_number")
   @@index([branchId], map: "idx_sales_branch")
@@ -1036,28 +1042,28 @@ model DeliveryPayment {
 }
 
 model DeliverySettlement {
-  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId      String                   @map("organization_id") @db.Uuid
-  branchId            String                   @map("branch_id") @db.Uuid
-  driverId            String?                  @map("driver_id") @db.Uuid
-  routeId             String?                  @map("route_id") @db.Uuid
-  status              DeliverySettlementStatus @default(open)
-  expectedCashAmount  Decimal                  @default(0) @map("expected_cash_amount") @db.Decimal(12, 2)
-  deliveredCashAmount Decimal                  @default(0) @map("delivered_cash_amount") @db.Decimal(12, 2)
-  differenceAmount    Decimal                  @default(0) @map("difference_amount") @db.Decimal(12, 2)
-  receivedByUserId    String?                  @map("received_by_user_id") @db.Uuid
-  cashSessionId       String?                  @map("cash_session_id") @db.Uuid
-  cashMovementId      String?                  @unique @map("cash_movement_id") @db.Uuid
-  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  closedAt            DateTime?                @map("closed_at") @db.Timestamptz(6)
-  branch              Branch                   @relation("DeliverySettlement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  cashMovement        CashMovement?            @relation("DeliverySettlement_cashMovement", fields: [cashMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  cashSession         CashSession?             @relation("DeliverySettlement_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  driver              DeliveryDriver?          @relation("DeliverySettlement_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization        Organization             @relation("DeliverySettlement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  receivedByUser      User?                    @relation("DeliverySettlement_receivedByUser", fields: [receivedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  route               DeliveryRoute?           @relation("DeliverySettlement_route", fields: [routeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  deliveryPaymentSettlement DeliveryPayment[]   @relation("DeliveryPayment_settlement")
+  id                        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId            String                   @map("organization_id") @db.Uuid
+  branchId                  String                   @map("branch_id") @db.Uuid
+  driverId                  String?                  @map("driver_id") @db.Uuid
+  routeId                   String?                  @map("route_id") @db.Uuid
+  status                    DeliverySettlementStatus @default(open)
+  expectedCashAmount        Decimal                  @default(0) @map("expected_cash_amount") @db.Decimal(12, 2)
+  deliveredCashAmount       Decimal                  @default(0) @map("delivered_cash_amount") @db.Decimal(12, 2)
+  differenceAmount          Decimal                  @default(0) @map("difference_amount") @db.Decimal(12, 2)
+  receivedByUserId          String?                  @map("received_by_user_id") @db.Uuid
+  cashSessionId             String?                  @map("cash_session_id") @db.Uuid
+  cashMovementId            String?                  @unique @map("cash_movement_id") @db.Uuid
+  createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  closedAt                  DateTime?                @map("closed_at") @db.Timestamptz(6)
+  branch                    Branch                   @relation("DeliverySettlement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashMovement              CashMovement?            @relation("DeliverySettlement_cashMovement", fields: [cashMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cashSession               CashSession?             @relation("DeliverySettlement_cashSession", fields: [cashSessionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  driver                    DeliveryDriver?          @relation("DeliverySettlement_driver", fields: [driverId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization              Organization             @relation("DeliverySettlement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  receivedByUser            User?                    @relation("DeliverySettlement_receivedByUser", fields: [receivedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  route                     DeliveryRoute?           @relation("DeliverySettlement_route", fields: [routeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  deliveryPaymentSettlement DeliveryPayment[]        @relation("DeliveryPayment_settlement")
 
   @@map("delivery_settlements")
 }
@@ -1131,57 +1137,107 @@ model PaymentProvider {
 }
 
 model PaymentProviderConnection {
-  id                     String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId         String                          @map("organization_id") @db.Uuid
-  provider               PaymentIntegrationProvider      @default(mercadopago)
-  connectionName         String                          @map("connection_name") @db.VarChar(160)
-  status                 PaymentProviderConnectionStatus @default(pending)
-  mpUserId               String?                         @map("mp_user_id") @db.VarChar(180)
-  accessTokenCiphertext  String?                         @map("access_token_ciphertext")
-  refreshTokenCiphertext String?                         @map("refresh_token_ciphertext")
-  tokenExpiresAt         DateTime?                       @map("token_expires_at") @db.Timestamptz(6)
-  scopes                 String[]                        @default([])
-  oauthStateHash         String?                         @map("oauth_state_hash") @db.VarChar(128)
-  oauthStateExpiresAt    DateTime?                       @map("oauth_state_expires_at") @db.Timestamptz(6)
-  connectedByUserId      String?                         @map("connected_by_user_id") @db.Uuid
-  connectedAt            DateTime?                       @map("connected_at") @db.Timestamptz(6)
-  lastHealthCheckAt      DateTime?                       @map("last_health_check_at") @db.Timestamptz(6)
-  lastErrorCode          String?                         @map("last_error_code") @db.VarChar(120)
-  lastErrorMessage       String?                         @map("last_error_message")
-  createdAt              DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                        @default(now()) @map("updated_at") @db.Timestamptz(6)
-  organization           Organization                    @relation("PaymentProviderConnection_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  connectedByUser        User?                           @relation("PaymentProviderConnection_connectedByUser", fields: [connectedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  paymentTerminalConnection PaymentTerminal[]            @relation("PaymentTerminal_providerConnection")
-  paymentTerminalOrderConnection PaymentTerminalOrder[]  @relation("PaymentTerminalOrder_providerConnection")
+  id                                String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                    String                          @map("organization_id") @db.Uuid
+  provider                          PaymentIntegrationProvider      @default(mercadopago)
+  connectionName                    String                          @map("connection_name") @db.VarChar(160)
+  status                            PaymentProviderConnectionStatus @default(pending)
+  mpUserId                          String?                         @map("mp_user_id") @db.VarChar(180)
+  accessTokenCiphertext             String?                         @map("access_token_ciphertext")
+  refreshTokenCiphertext            String?                         @map("refresh_token_ciphertext")
+  tokenExpiresAt                    DateTime?                       @map("token_expires_at") @db.Timestamptz(6)
+  scopes                            String[]                        @default([])
+  oauthStateHash                    String?                         @map("oauth_state_hash") @db.VarChar(128)
+  oauthStateExpiresAt               DateTime?                       @map("oauth_state_expires_at") @db.Timestamptz(6)
+  connectedByUserId                 String?                         @map("connected_by_user_id") @db.Uuid
+  connectedAt                       DateTime?                       @map("connected_at") @db.Timestamptz(6)
+  lastHealthCheckAt                 DateTime?                       @map("last_health_check_at") @db.Timestamptz(6)
+  lastErrorCode                     String?                         @map("last_error_code") @db.VarChar(120)
+  lastErrorMessage                  String?                         @map("last_error_message")
+  createdAt                         DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime                        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization                      Organization                    @relation("PaymentProviderConnection_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  connectedByUser                   User?                           @relation("PaymentProviderConnection_connectedByUser", fields: [connectedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentTerminalConnection         PaymentTerminal[]               @relation("PaymentTerminal_providerConnection")
+  paymentTerminalOrderConnection    PaymentTerminalOrder[]          @relation("PaymentTerminalOrder_providerConnection")
+  mercadoPagoBranchConfigConnection MercadoPagoBranchConfig[]       @relation("MercadoPagoBranchConfig_providerConnection")
+  mercadoPagoPosConfigConnection    MercadoPagoPosConfig[]          @relation("MercadoPagoPosConfig_providerConnection")
 
   @@index([organizationId, provider, status], map: "idx_payment_provider_connections_org_provider_status")
   @@map("payment_provider_connections")
 }
 
 model PaymentTerminal {
-  id                   String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId       String                     @map("organization_id") @db.Uuid
-  branchId             String?                    @map("branch_id") @db.Uuid
-  providerConnectionId String                     @map("provider_connection_id") @db.Uuid
-  provider             PaymentIntegrationProvider @default(mercadopago)
-  terminalId           String                     @map("terminal_id") @db.VarChar(180)
-  terminalName         String?                    @map("terminal_name") @db.VarChar(180)
-  externalStoreId      String?                    @map("external_store_id") @db.VarChar(180)
-  externalPosId        String?                    @map("external_pos_id") @db.VarChar(180)
-  status               PaymentTerminalStatus      @default(unassigned)
-  lastSeenAt           DateTime?                  @map("last_seen_at") @db.Timestamptz(6)
-  createdAt            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  organization         Organization               @relation("PaymentTerminal_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branch               Branch?                    @relation("PaymentTerminal_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  providerConnection   PaymentProviderConnection  @relation("PaymentTerminal_providerConnection", fields: [providerConnectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                    String                      @map("organization_id") @db.Uuid
+  branchId                          String?                     @map("branch_id") @db.Uuid
+  providerConnectionId              String                      @map("provider_connection_id") @db.Uuid
+  provider                          PaymentIntegrationProvider  @default(mercadopago)
+  terminalId                        String                      @map("terminal_id") @db.VarChar(180)
+  terminalName                      String?                     @map("terminal_name") @db.VarChar(180)
+  externalStoreId                   String?                     @map("external_store_id") @db.VarChar(180)
+  externalPosId                     String?                     @map("external_pos_id") @db.VarChar(180)
+  mpStoreId                         String?                     @map("mp_store_id") @db.VarChar(180)
+  mpPosId                           String?                     @map("mp_pos_id") @db.VarChar(180)
+  operatingMode                     String?                     @map("operating_mode") @db.VarChar(40)
+  status                            PaymentTerminalStatus       @default(unassigned)
+  lastSeenAt                        DateTime?                   @map("last_seen_at") @db.Timestamptz(6)
+  createdAt                         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization                      Organization                @relation("PaymentTerminal_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                            Branch?                     @relation("PaymentTerminal_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  providerConnection                PaymentProviderConnection   @relation("PaymentTerminal_providerConnection", fields: [providerConnectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   posPaymentTerminalBindingTerminal PosPaymentTerminalBinding[] @relation("PosPaymentTerminalBinding_terminal")
-  paymentTerminalOrderTerminal PaymentTerminalOrder[] @relation("PaymentTerminalOrder_terminal")
+  paymentTerminalOrderTerminal      PaymentTerminalOrder[]      @relation("PaymentTerminalOrder_terminal")
 
   @@unique([providerConnectionId, terminalId], map: "uq_payment_terminal_connection_terminal")
   @@index([organizationId, branchId], map: "idx_payment_terminals_org_branch")
   @@map("payment_terminals")
+}
+
+model MercadoPagoBranchConfig {
+  id                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                    @map("organization_id") @db.Uuid
+  branchId             String                    @map("branch_id") @db.Uuid
+  providerConnectionId String                    @map("provider_connection_id") @db.Uuid
+  mpStoreId            String?                   @map("mp_store_id") @db.VarChar(180)
+  externalStoreId      String                    @map("external_store_id") @db.VarChar(80)
+  storeName            String                    @map("store_name") @db.VarChar(160)
+  status               String                    @default("pending") @db.VarChar(40)
+  createdAt            DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization         Organization              @relation("MercadoPagoBranchConfig_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch               Branch                    @relation("MercadoPagoBranchConfig_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  providerConnection   PaymentProviderConnection @relation("MercadoPagoBranchConfig_providerConnection", fields: [providerConnectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  posConfigs           MercadoPagoPosConfig[]    @relation("MercadoPagoPosConfig_branchConfig")
+
+  @@unique([organizationId, branchId], map: "uq_mp_branch_config_org_branch")
+  @@unique([providerConnectionId, externalStoreId], map: "uq_mp_branch_config_connection_external_store")
+  @@map("mercadopago_branch_configs")
+}
+
+model MercadoPagoPosConfig {
+  id                   String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String                    @map("organization_id") @db.Uuid
+  branchId             String                    @map("branch_id") @db.Uuid
+  posDeviceId          String                    @map("pos_device_id") @db.Uuid
+  providerConnectionId String                    @map("provider_connection_id") @db.Uuid
+  mpBranchConfigId     String                    @map("mp_branch_config_id") @db.Uuid
+  mpPosId              String?                   @map("mp_pos_id") @db.VarChar(180)
+  externalPosId        String                    @map("external_pos_id") @db.VarChar(80)
+  posName              String                    @map("pos_name") @db.VarChar(160)
+  status               String                    @default("pending") @db.VarChar(40)
+  createdAt            DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization         Organization              @relation("MercadoPagoPosConfig_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch               Branch                    @relation("MercadoPagoPosConfig_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  posDevice            PosDevice                 @relation("MercadoPagoPosConfig_posDevice", fields: [posDeviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  providerConnection   PaymentProviderConnection @relation("MercadoPagoPosConfig_providerConnection", fields: [providerConnectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  branchConfig         MercadoPagoBranchConfig   @relation("MercadoPagoPosConfig_branchConfig", fields: [mpBranchConfigId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organizationId, posDeviceId], map: "uq_mp_pos_config_org_pos_device")
+  @@unique([providerConnectionId, externalPosId], map: "uq_mp_pos_config_connection_external_pos")
+  @@map("mercadopago_pos_configs")
 }
 
 model PosPaymentTerminalBinding {
@@ -1206,43 +1262,43 @@ model PosPaymentTerminalBinding {
 }
 
 model PaymentTerminalOrder {
-  id                    String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId        String                     @map("organization_id") @db.Uuid
-  branchId              String                     @map("branch_id") @db.Uuid
-  posDeviceId           String                     @map("pos_device_id") @db.Uuid
-  saleId                String?                    @map("sale_id") @db.Uuid
-  salePaymentId         String?                    @unique @map("sale_payment_id") @db.Uuid
-  paymentTerminalId     String                     @map("payment_terminal_id") @db.Uuid
-  providerConnectionId  String                     @map("provider_connection_id") @db.Uuid
-  provider              PaymentIntegrationProvider @default(mercadopago)
-  externalOrderId       String?                    @map("external_order_id") @db.VarChar(180)
-  externalPaymentId     String?                    @map("external_payment_id") @db.VarChar(180)
-  externalReference     String                     @map("external_reference") @db.VarChar(80)
-  idempotencyKey        String                     @map("idempotency_key") @db.VarChar(180)
-  amount                Decimal                    @db.Decimal(12, 2)
-  currency              String                     @default("MXN") @db.Char(3)
-  status                PaymentTerminalOrderStatus @default(created)
-  statusDetail          String?                    @map("status_detail") @db.VarChar(180)
-  saleDraft             Json?                      @map("sale_draft")
-  checkoutPayments      Json?                      @map("checkout_payments")
-  expiresAt             DateTime?                  @map("expires_at") @db.Timestamptz(6)
-  approvedAt            DateTime?                  @map("approved_at") @db.Timestamptz(6)
-  rejectedAt            DateTime?                  @map("rejected_at") @db.Timestamptz(6)
-  canceledAt            DateTime?                  @map("canceled_at") @db.Timestamptz(6)
-  rawCreateResponse     Json?                      @map("raw_create_response")
-  rawLastStatusResponse Json?                      @map("raw_last_status_response")
-  createdByUserId       String                     @map("created_by_user_id") @db.Uuid
-  createdAt             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
-  organization          Organization               @relation("PaymentTerminalOrder_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branch                Branch                     @relation("PaymentTerminalOrder_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  posDevice             PosDevice                  @relation("PaymentTerminalOrder_posDevice", fields: [posDeviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sale                  Sale?                      @relation("PaymentTerminalOrder_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  salePayment           SalePayment?               @relation("PaymentTerminalOrder_salePayment", fields: [salePaymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  paymentTerminal       PaymentTerminal            @relation("PaymentTerminalOrder_terminal", fields: [paymentTerminalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  providerConnection    PaymentProviderConnection  @relation("PaymentTerminalOrder_providerConnection", fields: [providerConnectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser         User                       @relation("PaymentTerminalOrder_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  paymentTerminalEventOrder PaymentTerminalEvent[] @relation("PaymentTerminalEvent_order")
+  id                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId            String                     @map("organization_id") @db.Uuid
+  branchId                  String                     @map("branch_id") @db.Uuid
+  posDeviceId               String                     @map("pos_device_id") @db.Uuid
+  saleId                    String?                    @map("sale_id") @db.Uuid
+  salePaymentId             String?                    @unique @map("sale_payment_id") @db.Uuid
+  paymentTerminalId         String                     @map("payment_terminal_id") @db.Uuid
+  providerConnectionId      String                     @map("provider_connection_id") @db.Uuid
+  provider                  PaymentIntegrationProvider @default(mercadopago)
+  externalOrderId           String?                    @map("external_order_id") @db.VarChar(180)
+  externalPaymentId         String?                    @map("external_payment_id") @db.VarChar(180)
+  externalReference         String                     @map("external_reference") @db.VarChar(80)
+  idempotencyKey            String                     @map("idempotency_key") @db.VarChar(180)
+  amount                    Decimal                    @db.Decimal(12, 2)
+  currency                  String                     @default("MXN") @db.Char(3)
+  status                    PaymentTerminalOrderStatus @default(created)
+  statusDetail              String?                    @map("status_detail") @db.VarChar(180)
+  saleDraft                 Json?                      @map("sale_draft")
+  checkoutPayments          Json?                      @map("checkout_payments")
+  expiresAt                 DateTime?                  @map("expires_at") @db.Timestamptz(6)
+  approvedAt                DateTime?                  @map("approved_at") @db.Timestamptz(6)
+  rejectedAt                DateTime?                  @map("rejected_at") @db.Timestamptz(6)
+  canceledAt                DateTime?                  @map("canceled_at") @db.Timestamptz(6)
+  rawCreateResponse         Json?                      @map("raw_create_response")
+  rawLastStatusResponse     Json?                      @map("raw_last_status_response")
+  createdByUserId           String                     @map("created_by_user_id") @db.Uuid
+  createdAt                 DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization              Organization               @relation("PaymentTerminalOrder_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                    Branch                     @relation("PaymentTerminalOrder_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  posDevice                 PosDevice                  @relation("PaymentTerminalOrder_posDevice", fields: [posDeviceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                      Sale?                      @relation("PaymentTerminalOrder_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  salePayment               SalePayment?               @relation("PaymentTerminalOrder_salePayment", fields: [salePaymentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentTerminal           PaymentTerminal            @relation("PaymentTerminalOrder_terminal", fields: [paymentTerminalId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  providerConnection        PaymentProviderConnection  @relation("PaymentTerminalOrder_providerConnection", fields: [providerConnectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser             User                       @relation("PaymentTerminalOrder_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  paymentTerminalEventOrder PaymentTerminalEvent[]     @relation("PaymentTerminalEvent_order")
 
   @@unique([organizationId, provider, externalReference], map: "uq_payment_terminal_orders_external_reference")
   @@unique([organizationId, provider, idempotencyKey], map: "uq_payment_terminal_orders_idempotency")
@@ -1349,41 +1405,41 @@ model BillingProfile {
 }
 
 model Invoice {
-  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId         String            @map("organization_id") @db.Uuid
-  branchId               String?           @map("branch_id") @db.Uuid
-  customerId             String?           @map("customer_id") @db.Uuid
-  billingProfileId       String?           @map("billing_profile_id") @db.Uuid
-  invoiceType            InvoiceType       @map("invoice_type")
-  status                 InvoiceStatus     @default(draft)
-  cfdiUse                String?           @map("cfdi_use") @db.VarChar(10)
-  paymentMethodSat       String?           @map("payment_method_sat") @db.VarChar(10)
-  paymentFormSat         String?           @map("payment_form_sat") @db.VarChar(10)
-  currency               String            @default("MXN") @db.Char(3)
-  subtotal               Decimal           @default(0) @db.Decimal(12, 2)
-  taxTotal               Decimal           @default(0) @map("tax_total") @db.Decimal(12, 2)
-  total                  Decimal           @default(0) @db.Decimal(12, 2)
-  cfdiUuid               String?           @unique @map("cfdi_uuid") @db.VarChar(80)
-  providerInvoiceId      String?           @map("provider_invoice_id") @db.VarChar(120)
-  pacProvider            String?           @map("pac_provider") @db.VarChar(120)
-  pacStatus              String?           @map("pac_status") @db.VarChar(120)
-  issuedAt               DateTime?         @map("issued_at") @db.Timestamptz(6)
-  cancelledAt            DateTime?         @map("cancelled_at") @db.Timestamptz(6)
-  cancellationReason     String?           @map("cancellation_reason")
-  rawRequest             Json?             @map("raw_request")
-  rawResponse            Json?             @map("raw_response")
-  invoiceDate            DateTime?         @map("invoice_date") @db.Date
-  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
-  invoiceDocumentInvoice InvoiceDocument[] @relation("InvoiceDocument_invoice")
-  invoiceItemInvoice     InvoiceItem[]     @relation("InvoiceItem_invoice")
-  invoiceSaleInvoice     InvoiceSale[]     @relation("InvoiceSale_invoice")
+  id                           String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId               String                  @map("organization_id") @db.Uuid
+  branchId                     String?                 @map("branch_id") @db.Uuid
+  customerId                   String?                 @map("customer_id") @db.Uuid
+  billingProfileId             String?                 @map("billing_profile_id") @db.Uuid
+  invoiceType                  InvoiceType             @map("invoice_type")
+  status                       InvoiceStatus           @default(draft)
+  cfdiUse                      String?                 @map("cfdi_use") @db.VarChar(10)
+  paymentMethodSat             String?                 @map("payment_method_sat") @db.VarChar(10)
+  paymentFormSat               String?                 @map("payment_form_sat") @db.VarChar(10)
+  currency                     String                  @default("MXN") @db.Char(3)
+  subtotal                     Decimal                 @default(0) @db.Decimal(12, 2)
+  taxTotal                     Decimal                 @default(0) @map("tax_total") @db.Decimal(12, 2)
+  total                        Decimal                 @default(0) @db.Decimal(12, 2)
+  cfdiUuid                     String?                 @unique @map("cfdi_uuid") @db.VarChar(80)
+  providerInvoiceId            String?                 @map("provider_invoice_id") @db.VarChar(120)
+  pacProvider                  String?                 @map("pac_provider") @db.VarChar(120)
+  pacStatus                    String?                 @map("pac_status") @db.VarChar(120)
+  issuedAt                     DateTime?               @map("issued_at") @db.Timestamptz(6)
+  cancelledAt                  DateTime?               @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason           String?                 @map("cancellation_reason")
+  rawRequest                   Json?                   @map("raw_request")
+  rawResponse                  Json?                   @map("raw_response")
+  invoiceDate                  DateTime?               @map("invoice_date") @db.Date
+  createdAt                    DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  invoiceDocumentInvoice       InvoiceDocument[]       @relation("InvoiceDocument_invoice")
+  invoiceItemInvoice           InvoiceItem[]           @relation("InvoiceItem_invoice")
+  invoiceSaleInvoice           InvoiceSale[]           @relation("InvoiceSale_invoice")
   billingInvoiceRequestInvoice BillingInvoiceRequest[] @relation("BillingInvoiceRequest_invoice")
-  billingProfile         BillingProfile?   @relation("Invoice_billingProfile", fields: [billingProfileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branch                 Branch?           @relation("Invoice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  customer               Customer?         @relation("Invoice_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization           Organization      @relation("Invoice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pacWebhookEventInvoice PacWebhookEvent[] @relation("PacWebhookEvent_invoice")
+  billingProfile               BillingProfile?         @relation("Invoice_billingProfile", fields: [billingProfileId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                       Branch?                 @relation("Invoice_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer                     Customer?               @relation("Invoice_customer", fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                 Organization            @relation("Invoice_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pacWebhookEventInvoice       PacWebhookEvent[]       @relation("PacWebhookEvent_invoice")
 
   @@index([branchId], map: "idx_invoices_branch")
   @@index([organizationId], map: "idx_invoices_org")
@@ -1424,36 +1480,36 @@ model InvoiceItem {
 }
 
 model InvoiceDocument {
-  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId    String              @map("invoice_id") @db.Uuid
-  documentType InvoiceDocumentType @map("document_type")
-  storageUrl   String              @map("storage_url")
-  contentType  String?             @map("content_type") @db.VarChar(120)
-  contentSha256 String?            @map("content_sha256") @db.VarChar(64)
-  storageContent String?           @map("storage_content")
-  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  invoice      Invoice             @relation("InvoiceDocument_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId      String              @map("invoice_id") @db.Uuid
+  documentType   InvoiceDocumentType @map("document_type")
+  storageUrl     String              @map("storage_url")
+  contentType    String?             @map("content_type") @db.VarChar(120)
+  contentSha256  String?             @map("content_sha256") @db.VarChar(64)
+  storageContent String?             @map("storage_content")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice        Invoice             @relation("InvoiceDocument_invoice", fields: [invoiceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("invoice_documents")
 }
 
 model BillingReceipt {
-  id                                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                         String                  @map("organization_id") @db.Uuid
-  branchId                               String                  @map("branch_id") @db.Uuid
-  saleId                                 String                  @unique(map: "uq_billing_receipts_sale_id") @map("sale_id") @db.Uuid
-  receiptToken                           String                  @unique(map: "uq_billing_receipts_token") @map("receipt_token") @db.VarChar(160)
-  receiptUrl                             String                  @map("receipt_url") @db.VarChar(260)
-  status                                 BillingReceiptStatus    @default(active)
-  expiresAt                              DateTime                @map("expires_at") @db.Timestamptz(6)
-  usedAt                                 DateTime?               @map("used_at") @db.Timestamptz(6)
-  expiredAt                              DateTime?               @map("expired_at") @db.Timestamptz(6)
-  createdAt                              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                              DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
-  branch                                 Branch                  @relation("BillingReceipt_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                           Organization            @relation("BillingReceipt_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sale                                   Sale                    @relation("BillingReceipt_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  billingInvoiceRequestBillingReceipt    BillingInvoiceRequest[] @relation("BillingInvoiceRequest_billingReceipt")
+  id                                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                      String                  @map("organization_id") @db.Uuid
+  branchId                            String                  @map("branch_id") @db.Uuid
+  saleId                              String                  @unique(map: "uq_billing_receipts_sale_id") @map("sale_id") @db.Uuid
+  receiptToken                        String                  @unique(map: "uq_billing_receipts_token") @map("receipt_token") @db.VarChar(160)
+  receiptUrl                          String                  @map("receipt_url") @db.VarChar(260)
+  status                              BillingReceiptStatus    @default(active)
+  expiresAt                           DateTime                @map("expires_at") @db.Timestamptz(6)
+  usedAt                              DateTime?               @map("used_at") @db.Timestamptz(6)
+  expiredAt                           DateTime?               @map("expired_at") @db.Timestamptz(6)
+  createdAt                           DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                           DateTime                @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch                              Branch                  @relation("BillingReceipt_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                        Organization            @relation("BillingReceipt_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale                                Sale                    @relation("BillingReceipt_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  billingInvoiceRequestBillingReceipt BillingInvoiceRequest[] @relation("BillingInvoiceRequest_billingReceipt")
 
   @@index([branchId, status], map: "idx_billing_receipts_branch_status")
   @@index([expiresAt], map: "idx_billing_receipts_expires_at")
@@ -1462,29 +1518,29 @@ model BillingReceipt {
 }
 
 model BillingInvoiceRequest {
-  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId          String               @map("organization_id") @db.Uuid
-  branchId                String               @map("branch_id") @db.Uuid
-  billingReceiptId        String               @map("billing_receipt_id") @db.Uuid
-  saleId                  String               @map("sale_id") @db.Uuid
-  invoiceId               String?              @map("invoice_id") @db.Uuid
-  status                  InvoiceRequestStatus @default(received)
-  rfc                     String               @db.VarChar(13)
-  legalName               String               @map("legal_name") @db.VarChar(220)
-  taxRegime               String               @map("tax_regime") @db.VarChar(10)
-  zipCode                 String               @map("zip_code") @db.VarChar(10)
-  cfdiUse                 String               @map("cfdi_use") @db.VarChar(10)
-  email                   String               @db.VarChar(180)
-  errorCode               String?              @map("error_code") @db.VarChar(80)
-  errorMessage            String?              @map("error_message")
-  rawRequest              Json?                @map("raw_request")
-  createdAt               DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt               DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
-  billingReceipt          BillingReceipt       @relation("BillingInvoiceRequest_billingReceipt", fields: [billingReceiptId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  branch                  Branch               @relation("BillingInvoiceRequest_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  invoice                 Invoice?             @relation("BillingInvoiceRequest_invoice", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization            Organization         @relation("BillingInvoiceRequest_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sale                    Sale                 @relation("BillingInvoiceRequest_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  branchId         String               @map("branch_id") @db.Uuid
+  billingReceiptId String               @map("billing_receipt_id") @db.Uuid
+  saleId           String               @map("sale_id") @db.Uuid
+  invoiceId        String?              @map("invoice_id") @db.Uuid
+  status           InvoiceRequestStatus @default(received)
+  rfc              String               @db.VarChar(13)
+  legalName        String               @map("legal_name") @db.VarChar(220)
+  taxRegime        String               @map("tax_regime") @db.VarChar(10)
+  zipCode          String               @map("zip_code") @db.VarChar(10)
+  cfdiUse          String               @map("cfdi_use") @db.VarChar(10)
+  email            String               @db.VarChar(180)
+  errorCode        String?              @map("error_code") @db.VarChar(80)
+  errorMessage     String?              @map("error_message")
+  rawRequest       Json?                @map("raw_request")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  billingReceipt   BillingReceipt       @relation("BillingInvoiceRequest_billingReceipt", fields: [billingReceiptId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  branch           Branch               @relation("BillingInvoiceRequest_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invoice          Invoice?             @relation("BillingInvoiceRequest_invoice", fields: [invoiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization     Organization         @relation("BillingInvoiceRequest_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sale             Sale                 @relation("BillingInvoiceRequest_sale", fields: [saleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([billingReceiptId], map: "idx_invoice_requests_receipt_id")
   @@index([rfc], map: "idx_invoice_requests_rfc")

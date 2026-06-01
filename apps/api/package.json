@@ -14,6 +14,7 @@
     "format": "node -e \"console.log('format pending: no formatter installed in Sprint 0 minimal setup')\"",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:generate": "prisma generate"
   },

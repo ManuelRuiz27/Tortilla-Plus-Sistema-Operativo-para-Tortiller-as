@@ -952,12 +952,7 @@ async function createSaleInventoryMovement(
     },
   });
 
-  const nextQuantity = ((toMillis(stock.quantity) - toMillis(quantity)) / 1000).toFixed(3);
   const allowsNegative = ["tortilla", "masa"].includes(stockProduct.productType);
-
-  if (Number(nextQuantity) < 0 && !allowsNegative) {
-    throw new DomainError(409, "NEGATIVE_STOCK_NOT_ALLOWED", "Stock insuficiente para producto retail.");
-  }
 
   const movement = await tx.inventoryMovement.create({
     data: {
@@ -974,18 +969,31 @@ async function createSaleInventoryMovement(
     },
   });
 
-  await tx.inventoryStock.update({
+  const stockUpdate = await tx.inventoryStock.updateMany({
+    where: {
+      branchId,
+      productId: stockProductId,
+      ...(allowsNegative ? {} : { quantity: { gte: quantity } }),
+    },
+    data: {
+      quantity: { decrement: quantity },
+      updatedAt: new Date(),
+    },
+  });
+
+  if (stockUpdate.count !== 1) {
+    throw new DomainError(409, "NEGATIVE_STOCK_NOT_ALLOWED", "Stock insuficiente para producto retail.");
+  }
+
+  const updatedStock = await tx.inventoryStock.findUniqueOrThrow({
     where: {
       branchId_productId: {
         branchId,
         productId: stockProductId,
       },
     },
-    data: {
-      quantity: nextQuantity,
-      updatedAt: new Date(),
-    },
   });
+  const nextQuantity = normalizeQuantity(updatedStock.quantity);
 
   if (Number(nextQuantity) < 0) {
     await tx.auditLog.create({

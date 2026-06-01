@@ -59,7 +59,7 @@ test("card and transfer payments require reference", () => {
     (error) => error instanceof DomainError && error.code === "TRANSFER_REFERENCE_REQUIRED",
   );
   assert.deepEqual(parseSalePayments([{ paymentMethod: "card", amount: "10", reference: "TERM-1" }]), [
-    { paymentMethod: "card", amount: "10.00", reference: "TERM-1", provider: null },
+    { paymentMethod: "card", amount: "10.00", reference: "TERM-1", provider: null, terminalOrderId: null },
   ]);
 });
 

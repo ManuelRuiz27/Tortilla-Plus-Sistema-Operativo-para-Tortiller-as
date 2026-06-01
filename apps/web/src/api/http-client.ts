@@ -9,7 +9,22 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 };
 
 function getBaseUrl(): string {
-  return import.meta.env.VITE_API_BASE_URL || defaultBaseUrl;
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL;
+  const configuredApiUrl = import.meta.env.VITE_API_URL;
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/$/, "");
+  }
+
+  if (configuredApiUrl) {
+    return `${configuredApiUrl.replace(/\/$/, "")}/api/v1`;
+  }
+
+  if (import.meta.env.PROD) {
+    throw new Error("VITE_API_BASE_URL or VITE_API_URL is required in production");
+  }
+
+  return defaultBaseUrl;
 }
 
 export async function httpClient<TResponse>(

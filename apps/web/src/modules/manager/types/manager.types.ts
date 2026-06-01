@@ -289,6 +289,9 @@ export type MercadoPagoTerminal = {
   terminalName: string | null;
   externalStoreId: string | null;
   externalPosId: string | null;
+  mpStoreId?: string | null;
+  mpPosId?: string | null;
+  operatingMode?: string | null;
   status: "active" | "inactive" | "unassigned" | "error";
   lastSeenAt: string | null;
   binding: {
@@ -297,6 +300,39 @@ export type MercadoPagoTerminal = {
     posDeviceName: string;
     status: "active" | "inactive";
   } | null;
+};
+
+export type MercadoPagoBranchConfig = {
+  id: string;
+  organizationId: string;
+  branchId: string;
+  providerConnectionId: string;
+  mpStoreId: string | null;
+  externalStoreId: string;
+  storeName: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MercadoPagoPosConfig = {
+  id: string;
+  organizationId: string;
+  branchId: string;
+  posDeviceId: string;
+  providerConnectionId: string;
+  mpBranchConfigId: string;
+  mpPosId: string | null;
+  externalPosId: string;
+  posName: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MercadoPagoProvisioningSummary = {
+  branchConfig: MercadoPagoBranchConfig | null;
+  posConfig: MercadoPagoPosConfig | null;
 };
 
 export type CashMovement = {

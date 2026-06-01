@@ -345,6 +345,17 @@ export function terminalOrderStatusRequest(orderId: string): Promise<TerminalOrd
   return httpClient<TerminalOrder>(`/pos/terminal-orders/${orderId}`);
 }
 
+export function openTerminalOrderRequest(payload: { branchId: string; posDeviceId: string }): Promise<TerminalOrder | null> {
+  if (useMocks) {
+    return Promise.resolve(null);
+  }
+
+  const params = new URLSearchParams();
+  params.set("branchId", payload.branchId);
+  params.set("posDeviceId", payload.posDeviceId);
+  return httpClient<TerminalOrder | null>(`/pos/terminal-orders/open?${params.toString()}`);
+}
+
 export function cancelTerminalOrderRequest(orderId: string, idempotencyKey: string): Promise<TerminalOrder> {
   if (useMocks) {
     return terminalOrderStatusRequest(orderId).then((order) => ({ ...order, status: "canceled", statusDetail: "mock-canceled" }));

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { prisma } from "../../src/lib/prisma.js";
+import { env } from "../../src/config/env.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import { login } from "../../src/services/auth-service.js";
 import {
@@ -12,6 +13,8 @@ import {
 } from "../../src/services/physical-integration-service.js";
 
 type LoginResult = Awaited<ReturnType<typeof login>>;
+
+env.PHYSICAL_INTEGRATIONS_MODE = "mock";
 
 function asAuthenticatedUser(session: LoginResult): AuthenticatedUser {
   assert.ok(session.user.organizationId, "demo user must have an organization");

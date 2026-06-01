@@ -1,13 +1,18 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, MonitorSmartphone, PackageCheck, RefreshCw, ShieldCheck, UserRoundCog } from "lucide-react";
 import { useState } from "react";
 import {
+  mercadoPagoActivatePdvRequest,
   mercadoPagoBindTerminalRequest,
   mercadoPagoConnectionRequest,
   mercadoPagoHealthCheckRequest,
   mercadoPagoOAuthStartRequest,
+  mercadoPagoProvisioningRequest,
+  mercadoPagoProvisionPosRequest,
+  mercadoPagoProvisionStoreRequest,
   mercadoPagoSyncTerminalsRequest,
   mercadoPagoTerminalsRequest,
+  mercadoPagoValidateReadyRequest,
   settingsSummaryRequest
 } from "../../../api/manager.api";
 import { subscriptionFeaturesRequest } from "../../../api/subscriptions.api";
@@ -22,6 +27,8 @@ import { labelFeature, labelPermission, labelRole, labelStatus } from "../../../
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"general" | "pos" | "terminales" | "integraciones">("general");
   const [selectedPosDeviceId, setSelectedPosDeviceId] = useState("");
+  const [terminalActionMessage, setTerminalActionMessage] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const branchName = useBranchStore((state) => state.activeBranchName);
   const branchId = useBranchStore((state) => state.activeBranchId);
@@ -44,6 +51,11 @@ export function SettingsPage() {
     queryFn: () => mercadoPagoTerminalsRequest(branchId),
     queryKey: ["mercadopago-terminals", branchId]
   });
+  const provisioningQuery = useQuery({
+    enabled: activeTab === "terminales" && Boolean(branchId),
+    queryFn: () => mercadoPagoProvisioningRequest({ branchId: branchId ?? "", posDeviceId: selectedPosDeviceId || null }),
+    queryKey: ["mercadopago-provisioning", branchId, selectedPosDeviceId]
+  });
   const subscriptionMutation = useMutation({
     mutationFn: subscriptionFeaturesRequest,
     onSuccess: setSubscription
@@ -63,11 +75,47 @@ export function SettingsPage() {
   });
   const syncTerminalsMutation = useMutation({
     mutationFn: () => mercadoPagoSyncTerminalsRequest(branchId),
-    onSuccess: () => void terminalsQuery.refetch()
+    onSuccess: () => {
+      void terminalsQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["mercadopago-terminals"] });
+    }
   });
   const bindTerminalMutation = useMutation({
     mutationFn: (paymentTerminalId: string) => mercadoPagoBindTerminalRequest({ posDeviceId: selectedPosDeviceId, paymentTerminalId }),
-    onSuccess: () => void terminalsQuery.refetch()
+    onSuccess: () => {
+      void terminalsQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["mercadopago-terminals"] });
+    }
+  });
+  const provisionStoreMutation = useMutation({
+    mutationFn: () => mercadoPagoProvisionStoreRequest(branchId ?? ""),
+    onError: (error) => setTerminalActionMessage(error instanceof Error ? error.message : "No se pudo preparar la sucursal Mercado Pago."),
+    onSuccess: () => {
+      setTerminalActionMessage("Sucursal Mercado Pago preparada.");
+      void provisioningQuery.refetch();
+    }
+  });
+  const provisionPosMutation = useMutation({
+    mutationFn: () => mercadoPagoProvisionPosRequest(selectedPosDeviceId),
+    onError: (error) => setTerminalActionMessage(error instanceof Error ? error.message : "No se pudo preparar la caja Mercado Pago."),
+    onSuccess: () => {
+      setTerminalActionMessage("Caja Mercado Pago preparada.");
+      void provisioningQuery.refetch();
+    }
+  });
+  const activatePdvMutation = useMutation({
+    mutationFn: (paymentTerminalId: string) => mercadoPagoActivatePdvRequest(paymentTerminalId),
+    onError: (error) => setTerminalActionMessage(error instanceof Error ? error.message : "No se pudo activar PDV."),
+    onSuccess: () => {
+      setTerminalActionMessage("Activacion PDV enviada. Sincroniza si la terminal solicita reinicio.");
+      void terminalsQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["mercadopago-terminals"] });
+    }
+  });
+  const validateReadyMutation = useMutation({
+    mutationFn: (paymentTerminalId: string) => mercadoPagoValidateReadyRequest(paymentTerminalId),
+    onError: (error) => setTerminalActionMessage(error instanceof Error ? error.message : "La terminal no esta lista."),
+    onSuccess: () => setTerminalActionMessage("Terminal lista para cobrar.")
   });
 
   if (isLoading) return <LoadingState message="Cargando ajustes..." />;
@@ -76,14 +124,32 @@ export function SettingsPage() {
   const branchPosDevices = data.posDevices.filter((device) => !branchId || device.branchId === branchId);
   const mpConnection = connectionQuery.data;
   const terminals = terminalsQuery.data ?? [];
+  const provisioning = provisioningQuery.data;
   const connectionIsActive = mpConnection?.status === "active";
+  const selectedPosHasTerminal = terminals.some(
+    (terminal) =>
+      terminal.binding?.status === "active" &&
+      terminal.binding.posDeviceId === selectedPosDeviceId
+  );
+  const selectedPosTerminal = terminals.find(
+    (terminal) =>
+      terminal.binding?.status === "active" &&
+      terminal.binding.posDeviceId === selectedPosDeviceId
+  );
+  const selectedPosTerminalIsPdv = !selectedPosTerminal?.operatingMode || selectedPosTerminal.operatingMode === "PDV";
+  const branchStoreReady = Boolean(provisioning?.branchConfig?.mpStoreId);
+  const posReady = Boolean(provisioning?.posConfig?.mpPosId);
   const wizardSteps = [
     { label: "Conectar cuenta", done: connectionIsActive },
-    { label: "Sincronizar terminales", done: terminals.length > 0 },
     { label: "Seleccionar sucursal", done: Boolean(branchId) },
-    { label: "Asignar terminal a POS", done: terminals.some((terminal) => terminal.binding) },
+    { label: "Preparar Store Mercado Pago", done: branchStoreReady },
+    { label: "Seleccionar caja/POS", done: Boolean(selectedPosDeviceId) },
+    { label: "Preparar POS Mercado Pago", done: posReady },
+    { label: "Sincronizar terminales", done: terminals.length > 0 },
+    { label: "Asignar terminal a POS", done: Boolean(selectedPosDeviceId) && selectedPosHasTerminal },
+    { label: "Terminal en modo PDV", done: selectedPosHasTerminal && selectedPosTerminalIsPdv },
     { label: "Probar conexion", done: Boolean(mpConnection?.lastHealthCheckAt) },
-    { label: "Cobrar desde POS", done: terminals.some((terminal) => terminal.binding?.status === "active") }
+    { label: "Cobrar desde POS", done: selectedPosHasTerminal && selectedPosTerminalIsPdv }
   ];
 
   return (
@@ -149,6 +215,57 @@ export function SettingsPage() {
               </div>
             </div>
 
+            <div className="mt-5 rounded-md border border-tp-border p-4">
+              <h3 className="text-sm font-semibold">Preparacion Mercado Pago</h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="rounded-md bg-tp-soft p-3 text-sm">
+                  <p className="font-semibold">Store de sucursal</p>
+                  <p className="mt-1 text-tp-muted">{provisioning?.branchConfig?.mpStoreId ?? "Pendiente"}</p>
+                  <p className="mt-1 text-xs text-tp-muted">{provisioning?.branchConfig?.externalStoreId ?? "Sin external store"}</p>
+                </div>
+                <div className="rounded-md bg-tp-soft p-3 text-sm">
+                  <p className="font-semibold">POS Mercado Pago</p>
+                  <p className="mt-1 text-tp-muted">{provisioning?.posConfig?.mpPosId ?? "Pendiente"}</p>
+                  <p className="mt-1 text-xs text-tp-muted">{provisioning?.posConfig?.externalPosId ?? "Selecciona caja"}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  disabled={!branchId || !connectionIsActive || provisionStoreMutation.isPending}
+                  onClick={() => provisionStoreMutation.mutate()}
+                  variant="secondary"
+                >
+                  Preparar sucursal en Mercado Pago
+                </Button>
+                <Button
+                  disabled={!selectedPosDeviceId || !branchStoreReady || provisionPosMutation.isPending}
+                  onClick={() => provisionPosMutation.mutate()}
+                  variant="secondary"
+                >
+                  Preparar caja en Mercado Pago
+                </Button>
+                {selectedPosTerminal ? (
+                  <>
+                    <Button
+                      disabled={activatePdvMutation.isPending || selectedPosTerminal.operatingMode === "PDV"}
+                      onClick={() => activatePdvMutation.mutate(selectedPosTerminal.id)}
+                      variant="secondary"
+                    >
+                      Activar modo PDV
+                    </Button>
+                    <Button
+                      disabled={validateReadyMutation.isPending}
+                      onClick={() => validateReadyMutation.mutate(selectedPosTerminal.id)}
+                      variant="secondary"
+                    >
+                      Validar terminal lista
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              {terminalActionMessage ? <p className="mt-3 rounded-md bg-tp-soft p-3 text-sm">{terminalActionMessage}</p> : null}
+            </div>
+
             <div className="mt-5 grid gap-3 md:grid-cols-[240px_1fr]">
               <label className="text-sm font-semibold">
                 POS
@@ -167,6 +284,14 @@ export function SettingsPage() {
                       <p className="font-semibold">{terminal.terminalName ?? terminal.terminalId}</p>
                       <p className="text-xs text-tp-muted">{terminal.terminalId}</p>
                       <p className="text-xs text-tp-muted">{terminal.binding ? `Asignada a ${terminal.binding.posDeviceName}` : "Sin asignar"}</p>
+                      <p className="text-xs text-tp-muted">Store MP: {terminal.mpStoreId ?? terminal.externalStoreId ?? "sin store"}</p>
+                      <p className="text-xs text-tp-muted">POS MP: {terminal.mpPosId ?? terminal.externalPosId ?? "sin POS"}</p>
+                      <p className="text-xs text-tp-muted">
+                        Modo: {terminal.operatingMode === "PDV" ? "PDV" : terminal.operatingMode ? "No PDV" : "desconocido"}
+                      </p>
+                      {terminal.operatingMode && terminal.operatingMode !== "PDV" ? (
+                        <p className="text-xs text-tp-danger">Configura modo PDV en Mercado Pago Point antes de cobrar.</p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge tone={terminal.status === "active" ? "success" : terminal.status === "error" ? "danger" : "warning"}>{labelStatus(terminal.status)}</StatusBadge>

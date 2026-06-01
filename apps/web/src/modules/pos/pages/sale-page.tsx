@@ -3,13 +3,14 @@ import { CreditCard, Scale, Wheat } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
-import { managerCustomersRequest, mercadoPagoTerminalsRequest } from "../../../api/manager.api";
+import { managerCustomersRequest, mercadoPagoTerminalsRequest, operationalPosDevicesRequest } from "../../../api/manager.api";
 import {
   cancelDraftSaleRequest,
   cancelTerminalOrderRequest,
   confirmTerminalOrderCheckoutRequest,
   createTerminalOrderRequest,
   checkoutSaleRequest,
+  openTerminalOrderRequest,
   terminalOrderStatusRequest,
   quoteSaleRequest
 } from "../../../api/sales.api";
@@ -17,6 +18,7 @@ import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { useAuthStore } from "../../../shared/stores/auth.store";
 import { useBranchStore } from "../../../shared/stores/branch.store";
+import { usePosDeviceStore } from "../../../shared/stores/pos-device.store";
 import { createId } from "../../../shared/utils/id";
 import { CartPanel } from "../components/cart-panel";
 import { CustomerSelector } from "../components/customer-selector";
@@ -49,6 +51,30 @@ function calculateCartTotal(items: PosCartItem[]): number {
   return Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
 }
 
+function terminalErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiErrorException)) {
+    return "No se pudo completar la operacion con terminal.";
+  }
+
+  const messages: Record<string, string> = {
+    POS_DEVICE_REQUIRED: "Selecciona la caja/POS antes de cobrar con Mercado Pago.",
+    TERMINAL_NOT_ASSIGNED: "Esta caja no tiene terminal Mercado Pago asignada.",
+    MP_STORE_NOT_CONFIGURED: "La sucursal no tiene Store Mercado Pago configurado.",
+    MP_POS_NOT_CONFIGURED: "La caja no tiene POS Mercado Pago configurado.",
+    TERMINAL_STORE_MISMATCH: "La terminal esta asociada a otra sucursal Mercado Pago.",
+    TERMINAL_POS_MISMATCH: "La terminal esta asociada a otro POS Mercado Pago.",
+    TERMINAL_NOT_PDV: "La terminal no esta en modo PDV. Configurala en Mercado Pago Point antes de cobrar.",
+    MERCADOPAGO_NOT_CONNECTED: "Mercado Pago no esta conectado para esta organizacion.",
+    MERCADOPAGO_CONNECTION_INACTIVE: "La conexion de Mercado Pago no esta activa.",
+    TERMINAL_PAYMENT_NOT_APPROVED: "El pago aun no esta aprobado en la terminal.",
+    TERMINAL_ORDER_ALREADY_CHECKED_OUT: "Esta orden ya fue usada en una venta.",
+    TERMINAL_PAYMENT_AMOUNT_MISMATCH: "El monto aprobado en terminal no coincide con la venta.",
+    MERCADOPAGO_POINT_CREATE_FAILED: "Mercado Pago rechazo la orden. Revisa terminal, modo PDV y cuenta vinculada."
+  };
+
+  return messages[error.apiError.error] ?? error.apiError.message;
+}
+
 export function SalePage() {
   const [searchParams] = useSearchParams();
   const branchId = useBranchStore((state) => state.activeBranchId);
@@ -71,6 +97,10 @@ export function SalePage() {
   const [terminalError, setTerminalError] = useState<string | null>(null);
   const [quickSaleProduct, setQuickSaleProduct] = useState<QuickSaleProduct | null>(null);
   const user = useAuthStore((state) => state.user);
+  const activePosDeviceId = usePosDeviceStore((state) => state.activePosDeviceId);
+  const activePosDeviceName = usePosDeviceStore((state) => state.activePosDeviceName);
+  const setActivePosDevice = usePosDeviceStore((state) => state.setActivePosDevice);
+  const clearActivePosDevice = usePosDeviceStore((state) => state.clearActivePosDevice);
   const items = usePosCartStore((state) => state.items);
   const subtotal = usePosCartStore((state) => state.subtotal);
   const total = usePosCartStore((state) => state.total);
@@ -92,9 +122,36 @@ export function SalePage() {
   const terminalsQuery = useQuery({
     enabled: Boolean(branchId),
     queryFn: () => mercadoPagoTerminalsRequest(branchId),
-    queryKey: ["mercadopago-terminals-pos", branchId]
+    queryKey: ["mercadopago-terminals", branchId]
   });
-  const assignedTerminal = terminalsQuery.data?.find((terminal) => terminal.binding?.status === "active") ?? null;
+  const posDevicesQuery = useQuery({
+    enabled: Boolean(branchId),
+    queryFn: () => operationalPosDevicesRequest(branchId ?? ""),
+    queryKey: ["pos-devices", branchId]
+  });
+  const openTerminalOrderQuery = useQuery({
+    enabled: Boolean(branchId && activePosDeviceId),
+    queryFn: () => openTerminalOrderRequest({ branchId: branchId ?? "", posDeviceId: activePosDeviceId ?? "" }),
+    queryKey: ["mercadopago-open-terminal-order", branchId, activePosDeviceId],
+    refetchOnWindowFocus: false
+  });
+  const assignedTerminal = terminalsQuery.data?.find(
+    (terminal) =>
+      terminal.binding?.status === "active" &&
+      terminal.binding.posDeviceId === activePosDeviceId
+  ) ?? null;
+  const mercadoPagoDisabledReason = !activePosDeviceId
+    ? "Selecciona la caja/POS antes de cobrar con Mercado Pago."
+    : !assignedTerminal
+      ? "Esta caja no tiene terminal Mercado Pago asignada."
+      : !assignedTerminal.mpStoreId && !assignedTerminal.externalStoreId
+        ? "La terminal no tiene Store Mercado Pago configurado."
+        : !assignedTerminal.mpPosId && !assignedTerminal.externalPosId
+          ? "La terminal no tiene POS Mercado Pago configurado."
+          : assignedTerminal.operatingMode && assignedTerminal.operatingMode !== "PDV"
+            ? "La terminal no esta en modo PDV. Configurala en Mercado Pago Point antes de cobrar."
+            : null;
+  const autoConfirmTerminalPayment = import.meta.env.VITE_POS_AUTO_CONFIRM_TERMINAL_PAYMENT !== "false";
   const tortillaKgPrice = tortillaProduct ? getProductPrice(tortillaProduct, "by_kg") : 0;
   const masaKgPrice = masaProduct ? getProductPrice(masaProduct, "by_kg") : 0;
   const packagePrice = package800gProduct ? getProductPrice(package800gProduct, "by_package") : 0;
@@ -152,9 +209,16 @@ export function SalePage() {
       if (!branchId) {
         throw new Error("Sucursal no seleccionada.");
       }
+      if (!activePosDeviceId) {
+        throw new Error("Selecciona la caja/POS antes de cobrar con Mercado Pago.");
+      }
+      if (mercadoPagoDisabledReason) {
+        throw new Error(mercadoPagoDisabledReason);
+      }
       const checkoutItems = checkoutDraft?.items ?? items;
       return createTerminalOrderRequest({
         branchId,
+        posDeviceId: activePosDeviceId,
         amount: payload.amount,
         saleDraft: {
           customerId: selectedCustomer?.id,
@@ -166,7 +230,7 @@ export function SalePage() {
       }, createId());
     },
     onError: (error) => {
-      setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo enviar el cobro a terminal.");
+      setTerminalError(error instanceof Error && !(error instanceof ApiErrorException) ? error.message : terminalErrorMessage(error));
     },
     onSuccess: (order) => {
       setTerminalError(null);
@@ -176,7 +240,7 @@ export function SalePage() {
   const confirmTerminalCheckoutMutation = useMutation({
     mutationFn: (orderId: string) => confirmTerminalOrderCheckoutRequest(orderId, createId()),
     onError: (error) => {
-      setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo confirmar la venta con terminal.");
+      setTerminalError(terminalErrorMessage(error));
     },
     onSuccess: (sale) => {
       clearCart();
@@ -191,8 +255,20 @@ export function SalePage() {
   });
   const cancelTerminalOrderMutation = useMutation({
     mutationFn: (orderId: string) => cancelTerminalOrderRequest(orderId, createId()),
+    onError: (error) => setTerminalError(terminalErrorMessage(error)),
     onSuccess: setTerminalOrder
   });
+
+  function handlePosDeviceChange(posDeviceId: string) {
+    const device = posDevicesQuery.data?.find((item) => item.id === posDeviceId);
+    if (!device) {
+      clearActivePosDevice();
+      return;
+    }
+
+    setActivePosDevice({ id: device.id, name: device.name });
+    setTerminalError(null);
+  }
 
   async function applyQuote(nextItems: PosCartItem[], customer = selectedCustomer, failOnError = false): Promise<PosCartItem[]> {
     if (!branchId || nextItems.length === 0) {
@@ -351,16 +427,38 @@ export function SalePage() {
       try {
         const next = await terminalOrderStatusRequest(terminalOrder.id);
         setTerminalOrder(next);
-        if (next.status === "approved") {
+        if (next.status === "approved" && autoConfirmTerminalPayment) {
           confirmTerminalCheckoutMutation.mutate(next.id);
         }
       } catch (error) {
-        setTerminalError(error instanceof ApiErrorException ? error.apiError.message : "No se pudo consultar la terminal.");
+        setTerminalError(terminalErrorMessage(error));
       }
     }, 2500);
 
     return () => window.clearInterval(interval);
-  }, [confirmTerminalCheckoutMutation, terminalOrder]);
+  }, [autoConfirmTerminalPayment, confirmTerminalCheckoutMutation, terminalOrder]);
+
+  useEffect(() => {
+    const openOrder = openTerminalOrderQuery.data;
+    if (!openOrder || terminalOrder?.id === openOrder.id) {
+      return;
+    }
+
+    setTerminalOrder(openOrder);
+    setTerminalError(null);
+    setIsPaymentOpen(false);
+  }, [openTerminalOrderQuery.data, terminalOrder?.id]);
+
+  useEffect(() => {
+    if (!activePosDeviceId || !posDevicesQuery.data) {
+      return;
+    }
+
+    const device = posDevicesQuery.data.find((item) => item.id === activePosDeviceId);
+    if (!device || device.branchId !== branchId) {
+      clearActivePosDevice();
+    }
+  }, [activePosDeviceId, branchId, clearActivePosDevice, posDevicesQuery.data]);
 
   useEffect(() => {
     if (!queryCustomerId || !customersQuery.data || selectedCustomer?.id === queryCustomerId) {
@@ -445,7 +543,26 @@ export function SalePage() {
               <h1 className="text-2xl font-semibold">Nueva venta</h1>
               <p className="mt-1 text-sm text-tp-muted">Agrega tortillas, masa, paquetes o productos de mostrador.</p>
             </div>
+            <label className="w-full text-sm font-semibold sm:w-64">
+              Caja/POS
+              <select
+                className="mt-2 h-11 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
+                disabled={!branchId || posDevicesQuery.isLoading}
+                onChange={(event) => handlePosDeviceChange(event.target.value)}
+                value={activePosDeviceId ?? ""}
+              >
+                <option value="">Selecciona caja</option>
+                {(posDevicesQuery.data ?? []).map((device) => (
+                  <option key={device.id} value={device.id}>{device.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
+          {activePosDeviceName ? (
+            <p className="mt-3 text-xs text-tp-muted">Caja activa: {activePosDeviceName}</p>
+          ) : (
+            <p className="mt-3 text-xs text-tp-danger">Selecciona una caja para habilitar cobros Mercado Pago.</p>
+          )}
         </div>
 
         <div className="mt-5">
@@ -501,9 +618,9 @@ export function SalePage() {
             <Scale className="h-5 w-5" aria-hidden="true" />
             Bascula futura
           </Button>
-          <Button className="min-h-14 justify-start px-5 text-left" disabled={!assignedTerminal} variant="secondary">
+          <Button className="min-h-14 justify-start px-5 text-left" disabled={Boolean(mercadoPagoDisabledReason)} variant="secondary">
             <CreditCard className="h-5 w-5" aria-hidden="true" />
-            {assignedTerminal ? "Terminal Mercado Pago lista" : "Cobro con terminal"}
+            {mercadoPagoDisabledReason ? "Cobro Mercado Pago no listo" : "Terminal Mercado Pago lista"}
           </Button>
         </div>
 
@@ -541,6 +658,7 @@ export function SalePage() {
         onSubmit={(payload) => checkoutMutation.mutate(payload)}
         open={isPaymentOpen}
         selectedCustomer={selectedCustomer}
+        mercadoPagoDisabledReason={mercadoPagoDisabledReason}
         terminalName={assignedTerminal?.terminalName ?? assignedTerminal?.terminalId ?? null}
         total={checkoutDraft?.total ?? total}
       />
@@ -554,6 +672,9 @@ export function SalePage() {
             <p className="mt-2 text-sm text-tp-muted">
               {assignedTerminal?.terminalName ?? assignedTerminal?.terminalId ?? "Terminal asignada"} - {terminalOrder.amount} {terminalOrder.currency}
             </p>
+            {!autoConfirmTerminalPayment && terminalOrder.status === "approved" ? (
+              <p className="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-700">Pago aprobado. Confirma la venta para cerrar el ticket.</p>
+            ) : null}
             <p className="mt-3 rounded-md bg-tp-soft p-3 text-sm">Estado: {terminalOrder.status}</p>
             {terminalError ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-tp-danger">{terminalError}</p> : null}
             <div className="mt-4 flex gap-2">

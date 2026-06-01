@@ -5,11 +5,13 @@ test("health response shape", () => {
   assert.deepEqual(
     {
       status: "ok",
-      service: "tortilla-plus-backend",
+      service: "tortilla-plus-api",
+      version: "0.1.0",
     },
     {
       status: "ok",
-      service: "tortilla-plus-backend",
+      service: "tortilla-plus-api",
+      version: "0.1.0",
     },
   );
 });

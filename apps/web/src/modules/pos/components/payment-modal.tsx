@@ -16,12 +16,13 @@ type PaymentModalProps = {
   selectedCustomer: PosSelectedCustomer | null;
   canUseManualCard: boolean;
   terminalName?: string | null;
+  mercadoPagoDisabledReason?: string | null;
   onClose: () => void;
   onSubmit: (payload: { payments: PosPayment[]; changeAmount?: number; authorizationPin?: string }) => void;
   onMercadoPagoSubmit: (payload: { amount: string; payments?: PosPayment[]; authorizationPin?: string }) => void;
 };
 
-export function PaymentModal({ open, total, isSubmitting, error, selectedCustomer, canUseManualCard, terminalName, onClose, onSubmit, onMercadoPagoSubmit }: PaymentModalProps) {
+export function PaymentModal({ open, total, isSubmitting, error, selectedCustomer, canUseManualCard, terminalName, mercadoPagoDisabledReason, onClose, onSubmit, onMercadoPagoSubmit }: PaymentModalProps) {
   const [mode, setMode] = useState<PaymentMode>("cash");
   const [cashAmount, setCashAmount] = useState(String(total));
   const [cardAmount, setCardAmount] = useState(String(total));
@@ -67,13 +68,14 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
   const isCashValid = cashParsed.ok && cash >= total;
   const isTransferValid = Boolean(transferReference.trim());
   const isCreditValid = canUseCredit && (!creditExceedsLimit || Boolean(authorizationPin.trim()));
+  const canUseMercadoPago = Boolean(terminalName) && !mercadoPagoDisabledReason;
   const isMixedValid =
     cashParsed.ok &&
     cardParsed.ok &&
     transferParsed.ok &&
     creditParsed.ok &&
     Math.abs(mixedDifference) <= 0.009 &&
-    (card <= 0 || Boolean(terminalName)) &&
+    (card <= 0 || canUseMercadoPago) &&
     (transfer <= 0 || isTransferValid) &&
     (credit <= 0 || isCreditValid);
 
@@ -227,9 +229,11 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
             <>
               <div className="rounded-md bg-tp-soft p-3 text-sm">
                 <p className="font-semibold">Tarjeta Mercado Pago</p>
-                <p className="mt-1 text-tp-muted">{terminalName ? `Terminal: ${terminalName}` : "Sin terminal asignada"}</p>
+                <p className="mt-1 text-tp-muted">
+                  {mercadoPagoDisabledReason ?? (terminalName ? `Terminal: ${terminalName}` : "Sin terminal asignada")}
+                </p>
               </div>
-              <Button className="w-full" disabled={!terminalName || isSubmitting} onClick={submitMercadoPagoCard}>
+              <Button className="w-full" disabled={!canUseMercadoPago || isSubmitting} onClick={submitMercadoPagoCard}>
                 Enviar cobro a terminal
               </Button>
             </>
@@ -361,7 +365,7 @@ export function PaymentModal({ open, total, isSubmitting, error, selectedCustome
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"
                 disabled
-                value={card > 0 ? `Mercado Pago: ${terminalName ?? "sin terminal"}` : "Sin tarjeta"}
+                value={card > 0 ? `Mercado Pago: ${mercadoPagoDisabledReason ?? terminalName ?? "sin terminal"}` : "Sin tarjeta"}
               />
               <input
                 className="h-12 w-full rounded-md border border-tp-border px-3 outline-none focus:border-tp-primary"

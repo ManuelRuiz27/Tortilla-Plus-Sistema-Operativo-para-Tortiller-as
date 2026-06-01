@@ -40,6 +40,9 @@ import type {
   ReportsSummary,
   SettingsSummary,
   MercadoPagoConnection,
+  MercadoPagoBranchConfig,
+  MercadoPagoPosConfig,
+  MercadoPagoProvisioningSummary,
   MercadoPagoTerminal
 } from "../modules/manager/types/manager.types";
 
@@ -1219,6 +1222,9 @@ export function mercadoPagoTerminalsRequest(branchId?: string | null): Promise<M
         terminalName: "Mercado Pago Point Mostrador",
         externalStoreId: "store-demo",
         externalPosId: "pos-demo",
+        mpStoreId: "mock-store-demo",
+        mpPosId: "mock-pos-demo",
+        operatingMode: "PDV",
         status: "active",
         lastSeenAt: new Date().toISOString(),
         binding: null
@@ -1232,6 +1238,22 @@ export function mercadoPagoTerminalsRequest(branchId?: string | null): Promise<M
   return httpClient<MercadoPagoTerminal[]>(`/integrations/mercadopago/terminals${query ? `?${query}` : ""}`);
 }
 
+export function operationalPosDevicesRequest(branchId: string): Promise<SettingsSummary["posDevices"]> {
+  if (useMocks) {
+    return Promise.resolve([
+      {
+        id: "pos-demo",
+        branchId,
+        name: "Caja principal",
+        status: "active",
+        lastSeen: new Date().toISOString()
+      }
+    ]);
+  }
+
+  return httpClient<SettingsSummary["posDevices"]>(`/pos-devices?branchId=${encodeURIComponent(branchId)}`);
+}
+
 export function mercadoPagoSyncTerminalsRequest(branchId?: string | null): Promise<MercadoPagoTerminal[]> {
   if (useMocks) {
     return mercadoPagoTerminalsRequest(branchId);
@@ -1240,6 +1262,88 @@ export function mercadoPagoSyncTerminalsRequest(branchId?: string | null): Promi
   return httpClient<MercadoPagoTerminal[]>("/integrations/mercadopago/terminals/sync", {
     method: "POST",
     body: { branchId }
+  });
+}
+
+export function mercadoPagoProvisioningRequest(filters: { branchId: string; posDeviceId?: string | null }): Promise<MercadoPagoProvisioningSummary> {
+  if (useMocks) {
+    return Promise.resolve({
+      branchConfig: null,
+      posConfig: null
+    });
+  }
+
+  const params = new URLSearchParams();
+  params.set("branchId", filters.branchId);
+  if (filters.posDeviceId) params.set("posDeviceId", filters.posDeviceId);
+  return httpClient<MercadoPagoProvisioningSummary>(`/integrations/mercadopago/provisioning?${params.toString()}`);
+}
+
+export function mercadoPagoProvisionStoreRequest(branchId: string): Promise<MercadoPagoBranchConfig> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: `mp-branch-${branchId}`,
+      organizationId: "org-demo",
+      branchId,
+      providerConnectionId: "mp-connection-demo",
+      mpStoreId: `mock-store-${branchId.slice(0, 8)}`,
+      externalStoreId: `TP-${branchId.slice(0, 8)}`,
+      storeName: "Sucursal demo",
+      status: "active",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  return httpClient<MercadoPagoBranchConfig>(`/integrations/mercadopago/branches/${branchId}/provision-store`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoProvisionPosRequest(posDeviceId: string): Promise<MercadoPagoPosConfig> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: `mp-pos-${posDeviceId}`,
+      organizationId: "org-demo",
+      branchId: "branch-demo",
+      posDeviceId,
+      providerConnectionId: "mp-connection-demo",
+      mpBranchConfigId: "mp-branch-demo",
+      mpPosId: `mock-pos-${posDeviceId.slice(0, 8)}`,
+      externalPosId: `TPPOS-${posDeviceId.slice(0, 8)}`,
+      posName: "Caja demo",
+      status: "active",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  return httpClient<MercadoPagoPosConfig>(`/integrations/mercadopago/pos-devices/${posDeviceId}/provision-pos`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoActivatePdvRequest(paymentTerminalId: string): Promise<unknown> {
+  if (useMocks) {
+    return Promise.resolve({});
+  }
+
+  return httpClient<unknown>(`/integrations/mercadopago/terminals/${paymentTerminalId}/activate-pdv`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function mercadoPagoValidateReadyRequest(paymentTerminalId: string): Promise<unknown> {
+  if (useMocks) {
+    return Promise.resolve({ ready: true });
+  }
+
+  return httpClient<unknown>(`/integrations/mercadopago/terminals/${paymentTerminalId}/validate-ready`, {
+    method: "POST",
+    body: {}
   });
 }
 

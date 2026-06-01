@@ -11,8 +11,10 @@ import { createPointOrder, getOrder, cancelOrder } from "./mercadopago-point-ada
 import { getActiveAccessToken } from "./mercadopago-oauth-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { resolveActiveBinding } from "./payment-terminal-service.js";
+import { assertTerminalReadyForOrder } from "./mercadopago-point-provisioning-service.js";
 
 const provider = "mercadopago" as const;
+const openTerminalOrderStatuses = ["created", "sent_to_terminal", "pending"] as const;
 
 export async function createTerminalOrder(currentUser: AuthenticatedUser, input: unknown, idempotencyKey?: string | null) {
   await assertPermission(currentUser.id, "payments.create");
@@ -25,6 +27,10 @@ export async function createTerminalOrder(currentUser: AuthenticatedUser, input:
   const authorizationPin = optionalString(body.authorizationPin);
   const checkoutPayments = asOptionalPayments(body.payments);
   const key = idempotencyKey || randomUUID();
+
+  if (env.PHYSICAL_INTEGRATIONS_MODE === "real" && !posDeviceId) {
+    throw new DomainError(409, "POS_DEVICE_REQUIRED", "Cobro Mercado Pago requiere caja/POS identificada.");
+  }
 
   const existing = await prisma.paymentTerminalOrder.findFirst({
     where: { organizationId: currentUser.organizationId, provider, idempotencyKey: key },
@@ -39,6 +45,15 @@ export async function createTerminalOrder(currentUser: AuthenticatedUser, input:
     posDeviceId,
   });
   const terminal = binding.paymentTerminal;
+  await assertTerminalReadyForOrder({
+    organizationId: currentUser.organizationId,
+    branchId,
+    posDeviceId: posDevice.id,
+    terminal,
+  });
+  if (terminal.operatingMode && terminal.operatingMode !== "PDV") {
+    throw new DomainError(409, "TERMINAL_NOT_PDV", "La terminal Mercado Pago no esta en modo PDV.");
+  }
   const connectionId = terminal.providerConnectionId;
   const externalReference = `TP_${randomUUID().replace(/-/g, "").slice(0, 28)}`;
 
@@ -94,6 +109,37 @@ export async function createTerminalOrder(currentUser: AuthenticatedUser, input:
   await recordEvent(updated, "order_created", updated.status, remote.raw);
   await audit(currentUser, branchId, "mercadopago_terminal_order_created", "payment_terminal_order", updated.id, serializeOrder(updated));
   return { data: serializeOrder(updated) };
+}
+
+export async function getOpenTerminalOrder(currentUser: AuthenticatedUser, input: unknown) {
+  await assertPermission(currentUser.id, "payments.create");
+  const query = asLooseRecord(input);
+  const branchId = asString(query.branchId, "branchId");
+  const posDeviceId = asString(query.posDeviceId, "posDeviceId");
+  await assertBranchAccess(currentUser, branchId);
+
+  const order = await prisma.paymentTerminalOrder.findFirst({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId,
+      posDeviceId,
+      provider,
+      status: { in: [...openTerminalOrderStatuses] },
+      saleId: null,
+      salePaymentId: null,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!order) {
+    return { data: null };
+  }
+
+  const refreshed = await refreshOrderStatus(order);
+  if (!openTerminalOrderStatuses.includes(refreshed.status as (typeof openTerminalOrderStatuses)[number]) && refreshed.status !== "approved") {
+    return { data: null };
+  }
+  return { data: serializeOrder(refreshed) };
 }
 
 export async function getTerminalOrderStatus(currentUser: AuthenticatedUser, orderId: string) {
@@ -443,6 +489,11 @@ function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new DomainError(400, "INVALID_REQUEST", "Body invalido.");
   }
+  return input as Record<string, unknown>;
+}
+
+function asLooseRecord(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
   return input as Record<string, unknown>;
 }
 
