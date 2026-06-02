@@ -3,8 +3,36 @@
 @tailwind utilities;
 
 :root {
-  color: #241a12;
-  background: #faf7ef;
+  --tp-bg: #f7f3ea;
+  --tp-surface: #ffffff;
+  --tp-surface-soft: #fff8e8;
+  --tp-surface-muted: #f3eadb;
+
+  --tp-primary: #2f6b3f;
+  --tp-primary-hover: #245632;
+  --tp-secondary: #d97706;
+
+  --tp-brand: #d97706;
+  --tp-brand-dark: #92400e;
+  --tp-brand-soft: #fbbf24;
+  --tp-accent: #f5c76b;
+
+  --tp-text: #1f2933;
+  --tp-text-muted: #6b7280;
+  --tp-border: #e5d8c5;
+
+  --tp-success: #16a34a;
+  --tp-success-bg: #ecfdf5;
+  --tp-warning: #f59e0b;
+  --tp-warning-bg: #fffbeb;
+  --tp-danger: #dc2626;
+  --tp-danger-hover: #991b1b;
+  --tp-danger-bg: #fef2f2;
+  --tp-info: #2563eb;
+  --tp-info-bg: #eff6ff;
+
+  color: var(--tp-text);
+  background: var(--tp-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,6 +47,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: var(--tp-bg);
 }
 
 button,
