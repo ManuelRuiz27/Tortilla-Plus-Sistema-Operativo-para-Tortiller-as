@@ -13,6 +13,7 @@ import {
   Users
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { BrandMark } from "../components/brand-mark";
 import { Button } from "../components/button";
 import { StatusBadge } from "../components/status-badge";
 import { useAuthStore } from "../stores/auth.store";
@@ -57,8 +58,7 @@ export function ManagerLayout() {
     <main className="grid min-h-screen bg-tp-bg text-tp-text lg:grid-cols-[240px_1fr]">
       <aside className="border-b border-tp-border bg-white px-3 py-4 lg:border-b-0 lg:border-r">
         <div className="mb-4 px-3 lg:mb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Tortilla Plus</p>
-          <p className="mt-1 text-xs text-tp-muted">Vista del negocio</p>
+          <BrandMark showByline />
         </div>
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
           {navItems.map((item) => (
@@ -81,7 +81,7 @@ export function ManagerLayout() {
       <section className="min-w-0">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-tp-border bg-white px-4 py-3 lg:px-6">
           <div className="flex min-w-0 items-center gap-4">
-            <Store className="h-5 w-5 text-tp-secondary" aria-hidden="true" />
+            <Store className="h-5 w-5 text-tp-brand" aria-hidden="true" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{branchName ?? "Sucursal sin seleccionar"}</p>
               <p className="text-xs text-tp-muted">{user?.fullName ?? "Usuario"}</p>
