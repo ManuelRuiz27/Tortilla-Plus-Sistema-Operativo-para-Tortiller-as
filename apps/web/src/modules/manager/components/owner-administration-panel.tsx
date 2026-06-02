@@ -20,8 +20,11 @@ export function OwnerAdministrationPanel() {
   const queryClient = useQueryClient();
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [userPin, setUserPin] = useState("");
   const [userRole, setUserRole] = useState<UserRoleInput>("manager");
   const [userBranchId, setUserBranchId] = useState("");
+  const [resetPin, setResetPin] = useState("");
   const [branchName, setBranchName] = useState("");
   const [posName, setPosName] = useState("");
   const [posBranchId, setPosBranchId] = useState("");
@@ -36,7 +39,9 @@ export function OwnerAdministrationPanel() {
     onSuccess: () => {
       setUserName("");
       setUserEmail("");
-      setMessage("Usuario creado con contrasena temporal Demo1234! y PIN 1234.");
+      setUserPassword("");
+      setUserPin("");
+      setMessage("Usuario creado.");
       refresh();
     }
   });
@@ -60,7 +65,7 @@ export function OwnerAdministrationPanel() {
     onSuccess: refresh
   });
   const resetPinMutation = useMutation({
-    mutationFn: resetOrganizationUserPinRequest,
+    mutationFn: (userId: string) => resetOrganizationUserPinRequest(userId, resetPin || undefined),
     onSuccess: (result) => setMessage(`PIN temporal actualizado: ${result.temporaryPin}`)
   });
 
@@ -92,6 +97,8 @@ export function OwnerAdministrationPanel() {
         <div className="grid gap-3 md:grid-cols-2">
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setUserName(event.target.value)} placeholder="Nombre" value={userName} />
           <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setUserEmail(event.target.value)} placeholder="correo@negocio.mx" type="email" value={userEmail} />
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setUserPassword(event.target.value)} placeholder="Contrasena temporal" type="password" value={userPassword} />
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setUserPin(event.target.value)} placeholder="PIN" value={userPin} />
           <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setUserRole(event.target.value as UserRoleInput)} value={userRole}>
             <option value="manager">Gerente</option>
             <option value="supervisor">Supervisor</option>
@@ -103,11 +110,14 @@ export function OwnerAdministrationPanel() {
         </div>
         <div className="mt-3 flex justify-end">
           <Button
-            disabled={!userName || !userEmail || !selectedUserBranchId || createUserMutation.isPending}
-            onClick={() => createUserMutation.mutate({ name: userName, email: userEmail, role: userRole, branchId: selectedUserBranchId })}
+            disabled={!userName || !userEmail || !userPassword || !userPin || !selectedUserBranchId || createUserMutation.isPending}
+            onClick={() => createUserMutation.mutate({ name: userName, email: userEmail, role: userRole, branchId: selectedUserBranchId, password: userPassword, pin: userPin })}
           >
             Crear usuario
           </Button>
+        </div>
+        <div className="mt-4">
+          <input className="h-11 w-full rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setResetPin(event.target.value)} placeholder="PIN para reset" value={resetPin} />
         </div>
         <div className="mt-5 space-y-3">
           {data.users.map((user) => (

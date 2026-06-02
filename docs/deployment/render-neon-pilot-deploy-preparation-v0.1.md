@@ -29,7 +29,7 @@ Incluye:
 - Deploy de frontend.
 - Conexión a Neon PostgreSQL.
 - Migraciones con Prisma.
-- Seed mínimo operativo.
+- Bootstrap productivo mínimo.
 - Configuración de variables de entorno.
 - Healthcheck.
 - CORS controlado.
@@ -320,14 +320,14 @@ Para el primer deploy piloto:
 1. Crear DB vacía en Neon.
 2. Cargar variables en Render API.
 3. Ejecutar migraciones.
-4. Ejecutar seed mínimo.
+4. Ejecutar bootstrap productivo.
 5. Probar login.
 6. Probar flujos críticos.
 ```
 
-## 13. Seed mínimo operativo
+## 13. Bootstrap productivo
 
-El seed de producción piloto debe crear solo datos indispensables.
+No ejecutar seeders demo en Render. El bootstrap productivo debe crear solo datos indispensables.
 
 Debe incluir:
 
@@ -335,15 +335,8 @@ Debe incluir:
 - Permisos base.
 - Plan piloto.
 - Features base.
-- Organización piloto.
-- Sucursal piloto.
-- Usuario owner.
-- Usuario cajero.
-- Productos base:
-  - tortilla kg;
-  - masa kg;
-  - paquete tortilla 800g;
-  - productos retail demo opcionales.
+- Usuario `platform_owner` inicial desde variables de entorno.
+- No debe crear organizaciones, sucursales, usuarios operativos, productos ni inventario demo.
 - Precios base por sucursal.
 - Motivos de caja:
   - retiro;
@@ -721,7 +714,7 @@ Regla:
 [ ] Variables Front configuradas
 [ ] Prisma usa DIRECT_URL
 [ ] Migraciones ejecutadas con migrate deploy
-[ ] Seed mínimo ejecutado
+[ ] Bootstrap productivo ejecutado
 [ ] Healthcheck activo
 [ ] CORS cerrado
 [ ] Login probado
@@ -749,7 +742,7 @@ El deploy piloto se considera listo cuando:
 [ ] Frontend está disponible públicamente por HTTPS
 [ ] Frontend consume API correcta
 [ ] Neon recibe migraciones correctamente
-[ ] Seed mínimo permite operar una sucursal piloto
+[ ] Plataforma permite crear organizacion piloto y owner inicial
 [ ] Auth propio funciona
 [ ] Caja abre/cierra correctamente
 [ ] Venta POS completa funciona

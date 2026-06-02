@@ -12,10 +12,11 @@
     "test:integration": "npm run build && node --test --test-concurrency=1 dist/tests/integration/*.test.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "format": "node -e \"console.log('format pending: no formatter installed in Sprint 0 minimal setup')\"",
-    "db:validate": "prisma validate",
+    "db:validate": "node scripts/prisma-cli.mjs validate",
     "db:migrate": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:deploy": "node scripts/prisma-cli.mjs migrate deploy",
     "db:seed": "prisma db seed",
+    "db:bootstrap:production": "npm run build && node dist/prisma/bootstrap-production.js",
     "db:generate": "prisma generate"
   },
   "dependencies": {

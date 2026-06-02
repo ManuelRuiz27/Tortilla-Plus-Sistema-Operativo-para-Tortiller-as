@@ -8,6 +8,7 @@ import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import {
   createPlatformManualPayment,
   createPlatformOrganization,
+  createPlatformOrganizationOwner,
   getPlatformDashboard,
   getPlatformOrganization,
   getPlatformSubscription,
@@ -265,6 +266,46 @@ test("platform_owner can execute organization, subscription, POS and payment mut
   }
   assert.equal(paymentAudits.length >= 1, true);
   assert.equal(paymentAudits.every((log) => log.action === "platform_manual_payment_recorded"), true);
+});
+
+test("platform_owner creates initial organization_owner and rejects duplicates", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT Owner Inicial ${suffix}`,
+    contactEmail: `owner-inicial-org-${suffix}@tortillaplus.mx`,
+    planCode: "free",
+    owner: {
+      name: `Owner Inicial ${suffix}`,
+      email: `owner-inicial-${suffix}@tortillaplus.mx`,
+      password: "Owner1234!",
+      pin: "2468",
+    },
+  });
+
+  const organization = (await getPlatformOrganization(platformUser, created.data.id)).data;
+  assert.ok(created.data.owner);
+  assert.equal(created.data.owner?.email, `owner-inicial-${suffix}@tortillaplus.mx`);
+  assert.equal(
+    organization.users.some((user) => user.email === `owner-inicial-${suffix}@tortillaplus.mx` && user.roles.includes("organization_owner")),
+    true,
+  );
+
+  const ownerSession = await login({ email: `owner-inicial-${suffix}@tortillaplus.mx`, password: "Owner1234!" });
+  assert.equal(ownerSession.user.organizationId, created.data.id);
+  assert.ok(ownerSession.user.roles.includes("organization_owner"));
+
+  await assert.rejects(
+    () =>
+      createPlatformOrganizationOwner(platformUser, created.data.id, {
+        name: `Owner Duplicado ${suffix}`,
+        email: `owner-duplicado-${suffix}@tortillaplus.mx`,
+        password: "Owner1234!",
+      }),
+    (error: unknown) => error instanceof DomainError && error.code === "ORGANIZATION_OWNER_EXISTS",
+  );
 });
 
 test("platform suspension blocks opening cash sessions for operational users", async () => {

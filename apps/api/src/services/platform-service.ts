@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { DomainError } from "../lib/domain-error.js";
+import { hashSecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
 
@@ -9,6 +10,13 @@ const organizationStatuses = ["active", "past_due", "grace_period", "suspended_l
 const subscriptionStatuses = ["trial", "active", "past_due", "grace_period", "suspended_limited", "cancelled", "expired"] as const;
 const billingPeriods = ["monthly", "annual"] as const;
 const deviceStatuses = ["pending_activation", "active", "inactive", "blocked"] as const;
+type OrganizationOwnerInput = {
+  name: string;
+  email: string;
+  password: string;
+  phone: string | null;
+  pin: string | null;
+};
 
 export async function requirePlatformOwner(currentUser: AuthenticatedUser) {
   if (currentUser.organizationId !== "") {
@@ -136,6 +144,7 @@ export async function createPlatformOrganization(currentUser: AuthenticatedUser,
   const body = asRecord(input);
   const planCode = optionalString(body.planCode) ?? "free";
   const plan = await getPlanByCode(planCode);
+  const ownerInput = getOptionalOwnerInput(body);
 
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organization.create({
@@ -173,10 +182,26 @@ export async function createPlatformOrganization(currentUser: AuthenticatedUser,
       },
     });
 
-    return organization;
+    const owner = ownerInput ? await createOrganizationOwner(tx, currentUser, organization.id, ownerInput) : null;
+    return { organization, owner };
   });
 
-  return { data: { id: result.id, name: result.name, status: result.status } };
+  return {
+    data: {
+      id: result.organization.id,
+      name: result.organization.name,
+      status: result.organization.status,
+      owner: result.owner,
+    },
+  };
+}
+
+export async function createPlatformOrganizationOwner(currentUser: AuthenticatedUser, organizationId: string, input: unknown) {
+  await requirePlatformOwner(currentUser);
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!organization) throw new DomainError(404, "ORGANIZATION_NOT_FOUND", "Organizacion no encontrada.");
+  const owner = await prisma.$transaction((tx) => createOrganizationOwner(tx, currentUser, organizationId, asOwnerInput(asRecord(input))));
+  return { data: owner };
 }
 
 export async function getPlatformOrganization(currentUser: AuthenticatedUser, organizationId: string) {
@@ -498,6 +523,76 @@ async function updatePosDevice(
   return { data: serializePosDevice(after) };
 }
 
+async function createOrganizationOwner(
+  tx: Prisma.TransactionClient,
+  currentUser: AuthenticatedUser,
+  organizationId: string,
+  input: OrganizationOwnerInput,
+) {
+  const ownerRole = await tx.role.findUnique({ where: { code: "organization_owner" } });
+  if (!ownerRole) throw new DomainError(500, "ROLE_NOT_CONFIGURED", "Rol organization_owner no configurado.");
+
+  const existingOwner = await tx.user.findFirst({
+    where: {
+      organizationId,
+      status: { not: "deleted" },
+      userRoleUser: {
+        some: {
+          organizationId,
+          role: { code: "organization_owner" },
+        },
+      },
+    },
+  });
+  if (existingOwner) {
+    throw new DomainError(409, "ORGANIZATION_OWNER_EXISTS", "La organizacion ya tiene duenio asignado.");
+  }
+
+  const email = input.email.toLowerCase();
+  const existingEmail = await tx.user.findFirst({ where: { organizationId, email } });
+  if (existingEmail) {
+    throw new DomainError(409, "USER_EMAIL_EXISTS", "Ya existe un usuario con ese correo en la organizacion.");
+  }
+
+  const user = await tx.user.create({
+    data: {
+      organizationId,
+      name: input.name,
+      email,
+      phone: input.phone,
+      passwordHash: await hashSecret(input.password),
+      pinHash: input.pin ? await hashSecret(input.pin) : null,
+      status: "active",
+    },
+  });
+
+  await tx.userRole.create({
+    data: {
+      userId: user.id,
+      roleId: ownerRole.id,
+      organizationId,
+    },
+  });
+
+  await tx.auditLog.create({
+    data: {
+      organizationId,
+      userId: currentUser.id,
+      action: "platform_organization_owner_created",
+      entityType: "user",
+      entityId: user.id,
+      afterSnapshot: serialize({ id: user.id, email: user.email, role: "organization_owner" }),
+    },
+  });
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: "organization_owner",
+  };
+}
+
 async function getPlanByCode(code: string) {
   const plan = await prisma.plan.findUnique({ where: { code } });
   if (!plan || plan.status !== "active") throw new DomainError(400, "INVALID_PLAN", "Plan invalido.");
@@ -670,6 +765,47 @@ function optionalString(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string") return null;
   return value.trim();
+}
+
+function getOptionalOwnerInput(body: Record<string, unknown>) {
+  if (body.owner !== undefined) {
+    if (!body.owner || typeof body.owner !== "object" || Array.isArray(body.owner)) {
+      throw new DomainError(400, "INVALID_REQUEST", "owner debe ser un objeto.");
+    }
+    return asOwnerInput(body.owner as Record<string, unknown>);
+  }
+
+  if (body.ownerEmail !== undefined || body.ownerName !== undefined || body.ownerPassword !== undefined) {
+    return asOwnerInput({
+      name: body.ownerName,
+      email: body.ownerEmail,
+      password: body.ownerPassword,
+      phone: body.ownerPhone,
+      pin: body.ownerPin,
+    });
+  }
+
+  return null;
+}
+
+function asOwnerInput(body: Record<string, unknown>): OrganizationOwnerInput {
+  const password = asString(body.password, "password");
+  if (password.length < 8) {
+    throw new DomainError(400, "WEAK_PASSWORD", "La contrasena temporal debe tener al menos 8 caracteres.");
+  }
+
+  const pin = optionalString(body.pin);
+  if (pin && !/^[0-9]{4,8}$/.test(pin)) {
+    throw new DomainError(400, "INVALID_PIN", "El PIN debe tener de 4 a 8 digitos.");
+  }
+
+  return {
+    name: asString(body.name, "name"),
+    email: asString(body.email, "email").toLowerCase(),
+    password,
+    phone: optionalString(body.phone),
+    pin,
+  };
 }
 
 function optionalDate(value: unknown) {

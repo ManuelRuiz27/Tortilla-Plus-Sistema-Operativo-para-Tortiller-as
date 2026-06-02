@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import { env } from "../config/env.js";
 import { DomainError } from "../lib/domain-error.js";
 import { hashSecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
@@ -10,8 +11,8 @@ const manageableRoles = ["manager", "supervisor", "cashier"] as const;
 const userStatuses = ["active", "inactive"] as const;
 const branchStatuses = ["active", "inactive"] as const;
 const deviceStatuses = ["pending_activation", "active", "inactive", "blocked"] as const;
-const defaultPassword = "Demo1234!";
-const defaultPin = "1234";
+const demoDefaultPassword = "Demo1234!";
+const demoDefaultPin = "1234";
 
 export async function getOrganizationSummary(currentUser: AuthenticatedUser) {
   await assertPermission(currentUser.id, "organization.view");
@@ -102,8 +103,8 @@ export async function createOrganizationUser(currentUser: AuthenticatedUser, inp
         name: asString(body.name, "name"),
         email: asString(body.email, "email").toLowerCase(),
         phone: optionalString(body.phone),
-        passwordHash: await hashSecret(optionalString(body.password) ?? defaultPassword),
-        pinHash: await hashSecret(optionalString(body.pin) ?? defaultPin),
+        passwordHash: await hashSecret(getTemporaryPassword(body.password)),
+        pinHash: await hashSecret(getTemporaryPin(body.pin)),
         status: "active",
       },
     });
@@ -166,7 +167,7 @@ export async function resetOrganizationUserPassword(currentUser: AuthenticatedUs
   await assertPermission(currentUser.id, "users.manage");
   const organizationId = requireOrganizationId(currentUser);
   await getOrganizationUserOrThrow(organizationId, userId);
-  const password = optionalString(asLooseRecord(input).password) ?? defaultPassword;
+  const password = getTemporaryPassword(asLooseRecord(input).password);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashSecret(password), updatedAt: new Date() } });
   await audit(currentUser, "organization_user_password_reset", "user", userId, { id: userId });
   return { data: { id: userId, temporaryPassword: password } };
@@ -176,7 +177,7 @@ export async function resetOrganizationUserPin(currentUser: AuthenticatedUser, u
   await assertPermission(currentUser.id, "users.manage");
   const organizationId = requireOrganizationId(currentUser);
   await getOrganizationUserOrThrow(organizationId, userId);
-  const pin = optionalString(asLooseRecord(input).pin) ?? defaultPin;
+  const pin = getTemporaryPin(asLooseRecord(input).pin);
   await prisma.user.update({ where: { id: userId }, data: { pinHash: await hashSecret(pin), updatedAt: new Date() } });
   await audit(currentUser, "organization_user_pin_reset", "user", userId, { id: userId });
   return { data: { id: userId, temporaryPin: pin } };
@@ -466,6 +467,38 @@ function optionalString(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string") return null;
   return value.trim();
+}
+
+function getTemporaryPassword(value: unknown) {
+  const password = optionalString(value);
+  if (!password) {
+    if (env.NODE_ENV === "production") {
+      throw new DomainError(400, "PASSWORD_REQUIRED", "La contrasena temporal es obligatoria en produccion.");
+    }
+    return demoDefaultPassword;
+  }
+
+  if (password.length < 8) {
+    throw new DomainError(400, "WEAK_PASSWORD", "La contrasena temporal debe tener al menos 8 caracteres.");
+  }
+
+  return password;
+}
+
+function getTemporaryPin(value: unknown) {
+  const pin = optionalString(value);
+  if (!pin) {
+    if (env.NODE_ENV === "production") {
+      throw new DomainError(400, "PIN_REQUIRED", "El PIN temporal es obligatorio en produccion.");
+    }
+    return demoDefaultPin;
+  }
+
+  if (!/^[0-9]{4,8}$/.test(pin)) {
+    throw new DomainError(400, "INVALID_PIN", "El PIN debe tener de 4 a 8 digitos.");
+  }
+
+  return pin;
 }
 
 function asManageableRole(value: unknown): (typeof manageableRoles)[number] {

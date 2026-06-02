@@ -43,8 +43,31 @@ export function createPlatformOrganizationRequest(payload: {
   contactEmail: string;
   contactPhone?: string;
   planCode: "free" | "paid";
+  owner?: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    pin?: string;
+  };
 }) {
-  return httpClient<{ id: string; name: string; status: string }>("/platform/organizations", {
+  return httpClient<{ id: string; name: string; status: string; owner?: { id: string; name: string; email: string } | null }>("/platform/organizations", {
+    method: "POST",
+    body: payload
+  });
+}
+
+export function createPlatformOrganizationOwnerRequest(
+  organizationId: string,
+  payload: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    pin?: string;
+  }
+) {
+  return httpClient<{ id: string; name: string; email: string; role: string }>(`/platform/organizations/${organizationId}/owner`, {
     method: "POST",
     body: payload
   });

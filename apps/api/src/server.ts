@@ -171,6 +171,7 @@ import {
 import {
   createPlatformManualPayment,
   createPlatformOrganization,
+  createPlatformOrganizationOwner,
   endPlatformImpersonation,
   getPlatformDashboard,
   getPlatformOrganization,
@@ -271,6 +272,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (path.startsWith("/api/v1/platform")) {
     const currentUser = await authenticate(request);
     const platformOrganizationMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)$/);
+    const platformOrganizationOwnerMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/owner$/);
     const platformOrganizationStatusMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/status$/);
     const platformOrganizationSubscriptionMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/subscription$/);
     const platformOrganizationPosDevicesMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/pos-devices$/);
@@ -291,6 +293,10 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     }
     if (method === "GET" && platformOrganizationMatch) {
       sendJson(response, 200, await getPlatformOrganization(currentUser, platformOrganizationMatch[1]));
+      return;
+    }
+    if (method === "POST" && platformOrganizationOwnerMatch) {
+      sendJson(response, 201, await createPlatformOrganizationOwner(currentUser, platformOrganizationOwnerMatch[1], await readJson(request)));
       return;
     }
     if (method === "PATCH" && platformOrganizationMatch) {

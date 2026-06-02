@@ -54,6 +54,8 @@ export function createOrganizationUserRequest(payload: {
   email: string;
   role: "manager" | "supervisor" | "cashier";
   branchId?: string;
+  password?: string;
+  pin?: string;
 }) {
   return httpClient<OrganizationUser>("/organization/users", { method: "POST", body: payload });
 }
@@ -70,6 +72,6 @@ export function updateOrganizationUserStatusRequest(userId: string, status: "act
   return httpClient<OrganizationUser>(`/organization/users/${userId}/status`, { method: "PATCH", body: { status } });
 }
 
-export function resetOrganizationUserPinRequest(userId: string) {
-  return httpClient<{ id: string; temporaryPin: string }>(`/organization/users/${userId}/reset-pin`, { method: "POST", body: {} });
+export function resetOrganizationUserPinRequest(userId: string, pin?: string) {
+  return httpClient<{ id: string; temporaryPin: string }>(`/organization/users/${userId}/reset-pin`, { method: "POST", body: pin ? { pin } : {} });
 }

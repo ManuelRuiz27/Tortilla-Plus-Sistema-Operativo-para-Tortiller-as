@@ -17,13 +17,30 @@ export function PlatformOrganizationsPage() {
     taxId: "",
     contactEmail: "",
     contactPhone: "",
-    planCode: "free" as "free" | "paid"
+    planCode: "free" as "free" | "paid",
+    ownerName: "",
+    ownerEmail: "",
+    ownerPassword: "",
+    ownerPhone: "",
+    ownerPin: ""
   });
   const [error, setError] = useState<string | null>(null);
   const createMutation = useMutation({
     mutationFn: createPlatformOrganizationRequest,
     onSuccess: () => {
-      setForm({ name: "", legalName: "", taxId: "", contactEmail: "", contactPhone: "", planCode: "free" });
+      setForm({
+        name: "",
+        legalName: "",
+        taxId: "",
+        contactEmail: "",
+        contactPhone: "",
+        planCode: "free",
+        ownerName: "",
+        ownerEmail: "",
+        ownerPassword: "",
+        ownerPhone: "",
+        ownerPin: ""
+      });
       setError(null);
       void queryClient.invalidateQueries({ queryKey: ["platform-organizations"] });
       void queryClient.invalidateQueries({ queryKey: ["platform-dashboard"] });
@@ -37,7 +54,26 @@ export function PlatformOrganizationsPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    createMutation.mutate(form);
+    const ownerEnabled = Boolean(form.ownerName || form.ownerEmail || form.ownerPassword || form.ownerPhone || form.ownerPin);
+    createMutation.mutate({
+      name: form.name,
+      legalName: form.legalName,
+      taxId: form.taxId,
+      contactEmail: form.contactEmail,
+      contactPhone: form.contactPhone,
+      planCode: form.planCode,
+      ...(ownerEnabled
+        ? {
+            owner: {
+              name: form.ownerName,
+              email: form.ownerEmail,
+              password: form.ownerPassword,
+              phone: form.ownerPhone,
+              pin: form.ownerPin
+            }
+          }
+        : {})
+    });
   }
 
   return (
@@ -53,6 +89,11 @@ export function PlatformOrganizationsPage() {
           <option value="free">Plan free</option>
           <option value="paid">Plan paid</option>
         </select>
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerName: event.target.value }))} placeholder="Dueno inicial" value={form.ownerName} />
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerEmail: event.target.value }))} placeholder="Correo dueno" type="email" value={form.ownerEmail} />
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerPassword: event.target.value }))} placeholder="Contrasena temporal" type="password" value={form.ownerPassword} />
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerPhone: event.target.value }))} placeholder="Telefono dueno" value={form.ownerPhone} />
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerPin: event.target.value }))} placeholder="PIN dueno" value={form.ownerPin} />
         {error ? <p className="text-sm text-tp-danger md:col-span-2">{error}</p> : <span />}
         <Button className="md:justify-self-end" disabled={createMutation.isPending} type="submit" variant="secondary">
           {createMutation.isPending ? "Creando..." : "Crear organizacion"}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ApiErrorException } from "../../../api/api-error";
 import {
+  createPlatformOrganizationOwnerRequest,
   platformOrganizationRequest,
   updatePlatformOrganizationRequest,
   updatePlatformOrganizationStatusRequest,
@@ -30,6 +31,13 @@ export function PlatformOrganizationDetailPage() {
   const [taxId, setTaxId] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [ownerForm, setOwnerForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+    pin: ""
+  });
   const [error, setError] = useState<string | null>(null);
 
   const detailsMutation = useMutation({
@@ -61,6 +69,15 @@ export function PlatformOrganizationDetailPage() {
     },
     onError: (mutationError) => setError(mutationError instanceof ApiErrorException ? mutationError.apiError.message : "No se pudo actualizar la suscripcion.")
   });
+  const ownerMutation = useMutation({
+    mutationFn: () => createPlatformOrganizationOwnerRequest(organizationId, ownerForm),
+    onSuccess: () => {
+      setOwnerForm({ name: "", email: "", password: "", phone: "", pin: "" });
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ["platform-organization", organizationId] });
+    },
+    onError: (mutationError) => setError(mutationError instanceof ApiErrorException ? mutationError.apiError.message : "No se pudo crear el dueno inicial.")
+  });
 
   useEffect(() => {
     if (!data) return;
@@ -77,6 +94,7 @@ export function PlatformOrganizationDetailPage() {
 
   if (isLoading) return <LoadingState message="Cargando organizacion..." />;
   if (!data) return null;
+  const hasOrganizationOwner = data.users.some((user) => user.roles.includes("organization_owner"));
 
   function applyStatus() {
     if (status === "suspended_limited" || status === "cancelled") {
@@ -151,6 +169,20 @@ export function PlatformOrganizationDetailPage() {
           <p>Activos: {data.posDevices.filter((device) => device.status === "active").length}</p>
           <p>Licenciados: {data.posDevices.filter((device) => device.licensed).length}</p>
         </Panel>
+        {!hasOrganizationOwner ? (
+          <Panel title="Dueno inicial">
+            <div className="grid gap-2">
+              <input className="h-10 rounded-md border border-tp-border px-3 text-sm text-tp-text" onChange={(event) => setOwnerForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nombre" value={ownerForm.name} />
+              <input className="h-10 rounded-md border border-tp-border px-3 text-sm text-tp-text" onChange={(event) => setOwnerForm((current) => ({ ...current, email: event.target.value }))} placeholder="Correo" type="email" value={ownerForm.email} />
+              <input className="h-10 rounded-md border border-tp-border px-3 text-sm text-tp-text" onChange={(event) => setOwnerForm((current) => ({ ...current, password: event.target.value }))} placeholder="Contrasena temporal" type="password" value={ownerForm.password} />
+              <input className="h-10 rounded-md border border-tp-border px-3 text-sm text-tp-text" onChange={(event) => setOwnerForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Telefono" value={ownerForm.phone} />
+              <input className="h-10 rounded-md border border-tp-border px-3 text-sm text-tp-text" onChange={(event) => setOwnerForm((current) => ({ ...current, pin: event.target.value }))} placeholder="PIN" value={ownerForm.pin} />
+              <Button disabled={ownerMutation.isPending} onClick={() => ownerMutation.mutate()} variant="secondary">
+                Crear dueno
+              </Button>
+            </div>
+          </Panel>
+        ) : null}
       </section>
       {error ? <p className="text-sm text-tp-danger">{error}</p> : null}
       <DetailList title="Sucursales" rows={data.branches.map((branch) => [branch.name, labelStatus(branch.status)])} />
