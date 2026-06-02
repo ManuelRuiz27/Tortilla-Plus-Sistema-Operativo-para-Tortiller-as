@@ -1,5 +1,6 @@
 import { Activity, Building2, CreditCard, Headphones, LayoutDashboard, LogOut, Monitor, ReceiptText, ScrollText } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { BrandMark } from "../components/brand-mark";
 import { Button } from "../components/button";
 import { useAuthStore } from "../stores/auth.store";
 import { useBranchStore } from "../stores/branch.store";
@@ -34,10 +35,10 @@ export function PlatformLayout() {
     <main className="grid min-h-screen bg-tp-bg text-tp-text lg:grid-cols-[248px_1fr]">
       <aside className="border-b border-tp-border bg-white px-3 py-4 lg:border-b-0 lg:border-r">
         <div className="mb-4 px-3 lg:mb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Tortilla Plus</p>
-          <p className="mt-1 flex items-center gap-2 text-xs text-tp-muted">
-            <Activity className="h-3.5 w-3.5" aria-hidden="true" />
-            Plataforma SaaS
+          <BrandMark showByline />
+          <p className="mt-3 flex items-center gap-2 text-xs font-medium text-tp-muted">
+            <Activity className="h-3.5 w-3.5 text-tp-brand" aria-hidden="true" />
+            Soft Monkey Console
           </p>
         </div>
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
