@@ -4,7 +4,7 @@ import test from "node:test";
 import { prisma } from "../../src/lib/prisma.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import { login } from "../../src/services/auth-service.js";
-import { getCashSessionSummary, getOpenCashSession, openCashSession } from "../../src/services/cash-service.js";
+import { getCashSessionSummary, getOpenCashSession, openCashSession, requestWithdrawal } from "../../src/services/cash-service.js";
 import { configureCustomerCredit, createCustomer, setCustomerPrice } from "../../src/services/customer-service.js";
 import {
   assignCustomerToRoute,
@@ -20,6 +20,8 @@ import {
   recordDeliveryPayment,
   createDeliverySettlement,
 } from "../../src/services/delivery-service.js";
+import { createInventoryAdjustment, createProductionBatch } from "../../src/services/inventory-service.js";
+import { updatePlatformOrganizationStatus } from "../../src/services/platform-service.js";
 import { addSaleItem, checkoutSale, completeSale, createSale, quoteSale } from "../../src/services/sale-service.js";
 import { DomainError } from "../../src/lib/domain-error.js";
 
@@ -38,6 +40,15 @@ function firstBranchId(session: LoginResult): string {
   const branchId = session.user.branches[0]?.branchId;
   assert.ok(branchId, "demo user must have a branch assignment");
   return branchId;
+}
+
+function asPlatformUser(session: LoginResult): AuthenticatedUser {
+  assert.equal(session.user.organizationId, null, "platform user must not have an organization");
+  return {
+    id: session.user.id,
+    organizationId: "",
+    email: session.user.email,
+  };
 }
 
 function moneyDelta(after: string | number, before: string | number) {
@@ -421,4 +432,142 @@ test("delivery route completes order, partial return, cash payment, settlement d
     () => depositSettlementToCash(manager, closed.id, `integration-route-deposit-duplicate-${closed.id}`),
     (error) => error instanceof DomainError && error.code === "SETTLEMENT_ALREADY_DEPOSITED",
   );
+});
+
+test("delivery order flow is blocked when platform suspends the organization", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const manager = asAuthenticatedUser(managerSession);
+  const branchId = firstBranchId(managerSession);
+  const suffix = Date.now();
+  const originalOrganization = await prisma.organization.findUniqueOrThrow({
+    where: { id: manager.organizationId },
+    select: { status: true },
+  });
+  const driver = (await createDeliveryDriver(manager, {
+    name: `Repartidor Susp ${suffix}`,
+    phone: "5551234567",
+  })).data;
+  const route = (await createDeliveryRoute(manager, {
+    branchId,
+    driverId: driver.id,
+    name: `Ruta Susp ${suffix}`,
+  })).data;
+  const customer = (await createCustomer(manager, {
+    name: `Cliente Susp ${suffix}`,
+    customerType: "tienda",
+    creditEnabled: false,
+  })).data;
+  await assignCustomerToRoute(manager, route.id, { customerId: customer.id, sortOrder: 1 });
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: manager.organizationId, sku: "TORTILLA-KG" },
+  });
+
+  try {
+    await updatePlatformOrganizationStatus(platformUser, manager.organizationId, {
+      status: "suspended_limited",
+    });
+
+    await assert.rejects(
+      () => createDeliveryOrder(manager, {
+        branchId,
+        routeId: route.id,
+        driverId: driver.id,
+        customerId: customer.id,
+        items: [{ productId: tortilla.id, quantity: "2.000" }],
+      }, `integration-route-suspended-${suffix}`),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+  } finally {
+    await updatePlatformOrganizationStatus(platformUser, manager.organizationId, {
+      status: originalOrganization.status,
+    });
+  }
+});
+
+test("inventory and production operations are blocked when platform suspends the organization", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const manager = asAuthenticatedUser(managerSession);
+  const branchId = firstBranchId(managerSession);
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: manager.organizationId, sku: "TORTILLA-KG" },
+  });
+  const originalOrganization = await prisma.organization.findUniqueOrThrow({
+    where: { id: manager.organizationId },
+    select: { status: true },
+  });
+
+  try {
+    await updatePlatformOrganizationStatus(platformUser, manager.organizationId, {
+      status: "suspended_limited",
+    });
+
+    await assert.rejects(
+      () => createInventoryAdjustment(manager, {
+        branchId,
+        productId: tortilla.id,
+        direction: "in",
+        quantity: "1.000",
+        reason: "Ajuste bloqueado por suspension",
+      }),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+
+    await assert.rejects(
+      () => createProductionBatch(manager, {
+        branchId,
+        productionDate: "2026-06-01",
+        items: [{ productId: tortilla.id, quantity: "5.000", unit: "kg" }],
+      }),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+  } finally {
+    await updatePlatformOrganizationStatus(platformUser, manager.organizationId, {
+      status: originalOrganization.status,
+    });
+  }
+});
+
+test("cash movements are blocked when platform suspends the organization", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const originalOrganization = await prisma.organization.findUniqueOrThrow({
+    where: { id: cashier.organizationId },
+    select: { status: true },
+  });
+
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Cash suspension test",
+    })).data;
+  }
+
+  try {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: "suspended_limited",
+    });
+
+    await assert.rejects(
+      () => requestWithdrawal(cashier, {
+        branchId,
+        cashSessionId: cashSession.id,
+        amount: "50.00",
+        description: "Blocked by platform suspension",
+      }),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+  } finally {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: originalOrganization.status,
+    });
+  }
 });

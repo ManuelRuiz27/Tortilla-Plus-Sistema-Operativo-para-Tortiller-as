@@ -32,6 +32,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const roleLabels: Record<string, string> = {
+  platform_owner: "Dueno de Plataforma",
   organization_owner: "Dueno",
   manager: "Gerente",
   supervisor: "Supervisor",

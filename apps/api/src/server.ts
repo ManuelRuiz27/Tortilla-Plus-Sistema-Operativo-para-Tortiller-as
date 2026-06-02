@@ -165,6 +165,25 @@ import {
   getTerminalOrderStatus,
   processMercadoPagoTerminalWebhook,
 } from "./services/payment-terminal-order-service.js";
+import {
+  createPlatformManualPayment,
+  createPlatformOrganization,
+  endPlatformImpersonation,
+  getPlatformDashboard,
+  getPlatformOrganization,
+  getPlatformSubscription,
+  listPlatformAuditLog,
+  listPlatformOrganizationPosDevices,
+  listPlatformOrganizations,
+  listPlatformPayments,
+  listPlatformPosDevices,
+  startPlatformImpersonation,
+  updatePlatformOrganization,
+  updatePlatformOrganizationStatus,
+  updatePlatformPosDeviceLicense,
+  updatePlatformPosDeviceStatus,
+  updatePlatformSubscription,
+} from "./services/platform-service.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -227,6 +246,85 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await getMe(currentUser));
     return;
+  }
+
+  if (path.startsWith("/api/v1/platform")) {
+    const currentUser = await authenticate(request);
+    const platformOrganizationMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)$/);
+    const platformOrganizationStatusMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/status$/);
+    const platformOrganizationSubscriptionMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/subscription$/);
+    const platformOrganizationPosDevicesMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/pos-devices$/);
+    const platformPosDeviceStatusMatch = path.match(/^\/api\/v1\/platform\/pos-devices\/([^/]+)\/status$/);
+    const platformPosDeviceLicenseMatch = path.match(/^\/api\/v1\/platform\/pos-devices\/([^/]+)\/license$/);
+
+    if (method === "GET" && path === "/api/v1/platform/dashboard") {
+      sendJson(response, 200, await getPlatformDashboard(currentUser));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/organizations") {
+      sendJson(response, 200, await listPlatformOrganizations(currentUser));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/platform/organizations") {
+      sendJson(response, 201, await createPlatformOrganization(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "GET" && platformOrganizationMatch) {
+      sendJson(response, 200, await getPlatformOrganization(currentUser, platformOrganizationMatch[1]));
+      return;
+    }
+    if (method === "PATCH" && platformOrganizationMatch) {
+      sendJson(response, 200, await updatePlatformOrganization(currentUser, platformOrganizationMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && platformOrganizationStatusMatch) {
+      sendJson(response, 200, await updatePlatformOrganizationStatus(currentUser, platformOrganizationStatusMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && platformOrganizationSubscriptionMatch) {
+      sendJson(response, 200, await getPlatformSubscription(currentUser, platformOrganizationSubscriptionMatch[1]));
+      return;
+    }
+    if (method === "PATCH" && platformOrganizationSubscriptionMatch) {
+      sendJson(response, 200, await updatePlatformSubscription(currentUser, platformOrganizationSubscriptionMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && platformOrganizationPosDevicesMatch) {
+      sendJson(response, 200, await listPlatformOrganizationPosDevices(currentUser, platformOrganizationPosDevicesMatch[1]));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/pos-devices") {
+      sendJson(response, 200, await listPlatformPosDevices(currentUser));
+      return;
+    }
+    if (method === "PATCH" && platformPosDeviceStatusMatch) {
+      sendJson(response, 200, await updatePlatformPosDeviceStatus(currentUser, platformPosDeviceStatusMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && platformPosDeviceLicenseMatch) {
+      sendJson(response, 200, await updatePlatformPosDeviceLicense(currentUser, platformPosDeviceLicenseMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/payments") {
+      sendJson(response, 200, await listPlatformPayments(currentUser));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/platform/payments/manual") {
+      sendJson(response, 201, await createPlatformManualPayment(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/audit-log") {
+      sendJson(response, 200, await listPlatformAuditLog(currentUser, Object.fromEntries(url.searchParams.entries())));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/platform/support/impersonation/start") {
+      await startPlatformImpersonation(currentUser);
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/platform/support/impersonation/end") {
+      await endPlatformImpersonation(currentUser);
+      return;
+    }
   }
 
   if (method === "GET" && path === "/api/v1/integrations/mercadopago/oauth/callback") {

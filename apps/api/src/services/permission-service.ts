@@ -63,6 +63,10 @@ export async function assertAnyPermission(userId: string, permissionCodes: strin
 }
 
 export async function assertBranchAccess(currentUser: AuthenticatedUser, branchId: string) {
+  if (!currentUser.organizationId) {
+    throw new DomainError(403, "BRANCH_ACCESS_DENIED", "Usuario sin organizacion operativa.");
+  }
+
   const branch = await prisma.branch.findFirst({
     where: {
       id: branchId,

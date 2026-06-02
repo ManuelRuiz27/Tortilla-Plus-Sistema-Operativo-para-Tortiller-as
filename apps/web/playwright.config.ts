@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "npm run build -w @tortilla-plus/api && npm run start -w @tortilla-plus/api",
+      command: "npm run build -w @tortilla-plus/api && npm run db:seed -w @tortilla-plus/api && npm run start -w @tortilla-plus/api",
       cwd: rootDir,
       env: {
         DATABASE_URL: "postgresql://tortilla_plus:tortilla_plus_dev@localhost:5432/tortilla_plus?schema=public",
@@ -31,7 +31,7 @@ export default defineConfig({
         JWT_SECRET: "change_me_in_local_development",
         PORT: "3199"
       },
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 60_000,
       url: "http://127.0.0.1:3199/api/v1/health"
     },
@@ -43,7 +43,7 @@ export default defineConfig({
         VITE_APP_ENV: "audit",
         VITE_USE_MOCKS: "false"
       },
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 60_000,
       url: "http://127.0.0.1:5179"
     }

@@ -5,7 +5,7 @@ import { DomainError } from "./domain-error.js";
 
 type AccessTokenPayload = {
   sub: string;
-  organizationId: string;
+  organizationId: string | null;
   email: string;
   exp: number;
 };

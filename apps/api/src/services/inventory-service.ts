@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { DomainError } from "../lib/domain-error.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { assertOrganizationOperational } from "./operational-access-service.js";
 import { assertAnyPermission, assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
@@ -277,6 +278,7 @@ export async function createInventoryAdjustment(currentUser: AuthenticatedUser, 
   const reason = asReason(body.reason);
 
   await assertBranchAccess(currentUser, branchId);
+  await assertInventoryOperationAllowed(currentUser, "La organizacion no puede ajustar inventario.");
 
   return prisma.$transaction(async (tx) => {
     const movement = await applyInventoryMovement(tx, {
@@ -315,6 +317,7 @@ export async function createProductionBatch(currentUser: AuthenticatedUser, inpu
   const items = asItems(body.items);
 
   await assertBranchAccess(currentUser, branchId);
+  await assertInventoryOperationAllowed(currentUser, "La organizacion no puede registrar produccion.");
 
   for (const item of items) {
     await assertProductionProduct(currentUser.organizationId, item.productId);
@@ -380,6 +383,7 @@ export async function closeProductionBatch(
   }
 
   await assertBranchAccess(currentUser, batch.branchId);
+  await assertInventoryOperationAllowed(currentUser, "La organizacion no puede registrar produccion.");
 
   if (batch.status !== "open") {
     throw new DomainError(409, "CANNOT_EDIT_CLOSED_BATCH", "La produccion cerrada no se edita.");
@@ -451,6 +455,7 @@ export async function createWasteRecord(currentUser: AuthenticatedUser, input: u
   const wasteReason = asEnum(body.wasteReason, "wasteReason", wasteReasons);
 
   await assertBranchAccess(currentUser, branchId);
+  await assertInventoryOperationAllowed(currentUser, "La organizacion no puede registrar mermas.");
 
   return prisma.$transaction(async (tx) => {
     const movement = await applyInventoryMovement(tx, {
@@ -520,6 +525,10 @@ export function calculateStockQuantity(
     : current - delta;
 
   return (next / 1000).toFixed(3);
+}
+
+async function assertInventoryOperationAllowed(currentUser: AuthenticatedUser, deniedMessage: string) {
+  await assertOrganizationOperational(currentUser.organizationId, deniedMessage);
 }
 
 async function applyInventoryMovement(

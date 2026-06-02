@@ -4,6 +4,7 @@ import { DomainError } from "../lib/domain-error.js";
 import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { assertLicensedPosDevice, assertOrganizationOperational } from "./operational-access-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
@@ -17,6 +18,15 @@ export async function openCashSession(currentUser: AuthenticatedUser, input: unk
   const openingNote = optionalString(body.openingNote);
 
   await assertCashAccess(currentUser, branchId, "cash.open");
+  await assertOrganizationOperational(currentUser.organizationId, "La organizacion no puede abrir caja.");
+  if (deviceId) {
+    await assertLicensedPosDevice({
+      organizationId: currentUser.organizationId,
+      branchId,
+      deviceId,
+      deniedMessage: "El POS no tiene licencia activa para abrir caja.",
+    });
+  }
 
   const expected = await getSuggestedOpeningAmount(currentUser.organizationId, branchId);
   const discrepancy = subtractMoney(openingAmountCounted, expected);
@@ -227,6 +237,7 @@ export async function requestWithdrawal(currentUser: AuthenticatedUser, input: u
   const description = optionalString(body.description);
 
   await assertCashAccess(currentUser, branchId, "cash.withdraw.request");
+  await assertOrganizationOperational(currentUser.organizationId, "La organizacion no puede operar movimientos de caja.");
   const session = await resolveOpenSession(currentUser.organizationId, branchId, cashSessionId);
   await assertCashReason(currentUser.organizationId, reasonId, "out_");
 
@@ -270,6 +281,7 @@ export async function recordCashIncome(currentUser: AuthenticatedUser, input: un
   const description = optionalString(body.description);
 
   await assertCashAccess(currentUser, branchId, "cash.withdraw.request");
+  await assertOrganizationOperational(currentUser.organizationId, "La organizacion no puede operar movimientos de caja.");
   const session = await resolveOpenSession(currentUser.organizationId, branchId, cashSessionId);
   await assertCashReason(currentUser.organizationId, reasonId, "in_");
 

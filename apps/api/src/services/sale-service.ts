@@ -10,6 +10,7 @@ import { assertFeatureAvailable } from "./subscription-service.js";
 import { classifyFiscalSale, invoiceDeadlineEndOfMonth } from "./billing-fiscal-classifier.js";
 import { createBillingReceiptForSale } from "./public-autofactura-service.js";
 import { assertApprovedTerminalOrderForPayment } from "./payment-terminal-order-service.js";
+import { assertLicensedPosDevice, assertOrganizationOperational } from "./operational-access-service.js";
 
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
 const paymentMethods = ["cash", "card", "transfer", "credit"] as const;
@@ -32,6 +33,7 @@ export async function createSale(currentUser: AuthenticatedUser, input: unknown)
   const clientGeneratedId = optionalString(body.clientGeneratedId);
 
   await assertBranchAccess(currentUser, branchId);
+  await assertSaleOperationAllowed(currentUser.organizationId, branchId, deviceId);
   const cashSession = await getOpenCashSession(currentUser.organizationId, branchId);
 
   return prisma.$transaction(async (tx) => {
@@ -319,6 +321,7 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
   const customerRequestedInvoice = optionalBoolean(body.customerRequestedInvoice ?? body.requestInvoice) ?? false;
 
   await assertBranchAccess(currentUser, branchId);
+  await assertSaleOperationAllowed(currentUser.organizationId, branchId, optionalString(body.deviceId));
 
   return prisma.$transaction(async (tx) => {
     const cashSession = await tx.cashSession.findFirst({
@@ -376,6 +379,19 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
     });
 
     return completeDraftSaleInTransaction(tx, currentUser, sale, body, payments, customerRequestedInvoice);
+  });
+}
+
+async function assertSaleOperationAllowed(organizationId: string, branchId: string, deviceId: string | null) {
+  await assertOrganizationOperational(organizationId, "La organizacion no puede operar ventas.");
+
+  if (!deviceId) return;
+
+  await assertLicensedPosDevice({
+    organizationId,
+    branchId,
+    deviceId,
+    deniedMessage: "El POS no tiene licencia activa para operar ventas.",
   });
 }
 

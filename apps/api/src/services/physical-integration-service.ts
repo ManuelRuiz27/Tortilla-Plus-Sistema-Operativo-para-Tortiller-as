@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { DomainError } from "../lib/domain-error.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { assertOrganizationOperational } from "./operational-access-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 
 type TerminalProvider = "mercadopago" | "clip";
@@ -29,6 +30,7 @@ export async function createTerminalPayment(currentUser: AuthenticatedUser, prov
   const body = asRecord(input);
   const branchId = asString(body.branchId, "branchId");
   await assertBranchAccess(currentUser, branchId);
+  await assertOrganizationOperational(currentUser.organizationId, "La organizacion no puede operar cobros de terminal.");
   const amount = normalizeMoney(body.amount);
   const externalReference = optionalString(body.externalReference) ?? `tp-${randomUUID()}`;
   const terminalId = optionalString(body.terminalId);

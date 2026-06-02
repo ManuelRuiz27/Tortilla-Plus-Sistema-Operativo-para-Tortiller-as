@@ -10,6 +10,7 @@ import { closeCashSession, getOpenCashSession, openCashSession } from "../../src
 import { startMercadoPagoOAuth } from "../../src/services/mercadopago-oauth-service.js";
 import { createOrSyncExternalPosForPosDevice, createOrSyncStoreForBranch } from "../../src/services/mercadopago-point-provisioning-service.js";
 import { bindMercadoPagoTerminalToPos, syncMercadoPagoTerminals } from "../../src/services/payment-terminal-service.js";
+import { updatePlatformOrganizationStatus } from "../../src/services/platform-service.js";
 import {
   confirmTerminalOrderAndCheckout,
   createTerminalOrder,
@@ -35,6 +36,15 @@ function firstBranchId(session: LoginResult): string {
   const branchId = session.user.branches[0]?.branchId;
   assert.ok(branchId, "demo user must have a branch assignment");
   return branchId;
+}
+
+function asPlatformUser(session: LoginResult): AuthenticatedUser {
+  assert.equal(session.user.organizationId, null);
+  return {
+    id: session.user.id,
+    organizationId: "",
+    email: session.user.email,
+  };
 }
 
 async function ensurePosDevice(organizationId: string, branchId: string) {
@@ -224,6 +234,50 @@ test("Mercado Pago terminal order is restricted to the selected POS binding and 
     where: { id: mockTerminal(terminals).id },
     data: { operatingMode: "PDV" },
   });
+});
+
+test("Mercado Pago terminal order is blocked when the organization is suspended by platform", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const manager = asAuthenticatedUser(managerSession);
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
+  await startMercadoPagoOAuth(manager);
+  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
+  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
+  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+  const originalOrganization = await prisma.organization.findUniqueOrThrow({
+    where: { id: cashier.organizationId },
+    select: { status: true },
+  });
+
+  try {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: "suspended_limited",
+    });
+
+    await assert.rejects(
+      () => createTerminalOrder(cashier, {
+        branchId,
+        posDeviceId: posDevice.id,
+        amount: "24.00",
+        saleDraft: {
+          items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+        },
+      }, `it-mp-suspended-${Date.now()}`),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+  } finally {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: originalOrganization.status,
+    });
+  }
 });
 
 test("Mercado Pago open terminal order returns the active POS order only", async () => {

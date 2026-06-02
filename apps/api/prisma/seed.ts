@@ -101,6 +101,7 @@ async function main() {
   }
 
   const roles = [
+    ["platform_owner", "Duenio de Plataforma", "platform"],
     ["organization_owner", "Duenio de Organizacion", "organization"],
     ["manager", "Gerente", "organization"],
     ["supervisor", "Supervisor", "branch"],
@@ -141,6 +142,21 @@ async function main() {
     ["billing.manage", "Gestionar facturacion"],
     ["routes.manage", "Gestionar rutas"],
     ["reports.basic.view", "Ver reportes basicos"],
+    ["platform.dashboard.view", "Ver dashboard de plataforma"],
+    ["platform.organizations.view", "Ver organizaciones de plataforma"],
+    ["platform.organizations.manage", "Gestionar organizaciones de plataforma"],
+    ["platform.organizations.suspend", "Suspender organizaciones"],
+    ["platform.subscriptions.view", "Ver suscripciones de plataforma"],
+    ["platform.subscriptions.manage", "Gestionar suscripciones de plataforma"],
+    ["platform.payments.view", "Ver pagos SaaS"],
+    ["platform.payments.manage", "Gestionar pagos SaaS"],
+    ["platform.pos_devices.view", "Ver POS de plataforma"],
+    ["platform.pos_devices.manage", "Gestionar POS de plataforma"],
+    ["platform.pos_devices.license", "Licenciar POS"],
+    ["platform.audit.view", "Ver auditoria global"],
+    ["platform.support.access", "Acceder a soporte de plataforma"],
+    ["platform.impersonation.start", "Iniciar impersonacion"],
+    ["platform.impersonation.end", "Terminar impersonacion"],
   ] as const;
 
   for (const [code, name] of permissionCodes) {
@@ -151,11 +167,17 @@ async function main() {
     });
   }
 
+  const platformOwnerRole = await prisma.role.findUniqueOrThrow({ where: { code: "platform_owner" } });
   const ownerRole = await prisma.role.findUniqueOrThrow({ where: { code: "organization_owner" } });
   const managerRole = await prisma.role.findUniqueOrThrow({ where: { code: "manager" } });
   const supervisorRole = await prisma.role.findUniqueOrThrow({ where: { code: "supervisor" } });
   const cashierRole = await prisma.role.findUniqueOrThrow({ where: { code: "cashier" } });
   const allPermissions = await prisma.permission.findMany();
+
+  await grantPermissions(
+    platformOwnerRole.id,
+    allPermissions.filter((permission) => permission.code.startsWith("platform.")).map((permission) => permission.code),
+  );
 
   for (const permission of allPermissions) {
     await prisma.rolePermission.upsert({
@@ -667,6 +689,7 @@ async function main() {
     email: "cashier.demo@tortillaplus.mx",
     name: "Cajero Demo",
   });
+  await upsertPlatformOwner(platformOwnerRole.id);
 }
 
 async function grantPermissions(roleId: string, permissionCodes: string[]) {
@@ -893,6 +916,55 @@ async function upsertDemoUser(input: {
       isDefault: true,
     },
   });
+}
+
+async function upsertPlatformOwner(roleId: string) {
+  const email = "admin@tortillaplus.mx";
+  const existing = await prisma.user.findFirst({
+    where: {
+      organizationId: null,
+      email,
+    },
+  });
+
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          name: "Duenio Plataforma",
+          passwordHash: await hashSecret(demoPassword),
+          pinHash: null,
+          status: "active",
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          organizationId: null,
+          name: "Duenio Plataforma",
+          email,
+          passwordHash: await hashSecret(demoPassword),
+          pinHash: null,
+          status: "active",
+        },
+      });
+
+  const existingRole = await prisma.userRole.findFirst({
+    where: {
+      userId: user.id,
+      roleId,
+      organizationId: null,
+    },
+  });
+
+  if (!existingRole) {
+    await prisma.userRole.create({
+      data: {
+        userId: user.id,
+        roleId,
+        organizationId: null,
+      },
+    });
+  }
 }
 
 main()

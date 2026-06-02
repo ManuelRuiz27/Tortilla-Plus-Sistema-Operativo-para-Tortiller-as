@@ -48,6 +48,11 @@ export function LoginForm() {
       login(payload);
       setBranches(payload.user.branches);
 
+      if (payload.user.roles.includes("platform_owner")) {
+        navigate("/platform", { replace: true });
+        return;
+      }
+
       try {
         setSubscription(await subscriptionFeaturesRequest());
       } catch {

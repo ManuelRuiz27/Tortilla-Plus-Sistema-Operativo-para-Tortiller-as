@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from "./auth-service.js";
 import { checkoutSale } from "./sale-service.js";
 import { createPointOrder, getOrder, cancelOrder } from "./mercadopago-point-adapter.js";
 import { getActiveAccessToken } from "./mercadopago-oauth-service.js";
+import { assertLicensedPosDevice, assertOrganizationOperational } from "./operational-access-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { resolveActiveBinding } from "./payment-terminal-service.js";
 import { assertTerminalReadyForOrder } from "./mercadopago-point-provisioning-service.js";
@@ -28,6 +29,8 @@ export async function createTerminalOrder(currentUser: AuthenticatedUser, input:
   const checkoutPayments = asOptionalPayments(body.payments);
   const key = idempotencyKey || randomUUID();
 
+  await assertOrganizationOperational(currentUser.organizationId, "La organizacion no puede operar cobros de terminal.");
+
   if (env.PHYSICAL_INTEGRATIONS_MODE === "real" && !posDeviceId) {
     throw new DomainError(409, "POS_DEVICE_REQUIRED", "Cobro Mercado Pago requiere caja/POS identificada.");
   }
@@ -43,6 +46,12 @@ export async function createTerminalOrder(currentUser: AuthenticatedUser, input:
     organizationId: currentUser.organizationId,
     branchId,
     posDeviceId,
+  });
+  await assertLicensedPosDevice({
+    organizationId: currentUser.organizationId,
+    branchId,
+    deviceId: posDevice.id,
+    deniedMessage: "El POS no tiene licencia activa para operar cobros de terminal.",
   });
   const terminal = binding.paymentTerminal;
   await assertTerminalReadyForOrder({

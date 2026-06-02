@@ -1,4 +1,4 @@
-export type UserRole = "cashier" | "manager" | "supervisor" | "organization_owner";
+export type UserRole = "cashier" | "manager" | "supervisor" | "organization_owner" | "platform_owner";
 
 export type UserBranch = {
   branchId: string;
@@ -9,7 +9,7 @@ export type UserBranch = {
 
 export type CurrentUser = {
   id: string;
-  organizationId: string;
+  organizationId: string | null;
   email: string;
   fullName: string;
   roles: UserRole[];

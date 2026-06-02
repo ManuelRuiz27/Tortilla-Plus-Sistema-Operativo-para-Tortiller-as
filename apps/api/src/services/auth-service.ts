@@ -39,16 +39,24 @@ export async function login(input: unknown) {
     throw new DomainError(403, "USER_INACTIVE", "Usuario inactivo.");
   }
 
-  if (!user.organizationId) {
+  const roles = await prisma.userRole.findMany({
+    where: { userId: user.id },
+    include: { role: true },
+  });
+  const isPlatformOwner = roles.some((userRole) => userRole.role.code === "platform_owner" && userRole.role.scope === "platform");
+
+  if (!user.organizationId && !isPlatformOwner) {
     throw new DomainError(403, "INVALID_TENANT_REFERENCE", "Usuario sin organizacion operativa.");
   }
 
-  const organization = await prisma.organization.findUnique({
-    where: { id: user.organizationId },
-  });
+  if (user.organizationId) {
+    const organization = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+    });
 
-  if (!organization || organization.status === "cancelled") {
-    throw new DomainError(403, "INVALID_TENANT_REFERENCE", "Organizacion no operativa.");
+    if (!organization || organization.status === "cancelled") {
+      throw new DomainError(403, "INVALID_TENANT_REFERENCE", "Organizacion no operativa.");
+    }
   }
 
   const refreshToken = createRefreshToken();
@@ -109,7 +117,7 @@ export async function refresh(input: unknown) {
     throw new DomainError(401, "INVALID_TOKEN", "Refresh token invalido.");
   }
 
-  if (session.user.status !== "active" || !session.user.organizationId) {
+  if (session.user.status !== "active") {
     throw new DomainError(403, "USER_INACTIVE", "Usuario inactivo.");
   }
 
@@ -187,13 +195,13 @@ export async function authenticate(request: IncomingMessage): Promise<Authentica
     where: { id: payload.sub },
   });
 
-  if (!user || user.status !== "active" || !user.organizationId) {
+  if (!user || user.status !== "active") {
     throw new DomainError(403, "USER_INACTIVE", "Usuario inactivo.");
   }
 
   return {
     id: user.id,
-    organizationId: user.organizationId,
+    organizationId: user.organizationId ?? "",
     email: user.email,
   };
 }

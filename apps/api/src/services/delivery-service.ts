@@ -5,6 +5,7 @@ import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
 import { runIdempotent } from "./idempotency-service.js";
+import { assertOrganizationOperational } from "./operational-access-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
@@ -270,6 +271,7 @@ async function createDeliveryOrderOnce(currentUser: AuthenticatedUser, input: un
   const items = asOrderItems(body.items);
 
   await assertBranchAccess(currentUser, branchId);
+  await assertDeliveryOperationAllowed(currentUser, branchId, "La organizacion no puede operar rutas.");
   await assertCustomer(currentUser.organizationId, customerId);
   if (routeId) {
     const route = await getRouteOrThrow(currentUser.organizationId, routeId);
@@ -459,6 +461,7 @@ async function recordDeliveryPaymentOnce(currentUser: AuthenticatedUser, orderId
   const body = asRecord(input);
   const order = await getOrderOrThrow(currentUser.organizationId, orderId);
   await assertBranchAccess(currentUser, order.branchId);
+  await assertDeliveryOperationAllowed(currentUser, order.branchId, "La organizacion no puede registrar pagos de ruta.");
   const amount = asMoney(body.amount, "amount");
   const paymentMethod = asEnum(body.paymentMethod ?? "cash", "paymentMethod", paymentMethods);
   const reference = optionalString(body.reference);
@@ -543,6 +546,7 @@ export async function createDeliveryReturn(currentUser: AuthenticatedUser, order
   const body = asRecord(input);
   const order = await getOrderOrThrow(currentUser.organizationId, orderId);
   await assertBranchAccess(currentUser, order.branchId);
+  await assertDeliveryOperationAllowed(currentUser, order.branchId, "La organizacion no puede procesar devoluciones de ruta.");
   const items = asReturnItems(body.items);
 
   return prisma.$transaction(async (tx) => {
@@ -588,6 +592,7 @@ export async function reviewDeliveryReturn(currentUser: AuthenticatedUser, deliv
     throw new DomainError(404, "DELIVERY_RETURN_NOT_FOUND", "Devolucion de ruta no encontrada.");
   }
   await assertBranchAccess(currentUser, deliveryReturn.branchId);
+  await assertDeliveryOperationAllowed(currentUser, deliveryReturn.branchId, "La organizacion no puede procesar devoluciones de ruta.");
   if (deliveryReturn.status !== "pending_review") {
     throw new DomainError(409, "RETURN_ALREADY_REVIEWED", "La devolucion ya fue revisada.");
   }
@@ -633,6 +638,7 @@ export async function createDeliverySettlement(currentUser: AuthenticatedUser, i
   const driverId = optionalString(body.driverId);
   const routeId = optionalString(body.routeId);
   await assertBranchAccess(currentUser, branchId);
+  await assertDeliveryOperationAllowed(currentUser, branchId, "La organizacion no puede operar liquidaciones de ruta.");
   const expectedCashAmount = await calculateExpectedCash(currentUser.organizationId, branchId, driverId, routeId);
 
   const settlement = await prisma.deliverySettlement.create({
@@ -688,6 +694,7 @@ export async function closeDeliverySettlement(currentUser: AuthenticatedUser, se
   const deliveredCashAmount = asMoney(body.deliveredCashAmount, "deliveredCashAmount");
   const settlement = await getSettlementOrThrow(currentUser.organizationId, settlementId);
   await assertBranchAccess(currentUser, settlement.branchId);
+  await assertDeliveryOperationAllowed(currentUser, settlement.branchId, "La organizacion no puede operar liquidaciones de ruta.");
 
   if (settlement.status !== "open") {
     throw new DomainError(409, "INVALID_DELIVERY_STATUS", "Liquidacion no abierta.");
@@ -755,6 +762,7 @@ async function depositSettlementToCashOnce(currentUser: AuthenticatedUser, settl
   await assertPermission(currentUser.id, "routes.manage");
   const settlement = await getSettlementOrThrow(currentUser.organizationId, settlementId);
   await assertBranchAccess(currentUser, settlement.branchId);
+  await assertDeliveryOperationAllowed(currentUser, settlement.branchId, "La organizacion no puede operar liquidaciones de ruta.");
 
   if (settlement.status !== "closed") {
     throw new DomainError(409, "INVALID_DELIVERY_STATUS", "Liquidacion debe estar cerrada.");
@@ -818,10 +826,19 @@ async function assertDeliveryOrderAction(
   await assertPermission(currentUser.id, "routes.manage");
   const order = await getOrderOrThrow(currentUser.organizationId, orderId);
   await assertBranchAccess(currentUser, order.branchId);
+  await assertDeliveryOperationAllowed(currentUser, order.branchId, "La organizacion no puede operar rutas.");
   if (order.status !== expectedStatus) {
     throw new DomainError(409, "INVALID_DELIVERY_STATUS", "Estado invalido para la accion.");
   }
   return order;
+}
+
+async function assertDeliveryOperationAllowed(
+  currentUser: AuthenticatedUser,
+  _branchId: string,
+  deniedMessage: string,
+) {
+  await assertOrganizationOperational(currentUser.organizationId, deniedMessage);
 }
 
 async function assertDeliveryCreditPayment(

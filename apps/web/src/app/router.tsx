@@ -19,6 +19,14 @@ import { SettingsPage } from "../modules/manager/pages/settings-page";
 import { WithdrawalsPage } from "../modules/manager/pages/withdrawals-page";
 import { OpenCashPage } from "../modules/pos/pages/open-cash-page";
 import { PosRouterPage } from "../modules/pos/pages/pos-router-page";
+import { PlatformAuditPage } from "../modules/platform/pages/platform-audit-page";
+import { PlatformDashboardPage } from "../modules/platform/pages/platform-dashboard-page";
+import { PlatformOrganizationDetailPage } from "../modules/platform/pages/platform-organization-detail-page";
+import { PlatformOrganizationsPage } from "../modules/platform/pages/platform-organizations-page";
+import { PlatformPaymentsPage } from "../modules/platform/pages/platform-payments-page";
+import { PlatformPosDevicesPage } from "../modules/platform/pages/platform-pos-devices-page";
+import { PlatformSubscriptionsPage } from "../modules/platform/pages/platform-subscriptions-page";
+import { PlatformSupportPage } from "../modules/platform/pages/platform-support-page";
 import { PublicAutofacturaPage } from "../modules/public-billing/pages/public-autofactura-page";
 import { SalePage } from "../modules/pos/pages/sale-page";
 import { AuthGuard } from "../shared/guards/auth-guard";
@@ -28,6 +36,7 @@ import { FeatureGuard } from "../shared/guards/feature-guard";
 import { RoleGuard } from "../shared/guards/role-guard";
 import { AuthLayout } from "../shared/layouts/auth-layout";
 import { ManagerLayout } from "../shared/layouts/manager-layout";
+import { PlatformLayout } from "../shared/layouts/platform-layout";
 import { PosLayout } from "../shared/layouts/pos-layout";
 import { POS_ALLOWED_ROLES } from "../modules/pos/config/pos.config";
 
@@ -39,6 +48,25 @@ export function AppRouter() {
       </Route>
       <Route element={<Navigate replace to="/app/manager/dashboard" />} path="/" />
       <Route element={<PublicAutofacturaPage />} path="/r/:token" />
+      <Route
+        element={
+          <AuthGuard>
+            <RoleGuard allowedRoles={["platform_owner"]}>
+              <PlatformLayout />
+            </RoleGuard>
+          </AuthGuard>
+        }
+        path="/platform"
+      >
+        <Route index element={<PlatformDashboardPage />} />
+        <Route element={<PlatformOrganizationsPage />} path="organizations" />
+        <Route element={<PlatformOrganizationDetailPage />} path="organizations/:organizationId" />
+        <Route element={<PlatformSubscriptionsPage />} path="subscriptions" />
+        <Route element={<PlatformPosDevicesPage />} path="pos-devices" />
+        <Route element={<PlatformPaymentsPage />} path="payments" />
+        <Route element={<PlatformAuditPage />} path="audit" />
+        <Route element={<PlatformSupportPage />} path="support" />
+      </Route>
       <Route
         element={
           <AuthGuard>
