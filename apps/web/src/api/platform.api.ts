@@ -1,6 +1,11 @@
-import { httpClient } from "./http-client";
+import { httpClient, httpDownload } from "./http-client";
 import type {
   PlatformAuditLog,
+  BillingCycle,
+  BillingSummary,
+  CommercialPlan,
+  CfdiUsage,
+  OneTimeCharge,
   PlatformDashboard,
   PlatformOrganization,
   PlatformOrganizationDetail,
@@ -8,8 +13,14 @@ import type {
   PlatformPosDevice
 } from "../modules/platform/types/platform.types";
 
+export type PlatformPlanCode = "free" | "paid" | "mostrador" | "operativo" | "comercial";
+
 export function platformDashboardRequest() {
   return httpClient<PlatformDashboard>("/platform/dashboard");
+}
+
+export function platformCommercialPlansRequest() {
+  return httpClient<CommercialPlan[]>("/platform/commercial-plans");
 }
 
 export function platformOrganizationsRequest() {
@@ -18,6 +29,59 @@ export function platformOrganizationsRequest() {
 
 export function platformOrganizationRequest(id: string) {
   return httpClient<PlatformOrganizationDetail>(`/platform/organizations/${id}`);
+}
+
+export function platformBillingSummaryRequest(organizationId: string) {
+  return httpClient<BillingSummary>(`/platform/organizations/${organizationId}/billing-summary`);
+}
+
+export function platformBillingCyclesRequest(organizationId: string) {
+  return httpClient<BillingCycle[]>(`/platform/organizations/${organizationId}/billing-cycles`);
+}
+
+export function platformCfdiUsageRequest(organizationId: string) {
+  return httpClient<CfdiUsage>(`/platform/organizations/${organizationId}/cfdi-usage`);
+}
+
+export function createPlatformOneTimeChargeRequest(organizationId: string, payload: {
+  chargeType: string;
+  description: string;
+  amount: string;
+  currency?: string;
+}) {
+  return httpClient<OneTimeCharge>(`/platform/organizations/${organizationId}/one-time-charges`, {
+    method: "POST",
+    body: payload
+  });
+}
+
+export function updatePlatformSubscriptionItemsRequest(organizationId: string, payload: {
+  items: Array<{ id?: string; itemType: string; quantity: number; unitPrice: string; currency?: string; status?: string }>;
+}) {
+  return httpClient(`/platform/organizations/${organizationId}/subscription-items`, {
+    method: "PATCH",
+    body: payload
+  });
+}
+
+export function generatePlatformBillingCycleRequest(organizationId: string) {
+  return httpClient<BillingCycle>(`/platform/organizations/${organizationId}/billing-cycles/generate`, {
+    method: "POST",
+    body: {}
+  });
+}
+
+export function recalculatePlatformBillingCycleRequest(billingCycleId: string) {
+  return httpClient<BillingCycle>(`/platform/billing-cycles/${billingCycleId}/recalculate`, {
+    method: "PATCH"
+  });
+}
+
+export function markPlatformBillingCyclePaidRequest(billingCycleId: string, payload?: { reference?: string; notes?: string }) {
+  return httpClient<{ cycle: BillingCycle; payment: PlatformPayment | null }>(`/platform/billing-cycles/${billingCycleId}/mark-paid`, {
+    method: "POST",
+    body: payload ?? {}
+  });
 }
 
 export function updatePlatformOrganizationRequest(
@@ -42,7 +106,7 @@ export function createPlatformOrganizationRequest(payload: {
   taxId?: string;
   contactEmail: string;
   contactPhone?: string;
-  planCode: "free" | "paid";
+  planCode: PlatformPlanCode;
   owner?: {
     name: string;
     email: string;
@@ -83,7 +147,7 @@ export function updatePlatformOrganizationStatusRequest(organizationId: string, 
 export function updatePlatformSubscriptionRequest(
   organizationId: string,
   payload: {
-    planCode?: "free" | "paid";
+    planCode?: PlatformPlanCode;
     status: string;
     billingPeriod: "monthly" | "annual";
   }
@@ -119,10 +183,14 @@ export function platformPaymentsRequest() {
 export function createPlatformManualPaymentRequest(payload: {
   organizationId: string;
   subscriptionId: string;
+  billingCycleId?: string;
   amount: string;
   currency?: string;
+  paymentMethod?: string;
+  reference?: string;
   paidAt?: string;
   note?: string;
+  notes?: string;
 }) {
   return httpClient<PlatformPayment>("/platform/payments/manual", {
     method: "POST",
@@ -145,4 +213,12 @@ export function platformAuditLogRequest(filters?: {
   if (filters?.to) searchParams.set("to", filters.to);
   const query = searchParams.toString();
   return httpClient<PlatformAuditLog[]>(`/platform/audit-log${query ? `?${query}` : ""}`);
+}
+
+export function downloadPlatformSaasIncomeReportRequest() {
+  return httpDownload("/platform/reports/saas-income");
+}
+
+export function downloadPlatformAccountsReceivableReportRequest() {
+  return httpDownload("/platform/reports/accounts-receivable");
 }

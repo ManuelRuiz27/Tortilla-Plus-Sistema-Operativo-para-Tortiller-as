@@ -97,9 +97,18 @@ async function ensureExtraPosDevice(organizationId: string, branchId: string) {
   });
 }
 
-async function prepareMercadoPagoPos(manager: AuthenticatedUser, branchId: string, posDeviceId: string) {
-  await createOrSyncStoreForBranch(manager, branchId);
-  await createOrSyncExternalPosForPosDevice(manager, posDeviceId);
+async function prepareMercadoPagoPos(configurator: AuthenticatedUser, branchId: string, posDeviceId: string) {
+  await createOrSyncStoreForBranch(configurator, branchId);
+  await createOrSyncExternalPosForPosDevice(configurator, posDeviceId);
+}
+
+async function prepareMercadoPagoTerminal(configurator: AuthenticatedUser, branchId: string, posDeviceId: string) {
+  await startMercadoPagoOAuth(configurator);
+  await prepareMercadoPagoPos(configurator, branchId, posDeviceId);
+  const terminals = (await syncMercadoPagoTerminals(configurator, { branchId })).data;
+  assert.equal(terminals.length > 0, true);
+  await bindMercadoPagoTerminalToPos(configurator, posDeviceId, { paymentTerminalId: mockTerminal(terminals).id });
+  return terminals;
 }
 
 function mockTerminal(terminals: Array<{ id: string; terminalId: string }>) {
@@ -109,9 +118,9 @@ function mockTerminal(terminals: Array<{ id: string; terminalId: string }>) {
 }
 
 test("Mercado Pago terminal mock order approves and completes POS checkout once", async () => {
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
 
@@ -125,11 +134,7 @@ test("Mercado Pago terminal mock order approves and completes POS checkout once"
   }
 
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  assert.equal(terminals.length > 0, true);
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
 
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
@@ -186,17 +191,14 @@ test("Mercado Pago real terminal order requires explicit POS device", async () =
 });
 
 test("Mercado Pago terminal order is restricted to the selected POS binding and PDV mode", async () => {
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
   const extraPosDevice = await ensureExtraPosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  const terminals = await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
   });
@@ -238,17 +240,14 @@ test("Mercado Pago terminal order is restricted to the selected POS binding and 
 
 test("Mercado Pago terminal order is blocked when the organization is suspended by platform", async () => {
   const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
   const platformUser = asPlatformUser(platformSession);
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
   });
@@ -281,16 +280,13 @@ test("Mercado Pago terminal order is blocked when the organization is suspended 
 });
 
 test("Mercado Pago open terminal order returns the active POS order only", async () => {
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
   await prisma.paymentTerminalOrder.updateMany({
     where: {
       organizationId: cashier.organizationId,
@@ -327,16 +323,13 @@ test("Mercado Pago open terminal order returns the active POS order only", async
 });
 
 test("Mercado Pago rejected terminal order blocks checkout", async () => {
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
   });
@@ -362,16 +355,13 @@ test("Mercado Pago rejected terminal order blocks checkout", async () => {
 });
 
 test("cash closing blocks pending Mercado Pago terminal orders", async () => {
-  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
-  const manager = asAuthenticatedUser(managerSession);
+  const owner = asAuthenticatedUser(ownerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
   const posDevice = await ensurePosDevice(cashier.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
 
   let cashSession = (await getOpenCashSession(cashier, branchId)).data;
   if (!cashSession) {
@@ -413,14 +403,13 @@ test("cash closing blocks pending Mercado Pago terminal orders", async () => {
 });
 
 test("terminal reconciliation detects approved order without POS sale", async () => {
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
   const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const owner = asAuthenticatedUser(ownerSession);
   const manager = asAuthenticatedUser(managerSession);
   const branchId = firstBranchId(managerSession);
   const posDevice = await ensurePosDevice(manager.organizationId, branchId);
-  await startMercadoPagoOAuth(manager);
-  await prepareMercadoPagoPos(manager, branchId, posDevice.id);
-  const terminals = (await syncMercadoPagoTerminals(manager, { branchId })).data;
-  await bindMercadoPagoTerminalToPos(manager, posDevice.id, { paymentTerminalId: mockTerminal(terminals).id });
+  await prepareMercadoPagoTerminal(owner, branchId, posDevice.id);
   const tortilla = await prisma.product.findFirstOrThrow({
     where: { organizationId: manager.organizationId, sku: "TORTILLA-KG" },
   });

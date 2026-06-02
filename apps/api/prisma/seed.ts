@@ -9,7 +9,8 @@ const demoPassword = "Demo1234!";
 const demoPin = "1234";
 
 async function main() {
-  const { paidPlan } = await bootstrapSystemCatalog(prisma);
+  const { commercialPlans, paidPlan } = await bootstrapSystemCatalog(prisma);
+  const operativoPlan = commercialPlans.find((plan) => plan.code === "operativo") ?? paidPlan;
 
   const platformOwnerRole = await prisma.role.findUniqueOrThrow({ where: { code: "platform_owner" } });
   const ownerRole = await prisma.role.findUniqueOrThrow({ where: { code: "organization_owner" } });
@@ -422,19 +423,18 @@ async function main() {
     },
   });
 
-  if (subscription) {
-    await prisma.subscription.update({
+  const demoSubscription = subscription
+    ? await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
-        planId: paidPlan.id,
+        planId: operativoPlan.id,
         provider: "manual",
       },
-    });
-  } else {
-    await prisma.subscription.create({
+    })
+    : await prisma.subscription.create({
       data: {
       organizationId: organization.id,
-      planId: paidPlan.id,
+      planId: operativoPlan.id,
       status: "active",
       provider: "manual",
       billingPeriod: "monthly",
@@ -443,7 +443,12 @@ async function main() {
       currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
-  }
+
+  await ensureSubscriptionItem(demoSubscription.id, "base_plan", 1, "599.00");
+  await ensureSubscriptionItem(demoSubscription.id, "included_branch", 1, "0.00");
+  await ensureSubscriptionItem(demoSubscription.id, "included_pos", 2, "0.00");
+  await ensureSubscriptionItem(demoSubscription.id, "included_terminal", 2, "0.00");
+  await ensureSubscriptionItem(demoSubscription.id, "included_cfdi", 50, "0.00");
 
   await upsertDemoUser({
     organizationId: organization.id,
@@ -602,6 +607,36 @@ async function ensureInventoryStock(
       quantity,
       reservedQuantity: "0.000",
       minimumQuantity: "0.000",
+    },
+  });
+}
+
+async function ensureSubscriptionItem(
+  subscriptionId: string,
+  itemType: "base_plan" | "included_branch" | "included_pos" | "included_terminal" | "included_cfdi",
+  quantity: number,
+  unitPrice: string,
+) {
+  const existing = await prisma.subscriptionItem.findFirst({
+    where: { subscriptionId, itemType },
+  });
+
+  if (existing) {
+    await prisma.subscriptionItem.update({
+      where: { id: existing.id },
+      data: { quantity, unitPrice, currency: "MXN", status: "active" },
+    });
+    return;
+  }
+
+  await prisma.subscriptionItem.create({
+    data: {
+      subscriptionId,
+      itemType,
+      quantity,
+      unitPrice,
+      currency: "MXN",
+      status: "active",
     },
   });
 }

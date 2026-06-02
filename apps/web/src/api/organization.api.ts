@@ -1,4 +1,5 @@
 import { httpClient } from "./http-client";
+import type { BillingSummary } from "../modules/platform/types/platform.types";
 
 export type OrganizationUser = {
   id: string;
@@ -47,6 +48,14 @@ export type OrganizationSummary = {
 
 export function organizationSummaryRequest() {
   return httpClient<OrganizationSummary>("/organization/summary");
+}
+
+export function organizationBillingSummaryRequest() {
+  return httpClient<BillingSummary>("/organization/billing-summary");
+}
+
+export function organizationCfdiUsageRequest() {
+  return httpClient<BillingSummary["cfdiUsage"]>("/organization/cfdi-usage");
 }
 
 export function createOrganizationUserRequest(payload: {

@@ -11,6 +11,48 @@ export const planDefinitions = [
   },
 ] as const;
 
+export const commercialPlanDefinitions = [
+  {
+    code: "mostrador",
+    name: "Mostrador",
+    description: "Plan piloto Mostrador: 1 sucursal, 1 POS, 1 terminal, sin CFDI.",
+    price: "299.00",
+    includedBranches: 1,
+    includedPos: 1,
+    includedTerminals: 1,
+    includedCfdi: 0,
+    routesEnabled: false,
+    billingCfdiEnabled: false,
+    advancedReportsEnabled: false,
+  },
+  {
+    code: "operativo",
+    name: "Operativo",
+    description: "Plan piloto Operativo: 1 sucursal, 2 POS, 2 terminales, 50 CFDI.",
+    price: "599.00",
+    includedBranches: 1,
+    includedPos: 2,
+    includedTerminals: 2,
+    includedCfdi: 50,
+    routesEnabled: false,
+    billingCfdiEnabled: true,
+    advancedReportsEnabled: false,
+  },
+  {
+    code: "comercial",
+    name: "Comercial",
+    description: "Plan piloto Comercial: 2 sucursales, 3 POS, 3 terminales, 100 CFDI y rutas.",
+    price: "999.00",
+    includedBranches: 2,
+    includedPos: 3,
+    includedTerminals: 3,
+    includedCfdi: 100,
+    routesEnabled: true,
+    billingCfdiEnabled: true,
+    advancedReportsEnabled: true,
+  },
+] as const;
+
 export const featureDefinitions = [
   ["pos_basic", "POS basico", null],
   ["cash_control", "Control de caja", null],
@@ -153,7 +195,6 @@ export const rolePermissionMatrix = {
     "reports.basic.view",
     "reports.advanced.view",
     "integrations.view",
-    "integrations.manage",
   ],
   supervisor: [
     "sales.create",

@@ -1,9 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
-import { createPlatformOrganizationRequest, platformOrganizationsRequest } from "../../../api/platform.api";
-import { queryClient } from "../../../app/query-client";
 import { ApiErrorException } from "../../../api/api-error";
+import {
+  createPlatformOrganizationRequest,
+  platformCommercialPlansRequest,
+  platformOrganizationsRequest
+} from "../../../api/platform.api";
+import type { PlatformPlanCode } from "../../../api/platform.api";
+import { queryClient } from "../../../app/query-client";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { StatusBadge } from "../../../shared/components/status-badge";
@@ -11,13 +16,14 @@ import { labelStatus } from "../../../shared/utils/labels";
 
 export function PlatformOrganizationsPage() {
   const { data, isLoading } = useQuery({ queryKey: ["platform-organizations"], queryFn: platformOrganizationsRequest });
+  const commercialPlansQuery = useQuery({ queryKey: ["platform-commercial-plans"], queryFn: platformCommercialPlansRequest });
   const [form, setForm] = useState({
     name: "",
     legalName: "",
     taxId: "",
     contactEmail: "",
     contactPhone: "",
-    planCode: "free" as "free" | "paid",
+    planCode: "operativo" as PlatformPlanCode,
     ownerName: "",
     ownerEmail: "",
     ownerPassword: "",
@@ -34,7 +40,7 @@ export function PlatformOrganizationsPage() {
         taxId: "",
         contactEmail: "",
         contactPhone: "",
-        planCode: "free",
+        planCode: "operativo",
         ownerName: "",
         ownerEmail: "",
         ownerPassword: "",
@@ -85,9 +91,12 @@ export function PlatformOrganizationsPage() {
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, taxId: event.target.value }))} placeholder="RFC" value={form.taxId} />
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, contactEmail: event.target.value }))} placeholder="Correo de contacto" required type="email" value={form.contactEmail} />
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, contactPhone: event.target.value }))} placeholder="Telefono" value={form.contactPhone} />
-        <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, planCode: event.target.value as "free" | "paid" }))} value={form.planCode}>
+        <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, planCode: event.target.value as PlatformPlanCode }))} value={form.planCode}>
           <option value="free">Plan free</option>
           <option value="paid">Plan paid</option>
+          {(commercialPlansQuery.data ?? []).map((plan) => (
+            <option key={plan.code} value={plan.code}>{plan.name}</option>
+          ))}
         </select>
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerName: event.target.value }))} placeholder="Dueno inicial" value={form.ownerName} />
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setForm((current) => ({ ...current, ownerEmail: event.target.value }))} placeholder="Correo dueno" type="email" value={form.ownerEmail} />

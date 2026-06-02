@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 import {
+  commercialPlanDefinitions,
   featureDefinitions,
   freePlanEnabledFeatures,
   permissionDefinitions,
@@ -41,6 +42,24 @@ export async function bootstrapSystemCatalog(prisma: Tx) {
       status: "active",
     },
   });
+
+  const commercialPlans = [];
+  for (const definition of commercialPlanDefinitions) {
+    commercialPlans.push(await prisma.plan.upsert({
+      where: { code: definition.code },
+      update: {
+        name: definition.name,
+        description: definition.description,
+        status: "active",
+      },
+      create: {
+        code: definition.code,
+        name: definition.name,
+        description: definition.description,
+        status: "active",
+      },
+    }));
+  }
 
   for (const [code, name, limitValue] of featureDefinitions) {
     const feature = await prisma.feature.upsert({
@@ -86,6 +105,36 @@ export async function bootstrapSystemCatalog(prisma: Tx) {
         limitValue: null,
       },
     });
+
+    for (const plan of commercialPlans) {
+      const definition = commercialPlanDefinitions.find((item) => item.code === plan.code);
+      const enabled = definition
+        ? code === "billing_cfdi"
+          ? definition.billingCfdiEnabled
+          : code === "delivery_routes"
+            ? definition.routesEnabled
+            : code === "advanced_reports"
+              ? definition.advancedReportsEnabled
+              : true
+        : true;
+      const commercialLimit = definition
+        ? code === "max_branches"
+          ? definition.includedBranches
+          : code === "max_pos_devices"
+            ? definition.includedPos
+            : limitValue
+        : limitValue;
+      await prisma.planFeature.upsert({
+        where: {
+          planId_featureId: {
+            planId: plan.id,
+            featureId: feature.id,
+          },
+        },
+        update: { enabled, limitValue: commercialLimit },
+        create: { planId: plan.id, featureId: feature.id, enabled, limitValue: commercialLimit },
+      });
+    }
   }
 
   for (const [code, name, scope] of roleDefinitions) {
@@ -109,7 +158,7 @@ export async function bootstrapSystemCatalog(prisma: Tx) {
     await grantPermissions(prisma, role.id, [...permissionCodes]);
   }
 
-  return { freePlan, paidPlan };
+  return { freePlan, paidPlan, commercialPlans };
 }
 
 export async function grantPermissions(prisma: Tx, roleId: string, permissionCodes: string[]) {

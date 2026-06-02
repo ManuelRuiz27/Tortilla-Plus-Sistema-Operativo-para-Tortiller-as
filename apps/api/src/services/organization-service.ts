@@ -194,6 +194,7 @@ export async function createOrganizationBranch(currentUser: AuthenticatedUser, i
   await assertPermission(currentUser.id, "branches.manage");
   const organizationId = requireOrganizationId(currentUser);
   const body = asRecord(input);
+  await assertEntitlementCapacity(organizationId, "branch");
   const businessUnit = await ensureBusinessUnit(organizationId);
   const branch = await prisma.branch.create({
     data: {
@@ -256,6 +257,7 @@ export async function createOrganizationPosDevice(currentUser: AuthenticatedUser
   const body = asRecord(input);
   const branchId = asString(body.branchId, "branchId");
   await assertOrganizationBranch(organizationId, branchId);
+  await assertEntitlementCapacity(organizationId, "pos");
   const deviceName = asString(body.name ?? body.deviceName, "name");
   const device = await prisma.posDevice.create({
     data: {
@@ -338,6 +340,38 @@ async function ensureBusinessUnit(organizationId: string) {
       businessType: "tortilleria",
     },
   });
+}
+
+async function assertEntitlementCapacity(organizationId: string, resource: "branch" | "pos") {
+  const subscription = await prisma.subscription.findFirst({
+    where: { organizationId, status: { in: ["trial", "active", "past_due", "grace_period", "suspended_limited"] } },
+    include: { subscriptionItemSubscription: { where: { status: "active" } } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!subscription) return;
+
+  const quantity = (type: string) =>
+    subscription.subscriptionItemSubscription
+      .filter((item) => item.itemType === type)
+      .reduce((total, item) => total + item.quantity, 0);
+
+  if (resource === "branch") {
+    const allowed = quantity("included_branch") + quantity("extra_branch") + quantity("branch_extra");
+    const activeBranches = await prisma.branch.count({ where: { organizationId, status: "active" } });
+    if (activeBranches >= allowed) {
+      throw new DomainError(403, "BRANCH_LIMIT_REACHED", "El plan contratado no permite crear mas sucursales activas.");
+    }
+  }
+
+  if (resource === "pos") {
+    const allowed = quantity("included_pos") + quantity("extra_pos") + quantity("pos_device");
+    const operationalDevices = await prisma.posDevice.count({
+      where: { organizationId, status: { in: ["pending_activation", "active", "inactive"] } },
+    });
+    if (operationalDevices >= allowed) {
+      throw new DomainError(403, "POS_LIMIT_REACHED", "El plan contratado no permite crear mas POS.");
+    }
+  }
 }
 
 async function audit(

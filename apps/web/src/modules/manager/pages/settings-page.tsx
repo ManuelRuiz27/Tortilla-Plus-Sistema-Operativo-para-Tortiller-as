@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, MonitorSmartphone, PackageCheck, RefreshCw, ShieldCheck, UserRoundCog } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   mercadoPagoActivatePdvRequest,
   mercadoPagoBindTerminalRequest,
@@ -118,6 +118,13 @@ export function SettingsPage() {
     onError: (error) => setTerminalActionMessage(error instanceof Error ? error.message : "La terminal no esta lista."),
     onSuccess: () => setTerminalActionMessage("Terminal lista para cobrar.")
   });
+  const canManageIntegrations = Boolean(user?.permissions.includes("integrations.manage"));
+
+  useEffect(() => {
+    if (!canManageIntegrations && (activeTab === "terminales" || activeTab === "integraciones")) {
+      setActiveTab("general");
+    }
+  }, [activeTab, canManageIntegrations]);
 
   if (isLoading) return <LoadingState message="Cargando ajustes..." />;
   if (isError || !data) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar los ajustes.</p>;
@@ -173,8 +180,7 @@ export function SettingsPage() {
           ["general", "General"],
           ...(canManageOrganization ? [["owner", "Negocio"]] : []),
           ["pos", "POS"],
-          ["terminales", "Terminales"],
-          ["integraciones", "Integraciones"]
+          ...(canManageIntegrations ? [["terminales", "Terminales"], ["integraciones", "Integraciones"]] : [])
         ].map(([value, label]) => (
           <Button key={value} onClick={() => setActiveTab(value as typeof activeTab)} variant={activeTab === value ? "primary" : "secondary"}>
             {label}

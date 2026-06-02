@@ -169,10 +169,28 @@ import {
   processMercadoPagoTerminalWebhook,
 } from "./services/payment-terminal-order-service.js";
 import {
+  cancelPlatformOneTimeCharge,
+  createPlatformOneTimeCharge,
+  generateMonthlyCyclesForActiveSubscriptions,
+  generatePlatformBillingCycle,
+  getOrganizationCfdiUsage,
+  getOrganizationBillingSummary,
+  getPlatformCfdiUsage,
+  getPlatformBillingSummary,
+  listPlatformBillingCycles,
+  listPlatformCommercialPlans,
+  markPlatformBillingCyclePaid,
+  recalculatePlatformBillingCycle,
+  updateOverdueBillingStatuses,
+  updatePlatformSubscriptionItems,
+} from "./services/billing-cycle-service.js";
+import {
   createPlatformManualPayment,
   createPlatformOrganization,
   createPlatformOrganizationOwner,
   endPlatformImpersonation,
+  exportPlatformAccountsReceivable,
+  exportPlatformSaasIncome,
   getPlatformDashboard,
   getPlatformOrganization,
   getPlatformSubscription,
@@ -275,12 +293,25 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     const platformOrganizationOwnerMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/owner$/);
     const platformOrganizationStatusMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/status$/);
     const platformOrganizationSubscriptionMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/subscription$/);
+    const platformOrganizationBillingSummaryMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/billing-summary$/);
+    const platformOrganizationBillingCyclesMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/billing-cycles$/);
+    const platformOrganizationBillingCycleGenerateMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/billing-cycles\/generate$/);
+    const platformOrganizationOneTimeChargesMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/one-time-charges$/);
+    const platformOrganizationCfdiUsageMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/cfdi-usage$/);
+    const platformOrganizationSubscriptionItemsMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/subscription-items$/);
+    const platformOneTimeChargeCancelMatch = path.match(/^\/api\/v1\/platform\/one-time-charges\/([^/]+)\/cancel$/);
+    const platformBillingCycleRecalculateMatch = path.match(/^\/api\/v1\/platform\/billing-cycles\/([^/]+)\/recalculate$/);
+    const platformBillingCycleMarkPaidMatch = path.match(/^\/api\/v1\/platform\/billing-cycles\/([^/]+)\/mark-paid$/);
     const platformOrganizationPosDevicesMatch = path.match(/^\/api\/v1\/platform\/organizations\/([^/]+)\/pos-devices$/);
     const platformPosDeviceStatusMatch = path.match(/^\/api\/v1\/platform\/pos-devices\/([^/]+)\/status$/);
     const platformPosDeviceLicenseMatch = path.match(/^\/api\/v1\/platform\/pos-devices\/([^/]+)\/license$/);
 
     if (method === "GET" && path === "/api/v1/platform/dashboard") {
       sendJson(response, 200, await getPlatformDashboard(currentUser));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/commercial-plans") {
+      sendJson(response, 200, await listPlatformCommercialPlans(currentUser));
       return;
     }
     if (method === "GET" && path === "/api/v1/platform/organizations") {
@@ -315,6 +346,42 @@ async function route(request: IncomingMessage, response: ServerResponse) {
       sendJson(response, 200, await updatePlatformSubscription(currentUser, platformOrganizationSubscriptionMatch[1], await readJson(request)));
       return;
     }
+    if (method === "GET" && platformOrganizationBillingSummaryMatch) {
+      sendJson(response, 200, await getPlatformBillingSummary(currentUser, platformOrganizationBillingSummaryMatch[1]));
+      return;
+    }
+    if (method === "GET" && platformOrganizationBillingCyclesMatch) {
+      sendJson(response, 200, await listPlatformBillingCycles(currentUser, platformOrganizationBillingCyclesMatch[1]));
+      return;
+    }
+    if (method === "POST" && platformOrganizationBillingCycleGenerateMatch) {
+      sendJson(response, 201, await generatePlatformBillingCycle(currentUser, platformOrganizationBillingCycleGenerateMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "POST" && platformOrganizationOneTimeChargesMatch) {
+      sendJson(response, 201, await createPlatformOneTimeCharge(currentUser, platformOrganizationOneTimeChargesMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && platformOrganizationCfdiUsageMatch) {
+      sendJson(response, 200, await getPlatformCfdiUsage(currentUser, platformOrganizationCfdiUsageMatch[1], Object.fromEntries(url.searchParams.entries())));
+      return;
+    }
+    if (method === "PATCH" && platformOrganizationSubscriptionItemsMatch) {
+      sendJson(response, 200, await updatePlatformSubscriptionItems(currentUser, platformOrganizationSubscriptionItemsMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && platformOneTimeChargeCancelMatch) {
+      sendJson(response, 200, await cancelPlatformOneTimeCharge(currentUser, platformOneTimeChargeCancelMatch[1]));
+      return;
+    }
+    if (method === "PATCH" && platformBillingCycleRecalculateMatch) {
+      sendJson(response, 200, await recalculatePlatformBillingCycle(currentUser, platformBillingCycleRecalculateMatch[1]));
+      return;
+    }
+    if (method === "POST" && platformBillingCycleMarkPaidMatch) {
+      sendJson(response, 200, await markPlatformBillingCyclePaid(currentUser, platformBillingCycleMarkPaidMatch[1], await readJson(request)));
+      return;
+    }
     if (method === "GET" && platformOrganizationPosDevicesMatch) {
       sendJson(response, 200, await listPlatformOrganizationPosDevices(currentUser, platformOrganizationPosDevicesMatch[1]));
       return;
@@ -341,6 +408,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     }
     if (method === "GET" && path === "/api/v1/platform/audit-log") {
       sendJson(response, 200, await listPlatformAuditLog(currentUser, Object.fromEntries(url.searchParams.entries())));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/reports/saas-income") {
+      sendDocument(response, 200, await exportPlatformSaasIncome(currentUser, Object.fromEntries(url.searchParams.entries())));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/platform/reports/accounts-receivable") {
+      sendDocument(response, 200, await exportPlatformAccountsReceivable(currentUser, Object.fromEntries(url.searchParams.entries())));
       return;
     }
     if (method === "POST" && path === "/api/v1/platform/support/impersonation/start") {
@@ -393,6 +468,14 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 
     if (method === "GET" && path === "/api/v1/organization/summary") {
       sendJson(response, 200, await getOrganizationSummary(currentUser));
+      return;
+    }
+    if (method === "GET" && (path === "/api/v1/organization/billing-summary" || path === "/api/v1/organization/subscription")) {
+      sendJson(response, 200, await getOrganizationBillingSummary(currentUser.organizationId));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/organization/cfdi-usage") {
+      sendJson(response, 200, await getOrganizationCfdiUsage(currentUser.organizationId, Object.fromEntries(url.searchParams.entries())));
       return;
     }
     if (method === "PATCH" && path === "/api/v1/organization") {
@@ -449,6 +532,18 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     }
     if (method === "PATCH" && organizationPosDeviceMatch) {
       sendJson(response, 200, await updateOrganizationPosDevice(currentUser, organizationPosDeviceMatch[1], await readJson(request)));
+      return;
+    }
+  }
+
+  if (path.startsWith("/api/v1/internal/billing")) {
+    assertInternalBillingToken(request);
+    if (method === "POST" && path === "/api/v1/internal/billing/generate-monthly-cycles") {
+      sendJson(response, 200, await generateMonthlyCyclesForActiveSubscriptions());
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/internal/billing/update-overdue-statuses") {
+      sendJson(response, 200, await updateOverdueBillingStatuses());
       return;
     }
   }
@@ -1396,6 +1491,19 @@ async function readJson(request: IncomingMessage) {
 function getIdempotencyKey(request: IncomingMessage): string | null {
   const value = request.headers["idempotency-key"];
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
+}
+
+function assertInternalBillingToken(request: IncomingMessage) {
+  if (!env.INTERNAL_BILLING_TOKEN) {
+    throw new DomainError(501, "INTERNAL_BILLING_DISABLED", "Scheduler interno de billing no configurado.");
+  }
+  const headerToken = request.headers["internal-billing-token"];
+  const authorization = request.headers.authorization;
+  const token = Array.isArray(headerToken) ? headerToken[0] : headerToken;
+  const bearer = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : null;
+  if (token !== env.INTERNAL_BILLING_TOKEN && bearer !== env.INTERNAL_BILLING_TOKEN) {
+    throw new DomainError(403, "INTERNAL_BILLING_FORBIDDEN", "Token interno invalido.");
+  }
 }
 
 function assertPublicAutofacturaRateLimit(

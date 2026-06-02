@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { FormEvent, useMemo, useState } from "react";
 import { ApiErrorException } from "../../../api/api-error";
-import { createPlatformManualPaymentRequest, platformOrganizationsRequest, platformPaymentsRequest } from "../../../api/platform.api";
+import { createPlatformManualPaymentRequest, platformBillingSummaryRequest, platformOrganizationsRequest, platformPaymentsRequest } from "../../../api/platform.api";
 import { queryClient } from "../../../app/query-client";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
@@ -14,17 +14,27 @@ export function PlatformPaymentsPage() {
   const organizations = organizationsQuery.data ?? [];
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [amount, setAmount] = useState("");
+  const [billingCycleId, setBillingCycleId] = useState("");
   const [paidAt, setPaidAt] = useState("");
+  const [reference, setReference] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("transfer");
   const [note, setNote] = useState("");
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === selectedOrganizationId) ?? null,
     [organizations, selectedOrganizationId]
   );
+  const billingQuery = useQuery({
+    enabled: Boolean(selectedOrganizationId),
+    queryKey: ["platform-billing-summary", selectedOrganizationId],
+    queryFn: () => platformBillingSummaryRequest(selectedOrganizationId)
+  });
   const createMutation = useMutation({
     mutationFn: createPlatformManualPaymentRequest,
     onSuccess: () => {
       setAmount("");
+      setBillingCycleId("");
       setPaidAt("");
+      setReference("");
       setNote("");
       void queryClient.invalidateQueries({ queryKey: ["platform-payments"] });
       void queryClient.invalidateQueries({ queryKey: ["platform-dashboard"] });
@@ -42,7 +52,10 @@ export function PlatformPaymentsPage() {
       organizationId: selectedOrganizationId,
       subscriptionId: selectedOrganization.subscriptionId,
       amount,
+      billingCycleId: billingCycleId || undefined,
       paidAt: paidAt || undefined,
+      paymentMethod,
+      reference: reference || undefined,
       note: note || undefined,
       currency: "MXN"
     });
@@ -58,8 +71,23 @@ export function PlatformPaymentsPage() {
             <option key={organization.id} value={organization.id}>{organization.name}</option>
           ))}
         </select>
+        <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setBillingCycleId(event.target.value)} value={billingCycleId}>
+          <option value="">Sin corte asociado</option>
+          {(billingQuery.data?.cycles ?? []).filter((cycle) => cycle.status !== "paid").map((cycle) => (
+            <option key={cycle.id} value={cycle.id}>
+              {new Date(cycle.periodStart).toLocaleDateString()} - {formatMoney(cycle.balanceDue)} pendiente
+            </option>
+          ))}
+        </select>
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="Monto" required step="0.01" type="number" value={amount} />
+        <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaymentMethod(event.target.value)} value={paymentMethod}>
+          <option value="transfer">Transferencia</option>
+          <option value="cash">Efectivo</option>
+          <option value="card">Tarjeta</option>
+          <option value="manual">Manual</option>
+        </select>
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaidAt(event.target.value)} type="date" value={paidAt} />
+        <input className="h-11 rounded-md border border-tp-border px-3 text-sm md:col-span-2" onChange={(event) => setReference(event.target.value)} placeholder="Referencia bancaria o folio" value={reference} />
         <Button disabled={createMutation.isPending || !selectedOrganization?.subscriptionId || Number(amount) <= 0} type="submit" variant="secondary">
           {createMutation.isPending ? "Registrando..." : "Registrar pago manual"}
         </Button>
@@ -75,11 +103,15 @@ export function PlatformPaymentsPage() {
             <span>${Number(payment.amount).toFixed(2)} {payment.currency}</span>
             <StatusBadge tone={payment.status === "approved" ? "success" : "warning"}>{labelStatus(payment.status)}</StatusBadge>
             <span className="text-tp-muted">{payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : "Sin fecha"}</span>
-            {payment.note ? <span className="text-tp-muted md:col-span-4">Nota: {payment.note}</span> : null}
+            {payment.reference || payment.note ? <span className="text-tp-muted md:col-span-4">Referencia: {payment.reference ?? "-"} | Nota: {payment.note ?? "-"}</span> : null}
           </div>
         ))}
         {!data?.length ? <p className="p-4 text-sm text-tp-muted">Sin pagos registrados.</p> : null}
       </div>
     </div>
   );
+}
+
+function formatMoney(value: string | number) {
+  return Number(value).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }

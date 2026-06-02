@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
+import { Download } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { platformDashboardRequest } from "../../../api/platform.api";
+import {
+  downloadPlatformAccountsReceivableReportRequest,
+  downloadPlatformSaasIncomeReportRequest,
+  platformDashboardRequest
+} from "../../../api/platform.api";
+import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import type { PlatformDashboard } from "../types/platform.types";
@@ -14,27 +21,64 @@ const metricLabels: Array<[Exclude<keyof PlatformDashboard, "alerts">, string]> 
   ["subscriptionsActive", "Suscripciones activas"],
   ["subscriptionsTrial", "Trials"],
   ["subscriptionsPastDue", "Vencidas"],
+  ["subscriptionsGrace", "En gracia"],
+  ["organizationsGrace", "Clientes en gracia"],
   ["monthlyRecurringRevenue", "MRR"],
-  ["paymentsCurrentMonth", "Pagos del mes"]
+  ["paymentsCurrentMonth", "Pagos del mes"],
+  ["paymentsTaxCurrentMonth", "IVA cobrado"],
+  ["accountsReceivable", "Cuentas por cobrar"],
+  ["taxReceivable", "IVA por cobrar"],
+  ["setupRevenueCurrentMonth", "Setup del mes"],
+  ["cfdiOverageRevenueCurrentMonth", "CFDI excedente"]
 ];
 
 export function PlatformDashboardPage() {
   const { data, isLoading } = useQuery({ queryKey: ["platform-dashboard"], queryFn: platformDashboardRequest });
+  const [downloadingReport, setDownloadingReport] = useState<"income" | "receivable" | null>(null);
+
+  async function downloadReport(type: "income" | "receivable") {
+    setDownloadingReport(type);
+    try {
+      const report = type === "income"
+        ? await downloadPlatformSaasIncomeReportRequest()
+        : await downloadPlatformAccountsReceivableReportRequest();
+      const url = URL.createObjectURL(report.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = report.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingReport(null);
+    }
+  }
 
   if (isLoading) return <LoadingState message="Cargando plataforma..." />;
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Plataforma</p>
-        <h1 className="mt-2 text-2xl font-semibold">Dashboard SaaS</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Plataforma</p>
+          <h1 className="mt-2 text-2xl font-semibold">Dashboard SaaS</h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={downloadingReport !== null} onClick={() => void downloadReport("income")} variant="secondary">
+            <Download aria-hidden size={16} />
+            Ingresos SaaS
+          </Button>
+          <Button disabled={downloadingReport !== null} onClick={() => void downloadReport("receivable")} variant="secondary">
+            <Download aria-hidden size={16} />
+            Cuentas por cobrar
+          </Button>
+        </div>
       </div>
       <section className="grid gap-px overflow-hidden rounded-md border border-tp-border bg-tp-border sm:grid-cols-2 xl:grid-cols-5">
         {metricLabels.map(([key, label]) => (
           <div className="bg-white p-4" key={key}>
             <p className="text-xs font-medium text-tp-muted">{label}</p>
             <p className="mt-2 text-2xl font-semibold">
-              {key.includes("Revenue") || key.includes("payments") ? `$${Number(data?.[key] ?? 0).toFixed(2)}` : data?.[key] ?? 0}
+              {isMoneyMetric(key) ? formatMoney(Number(data?.[key] ?? 0)) : data?.[key] ?? 0}
             </p>
           </div>
         ))}
@@ -57,4 +101,12 @@ export function PlatformDashboardPage() {
       </section>
     </div>
   );
+}
+
+function isMoneyMetric(key: string) {
+  return key.includes("Revenue") || key.includes("payments") || key.includes("Receivable") || key.includes("Tax") || key.includes("setup") || key.includes("cfdi");
+}
+
+function formatMoney(value: number) {
+  return value.toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }

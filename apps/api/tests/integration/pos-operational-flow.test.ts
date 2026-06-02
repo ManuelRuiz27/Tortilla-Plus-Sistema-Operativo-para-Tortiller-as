@@ -21,7 +21,7 @@ import {
   createDeliverySettlement,
 } from "../../src/services/delivery-service.js";
 import { createInventoryAdjustment, createProductionBatch } from "../../src/services/inventory-service.js";
-import { updatePlatformOrganizationStatus } from "../../src/services/platform-service.js";
+import { updatePlatformOrganizationStatus, updatePlatformSubscription } from "../../src/services/platform-service.js";
 import { addSaleItem, checkoutSale, completeSale, createSale, quoteSale } from "../../src/services/sale-service.js";
 import { DomainError } from "../../src/lib/domain-error.js";
 
@@ -328,10 +328,108 @@ test("POS checkout rolls back completely when payment total does not match", asy
   assert.equal(saleCount, 0);
 });
 
+test("POS sale creation is blocked for unlicensed device", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const device = await prisma.posDevice.create({
+    data: {
+      organizationId: cashier.organizationId,
+      branchId,
+      deviceName: `POS Sin Licencia ${Date.now()}`,
+      deviceCode: `UNLICENSED-${Date.now()}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: false,
+    },
+  });
+
+  await assert.rejects(
+    () => createSale(cashier, {
+      branchId,
+      deviceId: device.id,
+      clientGeneratedId: `integration-unlicensed-pos-${Date.now()}`,
+    }),
+    (error) => error instanceof DomainError && error.code === "POS_DEVICE_NOT_LICENSED",
+  );
+});
+
+test("POS sale creation is blocked for inactive licensed device", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const device = await prisma.posDevice.create({
+    data: {
+      organizationId: cashier.organizationId,
+      branchId,
+      deviceName: `POS Inactivo ${Date.now()}`,
+      deviceCode: `INACTIVE-${Date.now()}`,
+      deviceType: "desktop",
+      status: "inactive",
+      licensed: true,
+    },
+  });
+
+  await assert.rejects(
+    () => createSale(cashier, {
+      branchId,
+      deviceId: device.id,
+      clientGeneratedId: `integration-inactive-pos-${Date.now()}`,
+    }),
+    (error) => error instanceof DomainError && error.code === "POS_DEVICE_NOT_LICENSED",
+  );
+});
+
+test("POS sale creation is blocked when platform cancels the organization", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  const originalOrganization = await prisma.organization.findUniqueOrThrow({
+    where: { id: cashier.organizationId },
+    select: { status: true },
+  });
+
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Cancelled organization block test",
+    })).data;
+  }
+
+  try {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: "cancelled",
+    });
+
+    await assert.rejects(
+      () => createSale(cashier, {
+        branchId,
+        clientGeneratedId: `integration-cancelled-org-${Date.now()}`,
+      }),
+      (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",
+    );
+  } finally {
+    await updatePlatformOrganizationStatus(platformUser, cashier.organizationId, {
+      status: originalOrganization.status,
+    });
+  }
+});
+
 test("delivery route completes order, partial return, cash payment, settlement deposit and duplicate block", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
   const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
   const manager = asAuthenticatedUser(managerSession);
   const branchId = firstBranchId(managerSession);
+  await updatePlatformSubscription(platformUser, manager.organizationId, {
+    planCode: "comercial",
+    status: "active",
+    billingPeriod: "monthly",
+  });
   let cashSession = (await getOpenCashSession(manager, branchId)).data;
   if (!cashSession) {
     cashSession = (await openCashSession(manager, {
@@ -440,6 +538,11 @@ test("delivery order flow is blocked when platform suspends the organization", a
   const platformUser = asPlatformUser(platformSession);
   const manager = asAuthenticatedUser(managerSession);
   const branchId = firstBranchId(managerSession);
+  await updatePlatformSubscription(platformUser, manager.organizationId, {
+    planCode: "comercial",
+    status: "active",
+    billingPeriod: "monthly",
+  });
   const suffix = Date.now();
   const originalOrganization = await prisma.organization.findUniqueOrThrow({
     where: { id: manager.organizationId },

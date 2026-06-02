@@ -5,6 +5,7 @@ import {
   createOrganizationBranchRequest,
   createOrganizationPosDeviceRequest,
   createOrganizationUserRequest,
+  organizationBillingSummaryRequest,
   organizationSummaryRequest,
   resetOrganizationUserPinRequest,
   updateOrganizationUserStatusRequest
@@ -32,6 +33,10 @@ export function OwnerAdministrationPanel() {
   const { data, isError, isLoading } = useQuery({
     queryFn: organizationSummaryRequest,
     queryKey: ["organization-summary"]
+  });
+  const billingQuery = useQuery({
+    queryFn: organizationBillingSummaryRequest,
+    queryKey: ["organization-billing-summary"]
   });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["organization-summary"] });
   const createUserMutation = useMutation({
@@ -73,6 +78,7 @@ export function OwnerAdministrationPanel() {
   if (isError || !data) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar la administracion del negocio.</p>;
 
   const branches = data.branches.filter((branch) => branch.status === "active");
+  const billing = billingQuery.data;
   const selectedUserBranchId = userBranchId || branches[0]?.id || "";
   const selectedPosBranchId = posBranchId || branches[0]?.id || "";
 
@@ -85,6 +91,23 @@ export function OwnerAdministrationPanel() {
           <p><span className="text-tp-muted">RFC:</span> {data.taxId ?? "-"}</p>
           <p><span className="text-tp-muted">Plan:</span> {data.subscription?.planName ?? "-"}</p>
           <p><span className="text-tp-muted">Estado:</span> {labelStatus(data.status)}</p>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <ReadOnlyMetric label="Estado de pago" value={labelStatus(billing?.currentCycle?.status ?? data.subscription?.status ?? "sin_corte")} />
+          <ReadOnlyMetric label="Vencimiento" value={billing?.currentCycle?.dueDate ? new Date(billing.currentCycle.dueDate).toLocaleDateString() : "-"} />
+          <ReadOnlyMetric label="Deuda pendiente" value={formatMoney(billing?.pendingBalance ?? "0.00")} />
+          <ReadOnlyMetric label="Total corte" value={formatMoney(billing?.currentCycle?.total ?? "0.00")} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <LimitMetric label="Sucursales" used={billing?.usage.branches ?? branches.length} limit={billing?.limits.branches ?? 0} />
+          <LimitMetric label="POS" used={billing?.usage.licensedPos ?? data.posDevices.filter((device) => device.licensed).length} limit={billing?.limits.pos ?? 0} />
+          <LimitMetric label="Terminales" used={billing?.usage.terminals ?? 0} limit={billing?.limits.terminals ?? 0} />
+          <LimitMetric label="CFDI" used={billing?.usage.cfdi ?? 0} limit={billing?.limits.cfdi ?? 0} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <ReadOnlyMetric label="CFDI globales" value={String(billing?.cfdiUsage.globalInvoiceCount ?? 0)} />
+          <ReadOnlyMetric label="CFDI individuales" value={String(billing?.cfdiUsage.individualInvoiceCount ?? 0)} />
+          <ReadOnlyMetric label="Excedente estimado" value={formatMoney(billing?.cfdiUsage.overageTotal ?? "0.00")} />
         </div>
         {message ? <p className="mt-4 rounded-md bg-tp-soft p-3 text-sm">{message}</p> : null}
       </article>
@@ -190,4 +213,21 @@ export function OwnerAdministrationPanel() {
       </article>
     </div>
   );
+}
+
+function ReadOnlyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-tp-soft p-3 text-sm">
+      <p className="text-tp-muted">{label}</p>
+      <p className="mt-1 font-semibold text-tp-text">{value}</p>
+    </div>
+  );
+}
+
+function LimitMetric({ label, used, limit }: { label: string; used: number; limit: number }) {
+  return <ReadOnlyMetric label={label} value={`${used} / ${limit}`} />;
+}
+
+function formatMoney(value: string | number) {
+  return Number(value).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 }

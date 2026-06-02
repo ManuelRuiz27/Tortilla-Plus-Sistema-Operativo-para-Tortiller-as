@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
+import { commercialPlanDefinitions } from "../bootstrap/system-catalog.js";
 import { DomainError } from "../lib/domain-error.js";
 import { hashSecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
@@ -58,7 +59,12 @@ export async function getPlatformDashboard(currentUser: AuthenticatedUser) {
     subscriptionsActive,
     subscriptionsTrial,
     subscriptionsPastDue,
+    subscriptionsGrace,
+    organizationsGrace,
     payments,
+    pendingCycles,
+    setupCharges,
+    cfdiOverages,
   ] = await Promise.all([
     prisma.organization.count(),
     prisma.organization.count({ where: { status: "active" } }),
@@ -69,13 +75,24 @@ export async function getPlatformDashboard(currentUser: AuthenticatedUser) {
     prisma.subscription.count({ where: { status: "active" } }),
     prisma.subscription.count({ where: { status: "trial" } }),
     prisma.subscription.count({ where: { status: "past_due" } }),
+    prisma.subscription.count({ where: { status: "grace_period" } }),
+    prisma.organization.count({ where: { status: "grace_period" } }),
     prisma.saasPayment.findMany({
       where: { status: "approved", paidAt: { gte: currentMonthStart } },
-      select: { amount: true },
+      select: { amount: true, subtotal: true, taxTotal: true },
     }),
+    prisma.billingCycle.findMany({ where: { status: { not: "paid" } }, select: { total: true, taxTotal: true } }),
+    prisma.saasOneTimeCharge.findMany({ where: { chargeType: "setup", status: { in: ["included_in_cycle", "paid"] }, createdAt: { gte: currentMonthStart } }, select: { amount: true } }),
+    prisma.billingCycleItem.findMany({ where: { itemType: "cfdi_overage", createdAt: { gte: currentMonthStart } }, select: { subtotal: true } }),
   ]);
 
   const paymentsCurrentMonth = sumDecimals(payments.map((payment) => payment.amount));
+  const paymentsSubtotalCurrentMonth = sumDecimals(payments.map((payment) => payment.subtotal));
+  const paymentsTaxCurrentMonth = sumDecimals(payments.map((payment) => payment.taxTotal));
+  const accountsReceivable = sumDecimals(pendingCycles.map((cycle) => cycle.total));
+  const taxReceivable = sumDecimals(pendingCycles.map((cycle) => cycle.taxTotal));
+  const setupRevenueCurrentMonth = sumDecimals(setupCharges.map((charge) => charge.amount));
+  const cfdiOverageRevenueCurrentMonth = sumDecimals(cfdiOverages.map((item) => item.subtotal));
   const monthlyRecurringRevenue = await calculateMonthlyRecurringRevenue();
   const alerts = [];
   if (subscriptionsPastDue > 0) alerts.push({ type: "past_due", message: "Hay suscripciones vencidas.", count: subscriptionsPastDue });
@@ -92,8 +109,16 @@ export async function getPlatformDashboard(currentUser: AuthenticatedUser) {
       subscriptionsActive,
       subscriptionsTrial,
       subscriptionsPastDue,
+      subscriptionsGrace,
+      organizationsGrace,
       monthlyRecurringRevenue,
       paymentsCurrentMonth,
+      paymentsSubtotalCurrentMonth,
+      paymentsTaxCurrentMonth,
+      accountsReceivable,
+      taxReceivable,
+      setupRevenueCurrentMonth,
+      cfdiOverageRevenueCurrentMonth,
       alerts,
     },
   };
@@ -158,7 +183,7 @@ export async function createPlatformOrganization(currentUser: AuthenticatedUser,
       },
     });
 
-    await tx.subscription.create({
+    const subscription = await tx.subscription.create({
       data: {
         organizationId: organization.id,
         planId: plan.id,
@@ -170,6 +195,7 @@ export async function createPlatformOrganization(currentUser: AuthenticatedUser,
         currentPeriodEnd: nextMonth(),
       },
     });
+    await createDefaultSubscriptionItems(tx, subscription.id, plan.code);
 
     await tx.auditLog.create({
       data: {
@@ -418,34 +444,66 @@ export async function createPlatformManualPayment(currentUser: AuthenticatedUser
   const subscriptionId = asString(body.subscriptionId, "subscriptionId");
   const amount = asPositiveMoney(body.amount);
   const paidAt = optionalDate(body.paidAt) ?? new Date();
-  const note = optionalString(body.note);
+  const note = optionalString(body.note ?? body.notes);
+  const paymentMethod = optionalString(body.paymentMethod) ?? "manual";
+  const reference = optionalString(body.reference ?? body.providerPaymentId);
+  const billingCycleId = optionalString(body.billingCycleId);
 
   const subscription = await prisma.subscription.findFirst({ where: { id: subscriptionId, organizationId } });
   if (!subscription) throw new DomainError(404, "SUBSCRIPTION_NOT_FOUND", "Suscripcion no encontrada.");
+  const billingCycle = billingCycleId
+    ? await prisma.billingCycle.findFirst({
+        where: { id: billingCycleId, organizationId, subscriptionId },
+        include: { saasPaymentCycle: true },
+      })
+    : null;
+  if (billingCycleId && !billingCycle) throw new DomainError(404, "BILLING_CYCLE_NOT_FOUND", "Corte no encontrado.");
 
   const payment = await prisma.$transaction(async (tx) => {
+    const subtotal = optionalString(body.subtotal) ?? (Number(amount) / 1.16).toFixed(2);
+    const taxTotal = optionalString(body.taxTotal) ?? (Number(amount) - Number(subtotal)).toFixed(2);
     const created = await tx.saasPayment.create({
       data: {
         organizationId,
         subscriptionId,
+        billingCycleId,
         provider: "manual",
+        providerPaymentId: reference,
+        subtotal,
+        taxTotal,
         amount,
         currency: optionalString(body.currency) ?? "MXN",
         status: "approved",
+        paymentMethod,
+        reference,
+        notes: note,
         paidAt,
         rawPayload: note ? { note } : undefined,
       },
     });
 
+    let paidCycle = null;
+    if (billingCycle) {
+      const paidTotal = sumDecimals(billingCycle.saasPaymentCycle
+        .filter((cyclePayment) => cyclePayment.status === "approved")
+        .map((cyclePayment) => cyclePayment.amount)) + Number(amount);
+      if (paidTotal >= Number(billingCycle.total) && billingCycle.status !== "paid") {
+        paidCycle = await tx.billingCycle.update({
+          where: { id: billingCycle.id },
+          data: { status: "paid", paidAt, updatedAt: new Date() },
+        });
+      }
+    }
+
     await tx.auditLog.create({
       data: {
         organizationId,
         userId: currentUser.id,
-        action: "platform_manual_payment_recorded",
-        entityType: "saas_payment",
-        entityId: created.id,
+        action: paidCycle ? "billing_cycle_marked_paid" : "platform_manual_payment_recorded",
+        entityType: paidCycle ? "billing_cycle" : "saas_payment",
+        entityId: paidCycle?.id ?? created.id,
         afterSnapshot: serialize(created),
-        metadata: note ? { note } : undefined,
+        metadata: { ...(note ? { note } : {}), ...(billingCycleId ? { billingCycleId } : {}) },
       },
     });
 
@@ -477,6 +535,89 @@ export async function listPlatformAuditLog(currentUser: AuthenticatedUser, input
   });
 
   return { data: logs.map(serializeAuditLog) };
+}
+
+export async function exportPlatformSaasIncome(currentUser: AuthenticatedUser, input: unknown) {
+  await requirePlatformOwner(currentUser);
+  const { from, to } = reportPeriod(input);
+  const payments = await prisma.saasPayment.findMany({
+    where: { status: "approved", paidAt: { gte: from, lte: to } },
+    include: { organization: true, billingCycle: true },
+    orderBy: { paidAt: "asc" },
+  });
+  const rows = payments.map((payment) => [
+    payment.organization.name,
+    payment.organization.taxId ?? "",
+    payment.billingCycle ? `${dateOnly(payment.billingCycle.periodStart)}-${dateOnly(payment.billingCycle.periodEnd)}` : "",
+    payment.subtotal.toString(),
+    payment.taxTotal.toString(),
+    payment.amount.toString(),
+    payment.currency,
+    payment.paidAt ? dateOnly(payment.paidAt) : "",
+    payment.paymentMethod ?? "",
+    payment.reference ?? payment.providerPaymentId ?? "",
+    payment.notes ?? "",
+    "no",
+    "",
+    payment.status,
+  ]);
+  return csvDocument("saas-income", from, to, [
+    "cliente",
+    "rfc_cliente",
+    "periodo",
+    "subtotal",
+    "iva",
+    "total",
+    "moneda",
+    "fecha_pago",
+    "metodo_pago",
+    "referencia",
+    "nota",
+    "cfdi_emitido",
+    "uuid_cfdi",
+    "estatus",
+  ], rows);
+}
+
+export async function exportPlatformAccountsReceivable(currentUser: AuthenticatedUser, input: unknown) {
+  await requirePlatformOwner(currentUser);
+  const { from, to } = reportPeriod(input);
+  const cycles = await prisma.billingCycle.findMany({
+    where: { status: { not: "paid" }, periodStart: { gte: from }, periodEnd: { lte: to } },
+    include: { organization: true, billingCycleItemCycle: true, saasPaymentCycle: true },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+  });
+  const rows = cycles.map((cycle) => {
+    const paid = sumDecimals(cycle.saasPaymentCycle.filter((payment) => payment.status === "approved").map((payment) => payment.amount));
+    return [
+      cycle.organization.name,
+      cycle.organization.taxId ?? "",
+      `${dateOnly(cycle.periodStart)}-${dateOnly(cycle.periodEnd)}`,
+      cycle.subtotal.toString(),
+      cycle.taxTotal.toString(),
+      cycle.total.toString(),
+      paid.toFixed(2),
+      Math.max(0, Number(cycle.total) - paid).toFixed(2),
+      cycle.currency,
+      dateOnly(cycle.dueDate),
+      cycle.status,
+      cycle.billingCycleItemCycle.map((item) => `${item.itemType}:${item.total.toString()}`).join(" | "),
+    ];
+  });
+  return csvDocument("accounts-receivable", from, to, [
+    "cliente",
+    "rfc_cliente",
+    "periodo",
+    "subtotal",
+    "iva",
+    "total",
+    "pagado",
+    "saldo",
+    "moneda",
+    "fecha_vencimiento",
+    "estatus",
+    "conceptos",
+  ], rows);
 }
 
 export async function startPlatformImpersonation(currentUser: AuthenticatedUser) {
@@ -593,7 +734,53 @@ async function createOrganizationOwner(
   };
 }
 
+async function createDefaultSubscriptionItems(tx: Prisma.TransactionClient, subscriptionId: string, planCode: string) {
+  const catalog: Record<string, { price: string; branches: number; pos: number; terminals: number; cfdi: number }> = {
+    free: { price: "0.00", branches: 1, pos: 1, terminals: 1, cfdi: 0 },
+    paid: { price: "599.00", branches: 1, pos: 2, terminals: 2, cfdi: 50 },
+    mostrador: { price: "299.00", branches: 1, pos: 1, terminals: 1, cfdi: 0 },
+    operativo: { price: "599.00", branches: 1, pos: 2, terminals: 2, cfdi: 50 },
+    comercial: { price: "999.00", branches: 2, pos: 3, terminals: 3, cfdi: 100 },
+  };
+  const plan = catalog[planCode] ?? catalog.free;
+  const items: Array<{ itemType: Prisma.SubscriptionItemCreateInput["itemType"]; quantity: number; unitPrice: string }> = [
+    { itemType: "base_plan", quantity: 1, unitPrice: plan.price },
+    { itemType: "included_branch", quantity: plan.branches, unitPrice: "0.00" },
+    { itemType: "included_pos", quantity: plan.pos, unitPrice: "0.00" },
+    { itemType: "included_terminal", quantity: plan.terminals, unitPrice: "0.00" },
+    { itemType: "included_cfdi", quantity: plan.cfdi, unitPrice: "0.00" },
+  ];
+  await tx.subscriptionItem.createMany({
+    data: items.filter((item) => item.quantity > 0).map((item) => ({
+      subscriptionId,
+      itemType: item.itemType,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      currency: "MXN",
+      status: "active",
+    })),
+  });
+}
+
 async function getPlanByCode(code: string) {
+  const commercialPlan = commercialPlanDefinitions.find((definition) => definition.code === code);
+  if (commercialPlan) {
+    return prisma.plan.upsert({
+      where: { code },
+      update: {
+        name: commercialPlan.name,
+        description: commercialPlan.description,
+        status: "active",
+      },
+      create: {
+        code: commercialPlan.code,
+        name: commercialPlan.name,
+        description: commercialPlan.description,
+        status: "active",
+      },
+    });
+  }
+
   const plan = await prisma.plan.findUnique({ where: { code } });
   if (!plan || plan.status !== "active") throw new DomainError(400, "INVALID_PLAN", "Plan invalido.");
   return plan;
@@ -678,10 +865,16 @@ function serializePayment(payment: Prisma.SaasPaymentGetPayload<Record<string, n
     subscriptionId: payment.subscriptionId,
     planCode: withRelations.subscription?.plan?.code ?? null,
     provider: payment.provider,
+    billingCycleId: (payment as typeof payment & { billingCycleId?: string | null }).billingCycleId ?? null,
+    subtotal: (payment as typeof payment & { subtotal?: Prisma.Decimal }).subtotal?.toString() ?? "0.00",
+    taxTotal: (payment as typeof payment & { taxTotal?: Prisma.Decimal }).taxTotal?.toString() ?? "0.00",
     amount: payment.amount.toString(),
     currency: payment.currency,
     status: payment.status,
-    note: extractPaymentNote(payment.rawPayload),
+    paymentMethod: (payment as typeof payment & { paymentMethod?: string | null }).paymentMethod ?? null,
+    reference: (payment as typeof payment & { reference?: string | null }).reference ?? null,
+    notes: (payment as typeof payment & { notes?: string | null }).notes ?? extractPaymentNote(payment.rawPayload),
+    note: (payment as typeof payment & { notes?: string | null }).notes ?? extractPaymentNote(payment.rawPayload),
     paidAt: payment.paidAt?.toISOString() ?? null,
     createdAt: payment.createdAt.toISOString(),
   };
@@ -719,6 +912,40 @@ function serializeAuditLog(log: Prisma.AuditLogGetPayload<Record<string, never>>
 
 function nextMonth() {
   return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+}
+
+function reportPeriod(input: unknown) {
+  const query = asLooseRecord(input);
+  const from = optionalDate(query.from) ?? startOfCurrentMonth();
+  const to = optionalDate(query.to) ?? endOfMonth(from);
+  return { from, to };
+}
+
+function startOfCurrentMonth() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+function endOfMonth(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+}
+
+function dateOnly(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function csvDocument(slug: string, from: Date, to: Date, headers: string[], rows: string[][]) {
+  const body = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  return {
+    filename: `${slug}-${dateOnly(from)}-${dateOnly(to)}.csv`,
+    contentType: "text/csv; charset=utf-8",
+    body,
+  };
+}
+
+function csvCell(value: string) {
+  const escaped = value.replace(/"/g, '""');
+  return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped;
 }
 
 function sumDecimals(values: Array<Prisma.Decimal>) {

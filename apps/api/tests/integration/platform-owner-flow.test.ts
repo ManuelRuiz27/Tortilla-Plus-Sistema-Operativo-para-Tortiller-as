@@ -6,6 +6,18 @@ import { DomainError } from "../../src/lib/domain-error.js";
 import { login } from "../../src/services/auth-service.js";
 import type { AuthenticatedUser } from "../../src/services/auth-service.js";
 import {
+  cancelPlatformOneTimeCharge,
+  createPlatformOneTimeCharge,
+  generatePlatformBillingCycle,
+  getPlatformBillingSummary,
+  getPlatformCfdiUsage,
+  listPlatformCommercialPlans,
+  markPlatformBillingCyclePaid,
+  recalculatePlatformBillingCycle,
+  updateOverdueBillingStatuses,
+  updatePlatformSubscriptionItems,
+} from "../../src/services/billing-cycle-service.js";
+import {
   createPlatformManualPayment,
   createPlatformOrganization,
   createPlatformOrganizationOwner,
@@ -55,6 +67,16 @@ function firstBranchId(session: Awaited<ReturnType<typeof login>>) {
   return branchId;
 }
 
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - days);
+  return date;
+}
+
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 test("platform seed exposes platform_owner and no platform_admin", async () => {
   const platformOwner = await prisma.role.findUnique({ where: { code: "platform_owner" } });
   const platformAdmin = await prisma.role.findUnique({ where: { code: "platform_admin" } });
@@ -92,6 +114,8 @@ test("pilot role permission matrix does not leak platform permissions", async ()
   assert.equal((permissionsByRole.get("cashier") ?? []).includes("payments.cancel_terminal_order"), false);
   assert.equal((permissionsByRole.get("manager") ?? []).includes("payments.cancel_terminal_order"), true);
   assert.equal((permissionsByRole.get("supervisor") ?? []).includes("payments.cancel_terminal_order"), true);
+  assert.equal((permissionsByRole.get("organization_owner") ?? []).includes("integrations.manage"), true);
+  assert.equal((permissionsByRole.get("manager") ?? []).includes("integrations.manage"), false);
 });
 
 test("platform_owner can access platform services without branch or organization", async () => {
@@ -133,9 +157,17 @@ test("organization users cannot access platform services", async () => {
 });
 
 test("organization_owner can manage internal users, branches and unlicensed POS devices", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
   const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
   const owner = asOperationalUser(ownerSession);
   const suffix = Date.now();
+  await updatePlatformSubscriptionItems(platformUser, owner.organizationId, {
+    items: [
+      { itemType: "extra_branch", quantity: 100, unitPrice: "149.00", currency: "MXN", status: "active" },
+      { itemType: "extra_pos", quantity: 100, unitPrice: "99.00", currency: "MXN", status: "active" },
+    ],
+  });
   const branch = (await createOrganizationBranch(owner, { name: `Owner IT ${suffix}` })).data;
   const user = (await createOrganizationUser(owner, {
     name: `Cajero Owner IT ${suffix}`,
@@ -155,6 +187,67 @@ test("organization_owner can manage internal users, branches and unlicensed POS 
   assert.equal(posDevice.licensed, false);
   assert.equal(summary.branches.some((item) => item.id === branch.id), true);
   assert.equal(summary.posDevices.some((item) => item.id === posDevice.id && !item.licensed), true);
+});
+
+test("organization_owner cannot exceed contracted branch and POS limits", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT Limits ${suffix}`,
+    contactEmail: `limits-${suffix}@tortillaplus.mx`,
+    planCode: "mostrador",
+    owner: {
+      name: `Owner Limits ${suffix}`,
+      email: `owner-limits-${suffix}@tortillaplus.mx`,
+      password: "Owner1234!",
+      pin: "2468",
+    },
+  });
+  const ownerSession = await login({ email: `owner-limits-${suffix}@tortillaplus.mx`, password: "Owner1234!" });
+  const owner = asOperationalUser(ownerSession);
+  const businessUnit = await prisma.businessUnit.create({
+    data: {
+      organizationId: created.data.id,
+      name: `Unidad Limits ${suffix}`,
+    },
+  });
+  const branch = await prisma.branch.create({
+    data: {
+      organizationId: created.data.id,
+      businessUnitId: businessUnit.id,
+      name: `Sucursal Limits ${suffix}`,
+      timezone: "America/Mexico_City",
+      status: "active",
+    },
+  });
+  const existingPos = await prisma.posDevice.findFirst({ where: { organizationId: created.data.id } });
+  if (!existingPos) {
+    await prisma.posDevice.create({
+      data: {
+        organizationId: created.data.id,
+        branchId: branch.id,
+        deviceName: `POS Limite Base ${suffix}`,
+        deviceCode: `LIMIT-BASE-${suffix}`,
+        deviceType: "desktop",
+        status: "pending_activation",
+        licensed: false,
+      },
+    });
+  }
+
+  await assert.rejects(
+    () => createOrganizationBranch(owner, { name: `Sucursal excedente ${suffix}` }),
+    (error: unknown) => error instanceof DomainError && error.code === "BRANCH_LIMIT_REACHED",
+  );
+  await assert.rejects(
+    () => createOrganizationPosDevice(owner, {
+      name: `POS excedente ${suffix}`,
+      branchId: branch.id,
+      deviceCode: `LIMIT-EXTRA-${suffix}`,
+    }),
+    (error: unknown) => error instanceof DomainError && error.code === "POS_LIMIT_REACHED",
+  );
 });
 
 test("platform_owner can execute organization, subscription, POS and payment mutations with audit trail", async () => {
@@ -266,6 +359,250 @@ test("platform_owner can execute organization, subscription, POS and payment mut
   }
   assert.equal(paymentAudits.length >= 1, true);
   assert.equal(paymentAudits.every((log) => log.action === "platform_manual_payment_recorded"), true);
+});
+
+test("platform_owner generates monthly billing cycle from active subscription items and paid cycles cannot be recalculated", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT Billing ${suffix}`,
+    contactEmail: `billing-it-${suffix}@tortillaplus.mx`,
+    planCode: "paid",
+  });
+  const organizationId = created.data.id;
+  const subscription = await prisma.subscription.findFirstOrThrow({
+    where: { organizationId },
+    include: { subscriptionItemSubscription: true },
+  });
+  const basePlan = subscription.subscriptionItemSubscription.find((item) => item.itemType === "base_plan");
+  assert.ok(basePlan);
+  assert.equal(Number(basePlan.unitPrice).toFixed(2), "599.00");
+
+  const cycle = await generatePlatformBillingCycle(platformUser, organizationId, {
+    periodStart: "2027-01-01",
+    periodEnd: "2027-01-31",
+    dueDate: "2027-02-05",
+  });
+
+  assert.equal(cycle.data.status, "pending");
+  assert.equal(cycle.data.items.some((item) => item.itemType === "base_plan"), true);
+  assert.equal(cycle.data.subtotal, "599.00");
+  assert.equal(cycle.data.taxTotal, "95.84");
+  assert.equal(cycle.data.total, "694.84");
+
+  await prisma.subscriptionItem.update({
+    where: { id: basePlan.id },
+    data: { unitPrice: "777.00" },
+  });
+
+  const persistedCycle = await prisma.billingCycle.findUniqueOrThrow({
+    where: { id: cycle.data.id },
+    include: { billingCycleItemCycle: true },
+  });
+  const persistedBasePlan = persistedCycle.billingCycleItemCycle.find((item) => item.itemType === "base_plan");
+  assert.equal(Number(persistedBasePlan?.unitPrice).toFixed(2), "599.00");
+
+  const paid = await markPlatformBillingCyclePaid(platformUser, cycle.data.id, {
+    reference: `MANUAL-${suffix}`,
+    notes: "Pago manual de integracion",
+  });
+  assert.equal(paid.data.cycle.status, "paid");
+  assert.ok(paid.data.payment);
+  assert.equal(paid.data.payment.billingCycleId, cycle.data.id);
+
+  await assert.rejects(
+    () => recalculatePlatformBillingCycle(platformUser, cycle.data.id),
+    (error: unknown) => error instanceof DomainError && error.code === "BILLING_CYCLE_PAID",
+  );
+
+  const summary = await getPlatformBillingSummary(platformUser, organizationId);
+  assert.equal(summary.data.pendingBalance, "0.00");
+});
+
+test("platform billing covers commercial plans, one-time charges, subscription item updates and CFDI overage", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const plans = await listPlatformCommercialPlans(platformUser);
+  assert.equal(plans.data.some((plan) => plan.code === "mostrador" && plan.monthlyPrice === "299.00"), true);
+  assert.equal(plans.data.some((plan) => plan.code === "comercial" && plan.limits.cfdi === 100), true);
+
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT Billing Completo ${suffix}`,
+    contactEmail: `billing-completo-${suffix}@tortillaplus.mx`,
+    planCode: "mostrador",
+  });
+  const organizationId = created.data.id;
+  const subscription = await prisma.subscription.findFirstOrThrow({
+    where: { organizationId },
+    include: { subscriptionItemSubscription: true },
+  });
+  const basePlan = subscription.subscriptionItemSubscription.find((item) => item.itemType === "base_plan");
+  assert.ok(basePlan);
+  assert.equal(Number(basePlan.unitPrice).toFixed(2), "299.00");
+
+  await updatePlatformSubscriptionItems(platformUser, organizationId, {
+    items: [
+      { id: basePlan.id, itemType: "base_plan", quantity: 1, unitPrice: "349.00", currency: "MXN", status: "active" },
+      { itemType: "extra_pos", quantity: 1, unitPrice: "99.00", currency: "MXN", status: "active" },
+    ],
+  });
+  await createPlatformOneTimeCharge(platformUser, organizationId, {
+    chargeType: "setup",
+    description: "Setup inicial Tortilla Plus",
+    amount: "1000.00",
+  });
+
+  await prisma.invoice.create({
+    data: {
+      organizationId,
+      invoiceType: "individual",
+      status: "stamped",
+      cfdiUuid: `IT-CFDI-${suffix}`,
+      invoiceDate: new Date("2027-03-05T00:00:00.000Z"),
+      issuedAt: new Date("2027-03-05T12:00:00.000Z"),
+      subtotal: "10.00",
+      taxTotal: "1.60",
+      total: "11.60",
+    },
+  });
+
+  const usage = await getPlatformCfdiUsage(platformUser, organizationId, {
+    periodStart: "2027-03-01",
+    periodEnd: "2027-03-31",
+  });
+  assert.equal(usage.data.includedLimit, 0);
+  assert.equal(usage.data.usedCount, 1);
+  assert.equal(usage.data.overageCount, 1);
+  assert.equal(usage.data.overageTotal, "6.00");
+
+  const cycle = await generatePlatformBillingCycle(platformUser, organizationId, {
+    periodStart: "2027-03-01",
+    periodEnd: "2027-03-31",
+    dueDate: "2027-04-05",
+  });
+  assert.equal(cycle.data.items.some((item) => item.itemType === "base_plan" && item.unitPrice === "349.00"), true);
+  assert.equal(cycle.data.items.some((item) => item.itemType === "extra_pos" && item.unitPrice === "99.00"), true);
+  assert.equal(cycle.data.items.some((item) => item.itemType === "setup" && item.subtotal === "1000.00"), true);
+  assert.equal(cycle.data.items.some((item) => item.itemType === "cfdi_overage" && item.total === "6.00"), true);
+  assert.equal(cycle.data.subtotal, "1453.17");
+  assert.equal(cycle.data.taxTotal, "232.51");
+  assert.equal(cycle.data.total, "1685.68");
+
+  const auditTrail = (await listPlatformAuditLog(platformUser, { organizationId })).data;
+  assert.equal(auditTrail.some((log) => log.action === "subscription_items_updated"), true);
+  assert.equal(auditTrail.some((log) => log.action === "one_time_charge_created"), true);
+});
+
+test("billing overdue scheduler transitions cycles, subscriptions and organizations", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const cases = [
+    { label: "grace", daysPastDue: 1, cycleStatus: "graced", subscriptionStatus: "grace_period", organizationStatus: "grace_period" },
+    { label: "past", daysPastDue: 6, cycleStatus: "overdue", subscriptionStatus: "past_due", organizationStatus: "past_due" },
+    { label: "suspended", daysPastDue: 10, cycleStatus: "suspended", subscriptionStatus: "suspended_limited", organizationStatus: "suspended_limited" },
+    { label: "cancelled", daysPastDue: 30, cycleStatus: "cancelled", subscriptionStatus: "cancelled", organizationStatus: "cancelled" },
+  ] as const;
+
+  for (const scenario of cases) {
+    const created = await createPlatformOrganization(platformUser, {
+      name: `IT Billing Scheduler ${scenario.label} ${suffix}`,
+      contactEmail: `billing-scheduler-${scenario.label}-${suffix}@tortillaplus.mx`,
+      planCode: "operativo",
+    });
+    const organizationId = created.data.id;
+    const dueDate = daysAgo(scenario.daysPastDue);
+    const cycle = await generatePlatformBillingCycle(platformUser, organizationId, {
+      periodStart: `2028-0${cases.indexOf(scenario) + 1}-01`,
+      periodEnd: `2028-0${cases.indexOf(scenario) + 1}-28`,
+      dueDate: isoDate(dueDate),
+    });
+
+    await updateOverdueBillingStatuses();
+
+    const persistedCycle = await prisma.billingCycle.findUniqueOrThrow({ where: { id: cycle.data.id } });
+    const subscription = await prisma.subscription.findFirstOrThrow({ where: { organizationId } });
+    const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+
+    assert.equal(persistedCycle.status, scenario.cycleStatus);
+    assert.equal(subscription.status, scenario.subscriptionStatus);
+    assert.equal(organization.status, scenario.organizationStatus);
+  }
+});
+
+test("billing overdue scheduler and payment recovery write required audit events", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT Billing Audit ${suffix}`,
+    contactEmail: `billing-audit-${suffix}@tortillaplus.mx`,
+    planCode: "operativo",
+  });
+  const organizationId = created.data.id;
+  const cycle = await generatePlatformBillingCycle(platformUser, organizationId, {
+    periodStart: "2028-08-01",
+    periodEnd: "2028-08-31",
+    dueDate: isoDate(daysAgo(10)),
+  });
+
+  await updateOverdueBillingStatuses();
+  let auditTrail = (await listPlatformAuditLog(platformUser, { organizationId })).data;
+  assert.equal(auditTrail.some((log) => log.action === "subscription_status_changed"), true);
+  assert.equal(auditTrail.some((log) => log.action === "organization_suspended_for_non_payment"), true);
+
+  await markPlatformBillingCyclePaid(platformUser, cycle.data.id, {
+    reference: `RECOVERY-${suffix}`,
+    notes: "Pago de recuperacion",
+  });
+
+  const subscription = await prisma.subscription.findFirstOrThrow({ where: { organizationId } });
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  assert.equal(subscription.status, "active");
+  assert.equal(organization.status, "active");
+
+  auditTrail = (await listPlatformAuditLog(platformUser, { organizationId })).data;
+  assert.equal(auditTrail.some((log) => log.action === "organization_reactivated_after_payment"), true);
+});
+
+test("platform_owner can cancel pending one-time charges with audit trail", async () => {
+  const platformSession = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
+  const platformUser = asPlatformUser(platformSession);
+  const suffix = Date.now();
+  const created = await createPlatformOrganization(platformUser, {
+    name: `IT One Time Cancel ${suffix}`,
+    contactEmail: `one-time-cancel-${suffix}@tortillaplus.mx`,
+    planCode: "mostrador",
+  });
+  const organizationId = created.data.id;
+  const charge = await createPlatformOneTimeCharge(platformUser, organizationId, {
+    chargeType: "training_extra",
+    description: "Capacitacion reagendada",
+    amount: "500.00",
+  });
+
+  const cancelled = await cancelPlatformOneTimeCharge(platformUser, charge.data.id);
+  assert.equal(cancelled.data.status, "cancelled");
+
+  const auditTrail = (await listPlatformAuditLog(platformUser, { organizationId })).data;
+  assert.equal(auditTrail.some((log) => log.action === "one_time_charge_cancelled"), true);
+});
+
+test("organization users cannot generate platform billing cycles", async () => {
+  const managerSession = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const manager = asOperationalUser(managerSession);
+
+  await assert.rejects(
+    () => generatePlatformBillingCycle(manager, manager.organizationId, {}),
+    (error: unknown) => {
+      assert.ok(error instanceof DomainError);
+      assert.equal(error.statusCode, 403);
+      assert.equal(error.code, "PLATFORM_ACCESS_REQUIRED");
+      return true;
+    },
+  );
 });
 
 test("platform_owner creates initial organization_owner and rejects duplicates", async () => {

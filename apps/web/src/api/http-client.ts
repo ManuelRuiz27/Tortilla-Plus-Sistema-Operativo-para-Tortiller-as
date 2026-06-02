@@ -27,6 +27,10 @@ function getBaseUrl(): string {
   return defaultBaseUrl;
 }
 
+export function getApiBaseUrl() {
+  return getBaseUrl();
+}
+
 export async function httpClient<TResponse>(
   path: string,
   options: RequestOptions = {}
@@ -62,4 +66,37 @@ export async function httpClient<TResponse>(
   }
 
   return payload as TResponse;
+}
+
+export async function httpDownload(path: string, options: RequestOptions = {}) {
+  const { body, headers, skipAuth, ...rest } = options;
+  const accessToken = useAuthStore.getState().accessToken;
+
+  const response = await fetch(`${getBaseUrl()}${path}`, {
+    ...rest,
+    headers: {
+      ...(accessToken && !skipAuth ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...headers
+    },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+
+  if (response.status === 401) {
+    useAuthStore.getState().logout();
+  }
+
+  if (!response.ok) {
+    throw new ApiErrorException(await parseApiError(response));
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromDisposition(response.headers.get("Content-Disposition")) ?? "reporte.csv"
+  };
+}
+
+function filenameFromDisposition(disposition: string | null) {
+  if (!disposition) return null;
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return match?.[1] ?? null;
 }
