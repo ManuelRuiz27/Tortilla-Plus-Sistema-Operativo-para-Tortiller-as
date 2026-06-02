@@ -62,6 +62,7 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
 test("billing summary creates individual and global internal invoices from real sales", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
+  const billingUser = asAuthenticatedUser(await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }));
   const branchId = firstBranchId(session);
   const date = uniqueDateOnly();
   const invoiceDate = new Date(`${date}T12:00:00.000Z`);
@@ -107,17 +108,17 @@ test("billing summary creates individual and global internal invoices from real 
   }, `billing-global-complete-${publicSale.id}`);
   await prisma.sale.update({ where: { id: publicSale.id }, data: { createdAt: invoiceDate, customerId: null } });
 
-  const before = (await getBillingSummary(currentUser, { branchId, date })).data;
+  const before = (await getBillingSummary(billingUser, { branchId, date })).data;
   assert.equal(before.billableSales.some((sale) => sale.id === customerSale.id && sale.status === "billable"), true);
   assert.equal(before.billableSales.some((sale) => sale.id === publicSale.id && sale.status === "global_candidate"), true);
   assert.equal(before.globalDaily.status, "not_created");
   assert.equal(before.globalDaily.total, 24);
 
-  const individual = (await createIndividualInvoice(currentUser, { saleId: customerSale.id })).data;
+  const individual = (await createIndividualInvoice(billingUser, { saleId: customerSale.id })).data;
   assert.equal(individual.status, "processing");
   assert.equal(individual.total, 24);
 
-  const stampedIndividual = (await stampInvoice(currentUser, individual.id)).data;
+  const stampedIndividual = (await stampInvoice(billingUser, individual.id)).data;
   assert.equal(stampedIndividual.status, "stamped");
   assert.match(stampedIndividual.folio, /^[0-9a-f-]{36}$/);
   const stampProviderLog = await prisma.billingProviderLog.findFirst({
@@ -126,7 +127,7 @@ test("billing summary creates individual and global internal invoices from real 
   assert.ok(stampProviderLog);
   assert.equal(stampProviderLog.provider, "tortilla-plus-pac-mock");
 
-  const documents = (await getInvoiceDocuments(currentUser, individual.id)).data;
+  const documents = (await getInvoiceDocuments(billingUser, individual.id)).data;
   assert.equal(documents.documents.length, 2);
   assert.equal(documents.documents.some((document) => document.type === "xml"), true);
   assert.equal(documents.documents.some((document) => document.type === "pdf"), true);
@@ -141,21 +142,21 @@ test("billing summary creates individual and global internal invoices from real 
   assert.equal((await processPacWebhook(duplicateWebhook)).data.duplicate, false);
   assert.equal((await processPacWebhook(duplicateWebhook)).data.duplicate, true);
 
-  const cancelledIndividual = (await cancelInvoice(currentUser, individual.id, { reason: "Prueba de cancelacion fiscal" })).data;
+  const cancelledIndividual = (await cancelInvoice(billingUser, individual.id, { reason: "Prueba de cancelacion fiscal" })).data;
   assert.equal(cancelledIndividual.status, "cancelled");
   const cancelProviderLog = await prisma.billingProviderLog.findFirst({
     where: { relatedEntityType: "invoice", relatedEntityId: individual.id, operation: "cancelInvoice", success: true },
   });
   assert.ok(cancelProviderLog);
 
-  const global = (await createGlobalDailyInvoice(currentUser, { branchId, date })).data;
+  const global = (await createGlobalDailyInvoice(billingUser, { branchId, date })).data;
   assert.equal(global.status, "processing");
   assert.equal(global.total, 24);
 
-  const stampedGlobal = (await stampInvoice(currentUser, global.id)).data;
+  const stampedGlobal = (await stampInvoice(billingUser, global.id)).data;
   assert.equal(stampedGlobal.status, "stamped");
 
-  const after = (await getBillingSummary(currentUser, { branchId, date })).data;
+  const after = (await getBillingSummary(billingUser, { branchId, date })).data;
   assert.equal(after.billableSales.some((sale) => sale.id === customerSale.id), false);
   assert.equal(after.billableSales.some((sale) => sale.id === publicSale.id), false);
   assert.equal(after.invoices.length >= 2, true);
@@ -165,6 +166,7 @@ test("billing summary creates individual and global internal invoices from real 
 test("global daily invoice uses branch fiscal timezone near midnight", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
+  const billingUser = asAuthenticatedUser(await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }));
   const branchId = firstBranchId(session);
   const fiscalYear = 2200 + Math.floor(Math.random() * 300);
   const fiscalDate = `${fiscalYear}-05-24`;
@@ -194,17 +196,30 @@ test("global daily invoice uses branch fiscal timezone near midnight", async () 
       createdAt: new Date(`${fiscalYear}-05-25T05:30:00.000Z`),
     },
   });
+  await prisma.invoice.updateMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId,
+      invoiceType: "global_public",
+      invoiceDate: {
+        gte: new Date(`${fiscalYear}-05-24T00:00:00.000Z`),
+        lt: new Date(`${fiscalYear}-05-25T12:00:00.000Z`),
+      },
+    },
+    data: { status: "cancelled" },
+  });
 
-  const summary = (await getBillingSummary(currentUser, { branchId, date: fiscalDate })).data;
+  const summary = (await getBillingSummary(billingUser, { branchId, date: fiscalDate })).data;
   assert.equal(summary.billableSales.some((item) => item.id === sale.id && item.status === "global_candidate"), true);
 
-  const global = (await createGlobalDailyInvoice(currentUser, { branchId, date: fiscalDate })).data;
+  const global = (await createGlobalDailyInvoice(billingUser, { branchId, date: fiscalDate })).data;
   assert.equal(global.total, 24);
 });
 
 test("public autofactura creates stamped invoice from card sale receipt token", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
+  const billingUser = asAuthenticatedUser(await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }));
   const branchId = firstBranchId(session);
   await ensureCashSession(currentUser, branchId);
 
@@ -234,10 +249,10 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
   assert.equal(publicReceipt.folio, sale.saleNumber);
   assert.equal(publicReceipt.total, 24);
 
-  const managerReceipts = (await listBillingReceipts(currentUser, { branchId, date: new Date().toISOString().slice(0, 10) })).data;
+  const managerReceipts = (await listBillingReceipts(billingUser, { branchId, date: new Date().toISOString().slice(0, 10) })).data;
   assert.equal(managerReceipts.some((item) => item.id === receipt.id && item.status === "active"), true);
 
-  const reprint = (await reprintBillingReceipt(currentUser, receipt.id)).data;
+  const reprint = (await reprintBillingReceipt(billingUser, receipt.id)).data;
   assert.equal(reprint.receiptUrl, `/r/${receipt.receiptToken}`);
   assert.equal(reprint.qrContent, `/r/${receipt.receiptToken}`);
 

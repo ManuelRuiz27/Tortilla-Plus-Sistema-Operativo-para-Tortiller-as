@@ -33,12 +33,15 @@ import { AuthGuard } from "../shared/guards/auth-guard";
 import { BranchGuard } from "../shared/guards/branch-guard";
 import { CashSessionGuard } from "../shared/guards/cash-session-guard";
 import { FeatureGuard } from "../shared/guards/feature-guard";
+import { PlatformGuard } from "../shared/guards/platform-guard";
 import { RoleGuard } from "../shared/guards/role-guard";
 import { AuthLayout } from "../shared/layouts/auth-layout";
 import { ManagerLayout } from "../shared/layouts/manager-layout";
 import { PlatformLayout } from "../shared/layouts/platform-layout";
 import { PosLayout } from "../shared/layouts/pos-layout";
 import { POS_ALLOWED_ROLES } from "../modules/pos/config/pos.config";
+import { SupervisorLayout } from "../shared/layouts/supervisor-layout";
+import { SupervisorAuthorizationsPage } from "../modules/supervisor/pages/supervisor-authorizations-page";
 
 export function AppRouter() {
   return (
@@ -51,9 +54,9 @@ export function AppRouter() {
       <Route
         element={
           <AuthGuard>
-            <RoleGuard allowedRoles={["platform_owner"]}>
+            <PlatformGuard>
               <PlatformLayout />
-            </RoleGuard>
+            </PlatformGuard>
           </AuthGuard>
         }
         path="/platform"
@@ -102,7 +105,21 @@ export function AppRouter() {
         element={
           <AuthGuard>
             <BranchGuard>
-              <RoleGuard allowedRoles={["manager", "supervisor", "organization_owner"]}>
+              <RoleGuard allowedRoles={["supervisor"]}>
+                <SupervisorLayout />
+              </RoleGuard>
+            </BranchGuard>
+          </AuthGuard>
+        }
+        path="/app/supervisor"
+      >
+        <Route index element={<SupervisorAuthorizationsPage />} />
+      </Route>
+      <Route
+        element={
+          <AuthGuard>
+            <BranchGuard>
+              <RoleGuard allowedRoles={["manager", "organization_owner"]}>
                 <ManagerLayout />
               </RoleGuard>
             </BranchGuard>

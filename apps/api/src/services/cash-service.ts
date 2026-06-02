@@ -272,6 +272,65 @@ export async function requestWithdrawal(currentUser: AuthenticatedUser, input: u
   });
 }
 
+export async function listPendingWithdrawals(currentUser: AuthenticatedUser, input: unknown) {
+  const query = asLooseRecord(input);
+  const branchId = optionalString(query.branchId);
+  return listWithdrawals(currentUser, { branchId, status: "pending_authorization" });
+}
+
+export async function listCashWithdrawals(currentUser: AuthenticatedUser, input: unknown) {
+  const query = asLooseRecord(input);
+  const branchId = optionalString(query.branchId);
+  const status = optionalString(query.status);
+  return listWithdrawals(currentUser, {
+    branchId,
+    status: status ? asCashMovementStatus(status) : null,
+  });
+}
+
+async function listWithdrawals(
+  currentUser: AuthenticatedUser,
+  input: { branchId: string | null; status: "pending_authorization" | "authorized" | "rejected" | null },
+) {
+  await assertPermission(currentUser.id, "cash.movements.view");
+  if (input.branchId) {
+    await assertBranchAccess(currentUser, input.branchId);
+  }
+
+  const movements = await prisma.cashMovement.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      movementType: "cash_out",
+      ...(input.status ? { status: input.status } : { status: { in: ["pending_authorization", "authorized", "rejected"] } }),
+      ...(input.branchId ? { branchId: input.branchId } : {}),
+    },
+    include: {
+      authorizedByUser: true,
+      branch: true,
+      reason: true,
+      rejectedByUser: true,
+      requestedByUser: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+
+  return {
+    data: movements.map((movement) => ({
+      id: movement.id,
+      requestedAt: movement.createdAt.toISOString(),
+      cashierName: movement.requestedByUser.name,
+      branchName: movement.branch.name,
+      amount: Number(movement.amount),
+      reason: movement.reason?.name ?? "Retiro operativo",
+      description: movement.description ?? "",
+      status: movement.status,
+      resolvedByName: movement.authorizedByUser?.name ?? movement.rejectedByUser?.name ?? null,
+      resolvedAt: movement.authorizedAt?.toISOString() ?? movement.rejectedAt?.toISOString() ?? null,
+    })),
+  };
+}
+
 export async function recordCashIncome(currentUser: AuthenticatedUser, input: unknown) {
   const body = asRecord(input);
   const branchId = asString(body.branchId, "branchId");
@@ -639,12 +698,24 @@ function asRecord(input: unknown): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
+function asLooseRecord(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return input as Record<string, unknown>;
+}
+
 function asString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new DomainError(400, "INVALID_REQUEST", `Campo requerido: ${field}.`);
   }
 
   return value.trim();
+}
+
+function asCashMovementStatus(value: string): "pending_authorization" | "authorized" | "rejected" {
+  if (value !== "pending_authorization" && value !== "authorized" && value !== "rejected") {
+    throw new DomainError(400, "INVALID_REQUEST", "Estado de retiro invalido.");
+  }
+  return value;
 }
 
 function optionalString(value: unknown): string | null {

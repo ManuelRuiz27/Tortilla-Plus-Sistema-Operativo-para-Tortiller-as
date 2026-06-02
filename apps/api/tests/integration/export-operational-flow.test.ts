@@ -49,6 +49,7 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
 test("F4 exports issued invoices, global invoices and operational reports as CSV/XLSX downloads", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
+  const billingUser = asAuthenticatedUser(await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }));
   const branchId = firstBranchId(session);
   await ensureCashSession(currentUser, branchId);
   const invoiceDate = uniqueInvoiceDate();
@@ -77,8 +78,8 @@ test("F4 exports issued invoices, global invoices and operational reports as CSV
   await completeSale(currentUser, individualSale.id, {
     payments: [{ paymentMethod: "cash", amount: "24.00" }],
   }, `export-individual-complete-${individualSale.id}`);
-  const individual = (await createIndividualInvoice(currentUser, { saleId: individualSale.id })).data;
-  const stampedIndividual = (await stampInvoice(currentUser, individual.id)).data;
+  const individual = (await createIndividualInvoice(billingUser, { saleId: individualSale.id })).data;
+  const stampedIndividual = (await stampInvoice(billingUser, individual.id)).data;
 
   const globalSale = (await createSale(currentUser, {
     branchId,
@@ -96,16 +97,16 @@ test("F4 exports issued invoices, global invoices and operational reports as CSV
     where: { id: globalSale.id },
     data: { customerId: null, createdAt: new Date(`${invoiceDate}T12:00:00.000Z`) },
   });
-  const global = (await createGlobalDailyInvoice(currentUser, { branchId, date: invoiceDate })).data;
-  const stampedGlobal = (await stampInvoice(currentUser, global.id)).data;
+  const global = (await createGlobalDailyInvoice(billingUser, { branchId, date: invoiceDate })).data;
+  const stampedGlobal = (await stampInvoice(billingUser, global.id)).data;
 
-  const issuedCsv = await exportIssuedInvoices(currentUser, { branchId, from: reportDate, to: reportDate, format: "csv" });
+  const issuedCsv = await exportIssuedInvoices(billingUser, { branchId, from: reportDate, to: reportDate, format: "csv" });
   assert.equal(issuedCsv.contentType, "text/csv; charset=utf-8");
   assert.match(issuedCsv.filename, /facturas-emitidas.*\.csv$/);
   assert.match(String(issuedCsv.body), /folio,tipo,estado,sucursal,cliente,uuid,fecha,subtotal,impuestos,total/);
   assert.match(String(issuedCsv.body), new RegExp(stampedIndividual.folio));
 
-  const globalXlsx = await exportGlobalInvoices(currentUser, { branchId, from: reportDate, to: reportDate, format: "xlsx" });
+  const globalXlsx = await exportGlobalInvoices(billingUser, { branchId, from: reportDate, to: reportDate, format: "xlsx" });
   assert.equal(globalXlsx.contentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   assert.match(globalXlsx.filename, /facturas-globales.*\.xlsx$/);
   assert.ok(Buffer.isBuffer(globalXlsx.body));

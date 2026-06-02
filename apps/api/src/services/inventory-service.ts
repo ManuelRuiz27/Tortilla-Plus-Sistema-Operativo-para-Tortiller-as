@@ -361,6 +361,35 @@ export async function createProductionBatch(currentUser: AuthenticatedUser, inpu
   });
 }
 
+export async function listProductionBatches(currentUser: AuthenticatedUser, input: unknown) {
+  await assertFeatureAvailable(currentUser, "production_control");
+  await assertPermission(currentUser.id, "production.manage");
+  const query = asLooseRecord(input);
+  const branchId = optionalString(query.branchId);
+  const status = optionalString(query.status);
+
+  if (branchId) {
+    await assertBranchAccess(currentUser, branchId);
+  }
+
+  const batches = await prisma.productionBatch.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      ...(branchId ? { branchId } : {}),
+      ...(status ? { status: asProductionStatus(status) } : {}),
+    },
+    include: {
+      productionBatchItemProductionBatch: {
+        include: { product: true },
+      },
+    },
+    orderBy: [{ productionDate: "desc" }, { createdAt: "desc" }],
+    take: 100,
+  });
+
+  return { data: batches.map(serializeProductionBatch) };
+}
+
 export async function closeProductionBatch(
   currentUser: AuthenticatedUser,
   productionBatchId: string,
@@ -766,6 +795,18 @@ function asRecord(input: unknown): Record<string, unknown> {
   }
 
   return input as Record<string, unknown>;
+}
+
+function asLooseRecord(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return input as Record<string, unknown>;
+}
+
+function asProductionStatus(value: string): "open" | "closed" {
+  if (value !== "open" && value !== "closed") {
+    throw new DomainError(400, "INVALID_REQUEST", "Estado de produccion invalido.");
+  }
+  return value;
 }
 
 function asString(value: unknown, field: string): string {

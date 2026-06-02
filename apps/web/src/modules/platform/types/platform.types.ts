@@ -56,6 +56,7 @@ export type PlatformPayment = {
   amount: string;
   currency: string;
   status: string;
+  note?: string | null;
   paidAt?: string | null;
   createdAt: string;
 };

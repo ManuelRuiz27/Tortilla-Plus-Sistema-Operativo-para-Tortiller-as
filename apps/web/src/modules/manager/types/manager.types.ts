@@ -22,6 +22,8 @@ export type PendingWithdrawal = {
   reason: string;
   description: string;
   status: "pending_authorization" | "authorized" | "rejected";
+  resolvedByName?: string | null;
+  resolvedAt?: string | null;
 };
 
 export type InventoryItem = {

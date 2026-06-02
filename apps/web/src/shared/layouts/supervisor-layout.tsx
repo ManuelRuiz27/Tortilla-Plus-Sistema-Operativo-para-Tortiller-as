@@ -1,56 +1,23 @@
-import {
-  BarChart3,
-  BadgeDollarSign,
-  Boxes,
-  CreditCard,
-  Landmark,
-  LogOut,
-  PackagePlus,
-  Route,
-  Settings,
-  ShoppingCart,
-  Store,
-  Users
-} from "lucide-react";
+import { ClipboardCheck, LogOut, ShoppingCart, Store } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Button } from "../components/button";
-import { StatusBadge } from "../components/status-badge";
 import { useAuthStore } from "../stores/auth.store";
 import { useBranchStore } from "../stores/branch.store";
 import { useCashStore } from "../stores/cash.store";
-import { useSubscriptionStore } from "../stores/subscription.store";
 import { cn } from "../utils/cn";
-import { labelStatus } from "../utils/labels";
 
 const navItems = [
-  { to: "/app/manager/dashboard", label: "Inicio", icon: BarChart3 },
-  { to: "/app/pos/sale", label: "Ventas", icon: ShoppingCart, permission: "sales.create" },
-  { to: "/app/manager/customers", label: "Clientes", icon: Users, permission: "customers.view" },
-  { to: "/app/manager/routes", label: "Reparto", icon: Route, permission: "routes.view", feature: "delivery_routes" },
-  { to: "/app/manager/inventory", label: "Inventario", icon: Boxes, permission: "inventory.view" },
-  { to: "/app/manager/products", label: "Productos", icon: PackagePlus, permission: "products.view" },
-  { to: "/app/manager/prices", label: "Precios", icon: BadgeDollarSign, permission: "prices.manage" },
-  { to: "/app/manager/cash", label: "Caja", icon: CreditCard, permission: "cash.movements.view" },
-  { to: "/app/manager/reports", label: "Reportes", icon: BarChart3, permission: "reports.basic.view" },
-  { to: "/app/manager/reconciliation", label: "Conciliacion", icon: Landmark, permission: "reports.advanced.view", feature: "advanced_reports" },
-  { to: "/app/manager/settings", label: "Configuracion", icon: Settings, permission: "integrations.view" }
+  { to: "/app/supervisor", label: "Autorizaciones", icon: ClipboardCheck, end: true },
+  { to: "/app/pos/sale", label: "POS", icon: ShoppingCart }
 ];
 
-export function ManagerLayout() {
+export function SupervisorLayout() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const branchName = useBranchStore((state) => state.activeBranchName);
   const clearBranch = useBranchStore((state) => state.clearActiveBranch);
   const clearCash = useCashStore((state) => state.clearCashSession);
-  const planCode = useSubscriptionStore((state) => state.planCode);
-  const subscriptionStatus = useSubscriptionStore((state) => state.status);
-  const features = useSubscriptionStore((state) => state.features);
-  const visibleNavItems = navItems.filter((item) => {
-    const hasPermission = !item.permission || user?.permissions.includes(item.permission);
-    const hasFeature = !item.feature || features.includes(item.feature);
-    return hasPermission && hasFeature;
-  });
 
   function handleLogout() {
     clearCash();
@@ -64,10 +31,10 @@ export function ManagerLayout() {
       <aside className="border-b border-tp-border bg-white px-3 py-4 lg:border-b-0 lg:border-r">
         <div className="mb-4 px-3 lg:mb-6">
           <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Tortilla Plus</p>
-          <p className="mt-1 text-xs text-tp-muted">Vista del negocio</p>
+          <p className="mt-1 text-xs text-tp-muted">Supervisor</p>
         </div>
         <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
-          {visibleNavItems.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               className={({ isActive }) =>
                 cn(
@@ -75,6 +42,7 @@ export function ManagerLayout() {
                   isActive && "bg-tp-soft text-tp-text"
                 )
               }
+              end={item.end}
               key={item.to}
               to={item.to}
             >
@@ -90,11 +58,8 @@ export function ManagerLayout() {
             <Store className="h-5 w-5 text-tp-secondary" aria-hidden="true" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{branchName ?? "Sucursal sin seleccionar"}</p>
-              <p className="text-xs text-tp-muted">{user?.fullName ?? "Usuario"}</p>
+              <p className="text-xs text-tp-muted">{user?.fullName ?? "Supervisor"}</p>
             </div>
-            <StatusBadge tone={subscriptionStatus === "active" ? "success" : "warning"}>
-              Plan {labelStatus(planCode)} - {labelStatus(subscriptionStatus)}
-            </StatusBadge>
           </div>
           <Button variant="ghost" onClick={handleLogout}>
             <LogOut className="h-4 w-4" aria-hidden="true" />

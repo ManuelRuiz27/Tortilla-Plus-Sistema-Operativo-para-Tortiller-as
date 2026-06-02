@@ -23,6 +23,12 @@ import {
   updatePlatformSubscription,
 } from "../../src/services/platform-service.js";
 import { openCashSession } from "../../src/services/cash-service.js";
+import {
+  createOrganizationBranch,
+  createOrganizationPosDevice,
+  createOrganizationUser,
+  getOrganizationSummary,
+} from "../../src/services/organization-service.js";
 
 function asPlatformUser(session: Awaited<ReturnType<typeof login>>): AuthenticatedUser {
   assert.equal(session.user.organizationId, null);
@@ -62,6 +68,31 @@ test("platform seed exposes platform_owner and no platform_admin", async () => {
   assert.ok(platformUser.userRoleUser.some((userRole) => userRole.role.code === "platform_owner"));
 });
 
+test("pilot role permission matrix does not leak platform permissions", async () => {
+  const roles = await prisma.role.findMany({
+    where: { code: { in: ["platform_owner", "organization_owner", "manager", "supervisor", "cashier"] } },
+    include: { rolePermissionRole: { include: { permission: true } } },
+  });
+  const permissionsByRole = new Map(
+    roles.map((role) => [role.code, role.rolePermissionRole.map((rolePermission) => rolePermission.permission.code)]),
+  );
+
+  assert.deepEqual(
+    (permissionsByRole.get("platform_owner") ?? []).every((permission) => permission.startsWith("platform.")),
+    true,
+  );
+  for (const role of ["organization_owner", "manager", "supervisor", "cashier"]) {
+    assert.equal(
+      (permissionsByRole.get(role) ?? []).some((permission) => permission.startsWith("platform.")),
+      false,
+      `${role} must not have platform permissions`,
+    );
+  }
+  assert.equal((permissionsByRole.get("cashier") ?? []).includes("payments.cancel_terminal_order"), false);
+  assert.equal((permissionsByRole.get("manager") ?? []).includes("payments.cancel_terminal_order"), true);
+  assert.equal((permissionsByRole.get("supervisor") ?? []).includes("payments.cancel_terminal_order"), true);
+});
+
 test("platform_owner can access platform services without branch or organization", async () => {
   const session = await login({ email: "admin@tortillaplus.mx", password: "Demo1234!" });
   assert.equal(session.user.organizationId, null);
@@ -98,6 +129,31 @@ test("organization users cannot access platform services", async () => {
       return true;
     },
   );
+});
+
+test("organization_owner can manage internal users, branches and unlicensed POS devices", async () => {
+  const ownerSession = await login({ email: "owner.demo@tortillaplus.mx", password: "Demo1234!" });
+  const owner = asOperationalUser(ownerSession);
+  const suffix = Date.now();
+  const branch = (await createOrganizationBranch(owner, { name: `Owner IT ${suffix}` })).data;
+  const user = (await createOrganizationUser(owner, {
+    name: `Cajero Owner IT ${suffix}`,
+    email: `owner-it-cashier-${suffix}@tortillaplus.mx`,
+    role: "cashier",
+    branchId: branch.id,
+  })).data;
+  const posDevice = (await createOrganizationPosDevice(owner, {
+    name: `POS Owner IT ${suffix}`,
+    branchId: branch.id,
+    deviceCode: `OWNER-IT-POS-${suffix}`,
+  })).data;
+  const summary = (await getOrganizationSummary(owner)).data;
+
+  assert.equal(user.roles.includes("cashier"), true);
+  assert.equal(user.branches.some((assignment) => assignment.branchId === branch.id), true);
+  assert.equal(posDevice.licensed, false);
+  assert.equal(summary.branches.some((item) => item.id === branch.id), true);
+  assert.equal(summary.posDevices.some((item) => item.id === posDevice.id && !item.licensed), true);
 });
 
 test("platform_owner can execute organization, subscription, POS and payment mutations with audit trail", async () => {

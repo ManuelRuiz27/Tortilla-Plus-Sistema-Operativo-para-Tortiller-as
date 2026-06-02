@@ -1,9 +1,10 @@
 import type { CurrentUser } from "../types/session.types";
 
-const managerRoles = new Set(["manager", "supervisor", "organization_owner"]);
+const managerRoles = new Set(["manager", "organization_owner"]);
 
-export function getPrimaryDestination(user: CurrentUser): "/app/pos" | "/app/manager" | "/platform" {
+export function getPrimaryDestination(user: CurrentUser): "/app/pos" | "/app/manager" | "/app/supervisor" | "/platform" {
   if (user.roles.includes("platform_owner")) return "/platform";
+  if (user.roles.includes("supervisor")) return "/app/supervisor";
   const hasManagerRole = user.roles.some((role) => managerRoles.has(role));
   return hasManagerRole ? "/app/manager" : "/app/pos";
 }

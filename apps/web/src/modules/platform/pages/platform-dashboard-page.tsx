@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { platformDashboardRequest } from "../../../api/platform.api";
 import { LoadingState } from "../../../shared/components/loading-state";
 import { StatusBadge } from "../../../shared/components/status-badge";
@@ -44,7 +45,12 @@ export function PlatformDashboardPage() {
           {data?.alerts.length ? data.alerts.map((alert) => (
             <div className="flex items-center justify-between rounded-md border border-tp-border bg-white p-3" key={alert.type}>
               <span className="text-sm">{alert.message}</span>
-              <StatusBadge tone="warning">{alert.count}</StatusBadge>
+              <div className="flex items-center gap-3">
+                <StatusBadge tone="warning">{alert.count}</StatusBadge>
+                <Link className="text-sm font-semibold text-tp-primary" to={alert.type === "past_due" ? "/platform/subscriptions" : "/platform/organizations"}>
+                  Abrir
+                </Link>
+              </div>
             </div>
           )) : <p className="text-sm text-tp-muted">Sin alertas criticas.</p>}
         </div>

@@ -78,6 +78,14 @@ export function PlatformOrganizationDetailPage() {
   if (isLoading) return <LoadingState message="Cargando organizacion..." />;
   if (!data) return null;
 
+  function applyStatus() {
+    if (status === "suspended_limited" || status === "cancelled") {
+      const confirmed = window.confirm("La organizacion no podra operar ventas reales mientras este suspendida o cancelada. ¿Aplicar este estado?");
+      if (!confirmed) return;
+    }
+    statusMutation.mutate(status);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -107,7 +115,7 @@ export function PlatformOrganizationDetailPage() {
               <option value="suspended_limited">Suspendido</option>
               <option value="cancelled">Cancelado</option>
             </select>
-            <Button disabled={statusMutation.isPending || status === data.status} onClick={() => statusMutation.mutate(status)} variant="secondary">
+            <Button disabled={statusMutation.isPending || status === data.status} onClick={applyStatus} variant="secondary">
               Aplicar estado
             </Button>
           </div>

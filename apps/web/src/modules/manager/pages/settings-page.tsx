@@ -23,9 +23,10 @@ import { useAuthStore } from "../../../shared/stores/auth.store";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { useSubscriptionStore } from "../../../shared/stores/subscription.store";
 import { labelFeature, labelPermission, labelRole, labelStatus } from "../../../shared/utils/labels";
+import { OwnerAdministrationPanel } from "../components/owner-administration-panel";
 
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"general" | "pos" | "terminales" | "integraciones">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "owner" | "pos" | "terminales" | "integraciones">("general");
   const [selectedPosDeviceId, setSelectedPosDeviceId] = useState("");
   const [terminalActionMessage, setTerminalActionMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -137,6 +138,7 @@ export function SettingsPage() {
       terminal.binding.posDeviceId === selectedPosDeviceId
   );
   const selectedPosTerminalIsPdv = !selectedPosTerminal?.operatingMode || selectedPosTerminal.operatingMode === "PDV";
+  const canManageOrganization = Boolean(user?.permissions.includes("organization.view"));
   const branchStoreReady = Boolean(provisioning?.branchConfig?.mpStoreId);
   const posReady = Boolean(provisioning?.posConfig?.mpPosId);
   const wizardSteps = [
@@ -169,6 +171,7 @@ export function SettingsPage() {
       <div className="mb-5 flex flex-wrap gap-2">
         {[
           ["general", "General"],
+          ...(canManageOrganization ? [["owner", "Negocio"]] : []),
           ["pos", "POS"],
           ["terminales", "Terminales"],
           ["integraciones", "Integraciones"]
@@ -178,6 +181,8 @@ export function SettingsPage() {
           </Button>
         ))}
       </div>
+
+      {activeTab === "owner" ? <OwnerAdministrationPanel /> : null}
 
       {activeTab === "terminales" ? (
         <div className="grid gap-5 xl:grid-cols-[360px_1fr]">

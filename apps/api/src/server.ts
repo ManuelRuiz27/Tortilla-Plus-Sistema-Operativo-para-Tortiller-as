@@ -23,6 +23,8 @@ import {
   closeCashSession,
   getCashSessionSummary,
   getOpenCashSession,
+  listCashWithdrawals,
+  listPendingWithdrawals,
   openCashSession,
   recordCashIncome,
   rejectCashMovement,
@@ -36,6 +38,7 @@ import {
   createWasteRecord,
   getBranchInventory,
   getBranchPrices,
+  listProductionBatches,
   listProducts,
   setBranchPrice,
   updateProduct,
@@ -184,6 +187,23 @@ import {
   updatePlatformPosDeviceStatus,
   updatePlatformSubscription,
 } from "./services/platform-service.js";
+import {
+  createOrganizationBranch,
+  createOrganizationPosDevice,
+  createOrganizationUser,
+  getOrganizationSummary,
+  listOrganizationBranches,
+  listOrganizationPosDevices,
+  listOrganizationUsers,
+  resetOrganizationUserPassword,
+  resetOrganizationUserPin,
+  updateOrganization,
+  updateOrganizationBranch,
+  updateOrganizationBranchStatus,
+  updateOrganizationPosDevice,
+  updateOrganizationUser,
+  updateOrganizationUserStatus,
+} from "./services/organization-service.js";
 
 type JsonBody = Record<string, unknown>;
 
@@ -353,6 +373,78 @@ async function route(request: IncomingMessage, response: ServerResponse) {
       branchId: url.searchParams.get("branchId"),
     }));
     return;
+  }
+
+  if (path.startsWith("/api/v1/organization")) {
+    const currentUser = await authenticate(request);
+    const organizationUserMatch = path.match(/^\/api\/v1\/organization\/users\/([^/]+)$/);
+    const organizationUserStatusMatch = path.match(/^\/api\/v1\/organization\/users\/([^/]+)\/status$/);
+    const organizationUserResetPasswordMatch = path.match(/^\/api\/v1\/organization\/users\/([^/]+)\/reset-password$/);
+    const organizationUserResetPinMatch = path.match(/^\/api\/v1\/organization\/users\/([^/]+)\/reset-pin$/);
+    const organizationBranchMatch = path.match(/^\/api\/v1\/organization\/branches\/([^/]+)$/);
+    const organizationBranchStatusMatch = path.match(/^\/api\/v1\/organization\/branches\/([^/]+)\/status$/);
+    const organizationPosDeviceMatch = path.match(/^\/api\/v1\/organization\/pos-devices\/([^/]+)$/);
+
+    if (method === "GET" && path === "/api/v1/organization/summary") {
+      sendJson(response, 200, await getOrganizationSummary(currentUser));
+      return;
+    }
+    if (method === "PATCH" && path === "/api/v1/organization") {
+      sendJson(response, 200, await updateOrganization(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/organization/users") {
+      sendJson(response, 200, await listOrganizationUsers(currentUser));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/organization/users") {
+      sendJson(response, 201, await createOrganizationUser(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && organizationUserMatch) {
+      sendJson(response, 200, await updateOrganizationUser(currentUser, organizationUserMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && organizationUserStatusMatch) {
+      sendJson(response, 200, await updateOrganizationUserStatus(currentUser, organizationUserStatusMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "POST" && organizationUserResetPasswordMatch) {
+      sendJson(response, 200, await resetOrganizationUserPassword(currentUser, organizationUserResetPasswordMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "POST" && organizationUserResetPinMatch) {
+      sendJson(response, 200, await resetOrganizationUserPin(currentUser, organizationUserResetPinMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/organization/branches") {
+      sendJson(response, 200, await listOrganizationBranches(currentUser));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/organization/branches") {
+      sendJson(response, 201, await createOrganizationBranch(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && organizationBranchMatch) {
+      sendJson(response, 200, await updateOrganizationBranch(currentUser, organizationBranchMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && organizationBranchStatusMatch) {
+      sendJson(response, 200, await updateOrganizationBranchStatus(currentUser, organizationBranchStatusMatch[1], await readJson(request)));
+      return;
+    }
+    if (method === "GET" && path === "/api/v1/organization/pos-devices") {
+      sendJson(response, 200, await listOrganizationPosDevices(currentUser));
+      return;
+    }
+    if (method === "POST" && path === "/api/v1/organization/pos-devices") {
+      sendJson(response, 201, await createOrganizationPosDevice(currentUser, await readJson(request)));
+      return;
+    }
+    if (method === "PATCH" && organizationPosDeviceMatch) {
+      sendJson(response, 200, await updateOrganizationPosDevice(currentUser, organizationPosDeviceMatch[1], await readJson(request)));
+      return;
+    }
   }
 
   if (method === "GET" && path === "/api/v1/pos-devices") {
@@ -699,6 +791,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/production/batches") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createProductionBatch(currentUser, await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/production/batches") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listProductionBatches(currentUser, Object.fromEntries(url.searchParams.entries())));
     return;
   }
 
@@ -1112,6 +1210,18 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/cash-movements/withdrawals") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await requestWithdrawal(currentUser, await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/cash-movements/withdrawals/pending") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listPendingWithdrawals(currentUser, Object.fromEntries(url.searchParams.entries())));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/cash-movements/withdrawals") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listCashWithdrawals(currentUser, Object.fromEntries(url.searchParams.entries())));
     return;
   }
 

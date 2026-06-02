@@ -21,10 +21,13 @@ export async function requirePlatformOwner(currentUser: AuthenticatedUser) {
   });
 
   const platformRole = user?.userRoleUser.find(
-    (userRole) => userRole.role.code === "platform_owner" && userRole.role.scope === "platform",
+    (userRole) =>
+      userRole.organizationId === null &&
+      userRole.role.code === "platform_owner" &&
+      userRole.role.scope === "platform",
   );
 
-  if (!user || user.status !== "active" || !platformRole) {
+  if (!user || user.status !== "active" || user.organizationId !== null || !platformRole) {
     throw new DomainError(403, "PLATFORM_ACCESS_REQUIRED", "Acceso exclusivo de plataforma.");
   }
 
@@ -388,7 +391,7 @@ export async function createPlatformManualPayment(currentUser: AuthenticatedUser
   const body = asRecord(input);
   const organizationId = asString(body.organizationId, "organizationId");
   const subscriptionId = asString(body.subscriptionId, "subscriptionId");
-  const amount = asString(body.amount, "amount");
+  const amount = asPositiveMoney(body.amount);
   const paidAt = optionalDate(body.paidAt) ?? new Date();
   const note = optionalString(body.note);
 
@@ -583,9 +586,16 @@ function serializePayment(payment: Prisma.SaasPaymentGetPayload<Record<string, n
     amount: payment.amount.toString(),
     currency: payment.currency,
     status: payment.status,
+    note: extractPaymentNote(payment.rawPayload),
     paidAt: payment.paidAt?.toISOString() ?? null,
     createdAt: payment.createdAt.toISOString(),
   };
+}
+
+function extractPaymentNote(rawPayload: Prisma.JsonValue | null) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const note = (rawPayload as { note?: unknown }).note;
+  return typeof note === "string" ? note : null;
 }
 
 function serializeAuditLog(log: Prisma.AuditLogGetPayload<Record<string, never>>) {
@@ -645,6 +655,15 @@ function asString(value: unknown, field: string) {
     throw new DomainError(400, "INVALID_REQUEST", `Campo requerido: ${field}.`);
   }
   return value.trim();
+}
+
+function asPositiveMoney(value: unknown) {
+  const raw = asString(value, "amount");
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new DomainError(400, "INVALID_AMOUNT", "El monto debe ser mayor a cero.");
+  }
+  return amount.toFixed(2);
 }
 
 function optionalString(value: unknown) {

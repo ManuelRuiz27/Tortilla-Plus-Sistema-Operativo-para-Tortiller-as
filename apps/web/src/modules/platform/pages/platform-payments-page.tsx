@@ -35,7 +35,7 @@ export function PlatformPaymentsPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedOrganizationId || !selectedOrganization?.subscriptionId) {
+    if (!selectedOrganizationId || !selectedOrganization?.subscriptionId || Number(amount) <= 0) {
       return;
     }
     createMutation.mutate({
@@ -60,10 +60,12 @@ export function PlatformPaymentsPage() {
         </select>
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" min="0.01" onChange={(event) => setAmount(event.target.value)} placeholder="Monto" required step="0.01" type="number" value={amount} />
         <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPaidAt(event.target.value)} type="date" value={paidAt} />
-        <Button disabled={createMutation.isPending || !selectedOrganization?.subscriptionId} type="submit" variant="secondary">
+        <Button disabled={createMutation.isPending || !selectedOrganization?.subscriptionId || Number(amount) <= 0} type="submit" variant="secondary">
           {createMutation.isPending ? "Registrando..." : "Registrar pago manual"}
         </Button>
         <textarea className="min-h-20 rounded-md border border-tp-border px-3 py-2 text-sm md:col-span-4" onChange={(event) => setNote(event.target.value)} placeholder="Nota opcional" value={note} />
+        {selectedOrganization && !selectedOrganization.subscriptionId ? <p className="text-sm text-tp-danger md:col-span-4">La organizacion seleccionada no tiene suscripcion activa.</p> : null}
+        {amount && Number(amount) <= 0 ? <p className="text-sm text-tp-danger md:col-span-4">El monto debe ser mayor a cero.</p> : null}
         {createMutation.error instanceof ApiErrorException ? <p className="text-sm text-tp-danger md:col-span-4">{createMutation.error.apiError.message}</p> : null}
       </form>
       <div className="divide-y divide-tp-border rounded-md border border-tp-border bg-white">
@@ -73,6 +75,7 @@ export function PlatformPaymentsPage() {
             <span>${Number(payment.amount).toFixed(2)} {payment.currency}</span>
             <StatusBadge tone={payment.status === "approved" ? "success" : "warning"}>{labelStatus(payment.status)}</StatusBadge>
             <span className="text-tp-muted">{payment.paidAt ? new Date(payment.paidAt).toLocaleDateString() : "Sin fecha"}</span>
+            {payment.note ? <span className="text-tp-muted md:col-span-4">Nota: {payment.note}</span> : null}
           </div>
         ))}
         {!data?.length ? <p className="p-4 text-sm text-tp-muted">Sin pagos registrados.</p> : null}

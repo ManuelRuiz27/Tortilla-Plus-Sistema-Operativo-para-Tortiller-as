@@ -110,7 +110,10 @@ test("F6 role permissions block billing, reconciliation, reports, exports and ca
   const authorized = (await authorizeCashMovement(supervisor, withdrawal.id, { pin: "1234" })).data;
   assert.equal(authorized.status, "authorized");
 
-  assert.ok((await getBillingSummary(manager, { branchId, date: today })).data);
+  await assertPermissionDenied(
+    () => getBillingSummary(manager, { branchId, date: today }),
+    "billing.manage",
+  );
   assert.ok((await getReportsSummary(manager, filters)).data);
   assert.ok((await listReconciliationBatches(manager, { branchId })).data);
 

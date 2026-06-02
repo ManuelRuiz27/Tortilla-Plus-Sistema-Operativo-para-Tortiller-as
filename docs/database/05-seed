@@ -67,7 +67,6 @@ ON CONFLICT (plan_id, feature_id) DO UPDATE SET enabled = EXCLUDED.enabled, limi
 INSERT INTO roles (code, name, scope)
 VALUES
   ('platform_owner', 'Dueño de Plataforma', 'platform'),
-  ('platform_admin', 'Administrador de Plataforma', 'platform'),
   ('organization_owner', 'Dueño de Organización', 'organization'),
   ('manager', 'Gerente', 'organization'),
   ('supervisor', 'Supervisor', 'branch'),
@@ -76,9 +75,21 @@ ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, scope = EXCLUDED.scope, u
 
 INSERT INTO permissions (code, name, description)
 VALUES
+  ('platform.dashboard.view', 'Ver dashboard de plataforma', 'Permite ver KPIs SaaS globales.'),
+  ('platform.organizations.view', 'Ver organizaciones de plataforma', 'Permite consultar organizaciones SaaS.'),
   ('platform.organizations.manage', 'Gestionar organizaciones', 'Permite administrar organizaciones SaaS.'),
+  ('platform.organizations.suspend', 'Suspender organizaciones', 'Permite suspender organizaciones SaaS.'),
+  ('platform.subscriptions.view', 'Ver suscripciones de plataforma', 'Permite consultar suscripciones SaaS.'),
   ('platform.subscriptions.manage', 'Gestionar suscripciones', 'Permite administrar planes, pagos y suspensiones.'),
+  ('platform.payments.view', 'Ver pagos SaaS', 'Permite consultar pagos SaaS.'),
+  ('platform.payments.manage', 'Gestionar pagos SaaS', 'Permite registrar pagos SaaS manuales.'),
+  ('platform.pos_devices.view', 'Ver POS de plataforma', 'Permite consultar POS globales.'),
+  ('platform.pos_devices.manage', 'Gestionar POS de plataforma', 'Permite activar o desactivar POS globales.'),
+  ('platform.pos_devices.license', 'Licenciar POS', 'Permite asignar o retirar licencia de POS.'),
+  ('platform.audit.view', 'Ver auditoria global', 'Permite consultar auditoria global.'),
   ('platform.support.access', 'Acceso de soporte', 'Permite acceder a herramientas internas de soporte.'),
+  ('platform.impersonation.start', 'Iniciar impersonacion', 'Permiso reservado para soporte auditado.'),
+  ('platform.impersonation.end', 'Terminar impersonacion', 'Permiso reservado para soporte auditado.'),
   ('organization.view', 'Ver organización', 'Permite ver datos generales de la organización.'),
   ('organization.update', 'Editar organización', 'Permite editar datos generales de la organización.'),
   ('branches.view', 'Ver sucursales', 'Permite consultar sucursales.'),
@@ -91,6 +102,8 @@ VALUES
   ('sales.cancel_after_payment', 'Cancelar venta cobrada', 'Permite cancelar una venta ya cobrada.'),
   ('sales.refund', 'Registrar devolución', 'Permite registrar devoluciones parciales o totales.'),
   ('payments.create', 'Registrar pagos', 'Permite registrar pagos de ventas.'),
+  ('payments.cancel_terminal_order', 'Cancelar orden de terminal', 'Permite cancelar cobros enviados a terminal.'),
+  ('payments.manual_card_reference', 'Usar folio manual de tarjeta', 'Permite registrar referencia manual de tarjeta.'),
   ('payments.reconcile', 'Conciliar pagos', 'Permite conciliar pagos contra terminal bancaria.'),
   ('cash.open', 'Abrir caja', 'Permite abrir sesión de caja.'),
   ('cash.close', 'Cerrar caja', 'Permite cerrar sesión de caja.'),
@@ -118,7 +131,10 @@ VALUES
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = now();
 
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permissions p WHERE r.code = 'platform_owner'
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code LIKE 'platform.%'
+WHERE r.code = 'platform_owner'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 INSERT INTO role_permissions (role_id, permission_id)
@@ -133,7 +149,21 @@ JOIN permissions p ON p.code IN (
   'customers.manage','customers.credit.manage','routes.view','routes.manage','billing.view','billing.manage',
   'reports.basic.view','reports.advanced.view','audit.view'
 )
-WHERE r.code IN ('organization_owner', 'manager')
+WHERE r.code = 'organization_owner'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN (
+  'branches.view','sales.create','sales.view','sales.cancel_before_payment','sales.cancel_after_payment',
+  'payments.create','payments.cancel_terminal_order','cash.open','cash.close','cash.movements.view',
+  'cash.withdraw.request','cash.withdraw.authorize','cash.adjust','inventory.view','inventory.manage',
+  'production.manage','products.view','products.manage','prices.manage','customers.view',
+  'customers.manage','customers.credit.manage','routes.view','routes.manage',
+  'reports.basic.view','reports.advanced.view'
+)
+WHERE r.code = 'manager'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 INSERT INTO role_permissions (role_id, permission_id)

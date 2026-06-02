@@ -25,6 +25,23 @@ export function PlatformPosDevicesPage() {
   });
   if (isLoading) return <LoadingState message="Cargando POS..." />;
 
+  function changeStatus(device: { id: string; status: string; name: string }) {
+    const nextStatus = device.status === "active" ? "inactive" : "active";
+    if (nextStatus !== "active") {
+      const confirmed = window.confirm(`El POS ${device.name} no podra operar ventas reales mientras este inactivo. ¿Continuar?`);
+      if (!confirmed) return;
+    }
+    statusMutation.mutate({ id: device.id, status: nextStatus });
+  }
+
+  function changeLicense(device: { id: string; licensed: boolean; name: string }) {
+    if (device.licensed) {
+      const confirmed = window.confirm(`Quitar la licencia a ${device.name} bloqueara ventas reales en ese POS. ¿Continuar?`);
+      if (!confirmed) return;
+    }
+    licenseMutation.mutate({ id: device.id, licensed: !device.licensed });
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-semibold">POS / Licencias</h1>
@@ -52,10 +69,10 @@ export function PlatformPosDevicesPage() {
                 <td className="px-4 py-3">{device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "Sin registro"}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
-                    <Button disabled={statusMutation.isPending} onClick={() => statusMutation.mutate({ id: device.id, status: device.status === "active" ? "inactive" : "active" })} variant="secondary">
+                    <Button disabled={statusMutation.isPending} onClick={() => changeStatus(device)} variant="secondary">
                       {device.status === "active" ? "Desactivar" : "Activar"}
                     </Button>
-                    <Button disabled={licenseMutation.isPending} onClick={() => licenseMutation.mutate({ id: device.id, licensed: !device.licensed })} variant="secondary">
+                    <Button disabled={licenseMutation.isPending} onClick={() => changeLicense(device)} variant="secondary">
                       {device.licensed ? "Quitar licencia" : "Licenciar"}
                     </Button>
                   </div>

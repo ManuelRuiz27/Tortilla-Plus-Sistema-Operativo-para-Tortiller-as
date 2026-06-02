@@ -174,6 +174,29 @@ type ApiDeliverySettlement = {
   cashSessionId?: string | null;
 };
 
+type ApiPendingWithdrawal = {
+  id: string;
+  requestedAt: string;
+  cashierName: string;
+  branchName: string;
+  amount: string | number;
+  reason: string;
+  description?: string | null;
+  status: PendingWithdrawal["status"];
+  resolvedByName?: string | null;
+  resolvedAt?: string | null;
+};
+
+type ApiProductionBatch = {
+  id: string;
+  productionDate: string;
+  status: ProductionBatch["status"];
+  items?: Array<{
+    producedQuantity: string | number;
+    product?: { sku?: string | null; name?: string | null } | null;
+  }>;
+};
+
 const productTypes = new Set(["tortilla", "masa", "package", "retail", "service"]);
 const productUnits = new Set(["kg", "piece", "package", "liter", "service"]);
 const saleModes = new Set(["by_kg", "by_amount", "by_package", "by_unit"]);
@@ -348,6 +371,38 @@ function mapDeliverySettlement(settlement: ApiDeliverySettlement): DeliverySettl
   };
 }
 
+function mapPendingWithdrawal(withdrawal: ApiPendingWithdrawal): PendingWithdrawal {
+  return {
+    id: withdrawal.id,
+    requestedAt: new Date(withdrawal.requestedAt).toLocaleString(),
+    cashierName: withdrawal.cashierName,
+    branchName: withdrawal.branchName,
+    amount: Number(withdrawal.amount),
+    reason: withdrawal.reason,
+    description: withdrawal.description ?? "",
+    status: withdrawal.status,
+    resolvedByName: withdrawal.resolvedByName ?? null,
+    resolvedAt: withdrawal.resolvedAt ? new Date(withdrawal.resolvedAt).toLocaleString() : null
+  };
+}
+
+function mapProductionBatch(batch: ApiProductionBatch): ProductionBatch {
+  const tortillaKg = batch.items
+    ?.filter((item) => item.product?.sku === "TORTILLA-KG" || item.product?.name?.toLowerCase().includes("tortilla"))
+    .reduce((sum, item) => sum + Number(item.producedQuantity), 0) ?? 0;
+  const masaKg = batch.items
+    ?.filter((item) => item.product?.sku === "MASA-KG" || item.product?.name?.toLowerCase().includes("masa"))
+    .reduce((sum, item) => sum + Number(item.producedQuantity), 0) ?? 0;
+
+  return {
+    id: batch.id,
+    productionDate: new Date(batch.productionDate).toLocaleDateString(),
+    tortillaKg,
+    masaKg,
+    status: batch.status
+  };
+}
+
 export function managerDashboardRequest(filters: { branchId?: string | null } = {}): Promise<ManagerDashboardSummary> {
   if (!useMocks) {
     const params = new URLSearchParams();
@@ -361,10 +416,26 @@ export function managerDashboardRequest(filters: { branchId?: string | null } = 
 
 export function pendingWithdrawalsRequest(): Promise<PendingWithdrawal[]> {
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("pending-withdrawals"));
+    return httpClient<ApiPendingWithdrawal[]>("/cash-movements/withdrawals/pending").then((withdrawals) =>
+      withdrawals.map(mapPendingWithdrawal)
+    );
   }
 
   return Promise.resolve(buildDemoWithdrawals());
+}
+
+export function withdrawalsRequest(filters: { branchId?: string | null; status?: PendingWithdrawal["status"] | null } = {}): Promise<PendingWithdrawal[]> {
+  if (useMocks) {
+    return Promise.resolve(buildDemoWithdrawals());
+  }
+
+  const params = new URLSearchParams();
+  if (filters.branchId) params.set("branchId", filters.branchId);
+  if (filters.status) params.set("status", filters.status);
+  const query = params.toString();
+  return httpClient<ApiPendingWithdrawal[]>(`/cash-movements/withdrawals${query ? `?${query}` : ""}`).then((withdrawals) =>
+    withdrawals.map(mapPendingWithdrawal)
+  );
 }
 
 export function authorizeWithdrawalRequest(payload: { id: string; pin: string }): Promise<void> {
@@ -433,7 +504,9 @@ export function createWasteRecordRequest(payload: {
 
 export function productionBatchesRequest(): Promise<ProductionBatch[]> {
   if (!useMocks) {
-    return Promise.reject(demoModuleUnavailable("production-batches"));
+    return httpClient<ApiProductionBatch[]>("/production/batches").then((batches) =>
+      batches.map(mapProductionBatch)
+    );
   }
 
   return Promise.resolve(buildDemoProduction());
