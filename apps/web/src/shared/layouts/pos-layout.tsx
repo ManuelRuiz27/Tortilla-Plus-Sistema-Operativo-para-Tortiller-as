@@ -1,5 +1,6 @@
 import { LogOut, Store } from "lucide-react";
 import { Outlet, useNavigate } from "react-router-dom";
+import { BrandMark } from "../components/brand-mark";
 import { Button } from "../components/button";
 import { StatusBadge } from "../components/status-badge";
 import { useAuthStore } from "../stores/auth.store";
@@ -26,7 +27,8 @@ export function PosLayout() {
     <main className="min-h-screen bg-tp-bg text-tp-text">
       <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-tp-border bg-white px-4 py-3 lg:px-5">
         <div className="flex min-w-0 items-center gap-4">
-          <Store className="h-5 w-5 text-tp-primary" aria-hidden="true" />
+          <BrandMark compact />
+          <Store className="hidden h-5 w-5 text-tp-brand lg:block" aria-hidden="true" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{branchName ?? "Sucursal sin seleccionar"}</p>
             <p className="text-xs text-tp-muted">Cajero: {user?.fullName ?? "Usuario"}</p>
