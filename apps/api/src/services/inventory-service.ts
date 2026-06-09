@@ -3,17 +3,12 @@ import { Prisma } from "@prisma/client";
 import { DomainError } from "../lib/domain-error.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { applyInventoryMovement, calculateStockQuantity } from "./inventory-ledger-service.js";
 import { assertOrganizationOperational } from "./operational-access-service.js";
 import { assertAnyPermission, assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
 
-type InventoryMovementKind =
-  | "production_in"
-  | "waste_out"
-  | "manual_adjustment_in"
-  | "manual_adjustment_out";
-
-const productTypes = ["tortilla", "masa", "package", "retail", "service"] as const;
+const productTypes = ["tortilla", "masa", "package", "retail", "service", "raw_material", "packaging"] as const;
 const productUnits = ["kg", "piece", "package", "liter", "service"] as const;
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
 const wasteReasons = [
@@ -24,12 +19,19 @@ const wasteReasons = [
   "otro",
 ] as const;
 
-export async function listProducts(currentUser: AuthenticatedUser) {
+export async function listProducts(currentUser: AuthenticatedUser, input: unknown = {}) {
   await assertPermission(currentUser.id, "products.view");
+  const query = asLooseRecord(input);
+  const productType = optionalEnum(query.productType, "productType", productTypes);
+  const isRecipeIngredient = optionalBoolean(query.isRecipeIngredient);
+  const isSellable = optionalBoolean(query.isSellable);
 
   const products = await prisma.product.findMany({
     where: {
       organizationId: currentUser.organizationId,
+      ...(productType ? { productType } : {}),
+      ...(isRecipeIngredient !== null ? { isRecipeIngredient } : {}),
+      ...(isSellable !== null ? { isSellable } : {}),
     },
     include: {
       category: true,
@@ -56,9 +58,7 @@ export async function createProduct(currentUser: AuthenticatedUser, input: unkno
   const productType = asEnum(body.productType, "productType", productTypes);
   const unit = asEnum(body.unit, "unit", productUnits);
   const categoryId = await resolveCategoryId(currentUser.organizationId, body);
-  const isSellable = optionalBoolean(body.isSellable) ?? true;
-  const requiresProduction = optionalBoolean(body.requiresProduction) ?? ["tortilla", "masa"].includes(productType);
-  const isStockTracked = optionalBoolean(body.isStockTracked) ?? productType !== "service";
+  const behavior = productBehavior(productType, body);
 
   return prisma.$transaction(async (tx) => {
     const product = await tx.product.create({
@@ -70,9 +70,11 @@ export async function createProduct(currentUser: AuthenticatedUser, input: unkno
         barcode,
         productType,
         unit,
-        isSellable,
-        requiresProduction,
-        isStockTracked,
+        isSellable: behavior.isSellable,
+        requiresProduction: behavior.requiresProduction,
+        isStockTracked: behavior.isStockTracked,
+        isRecipeIngredient: behavior.isRecipeIngredient,
+        allowNegativeStock: behavior.allowNegativeStock,
         status: "active",
       },
     });
@@ -101,6 +103,14 @@ export async function updateProduct(currentUser: AuthenticatedUser, productId: s
   const body = asRecord(input);
   const existing = await getProductOrThrow(currentUser.organizationId, productId);
   const categoryId = await resolveCategoryId(currentUser.organizationId, body, true);
+  const nextProductType = optionalEnum(body.productType, "productType", productTypes) ?? existing.productType;
+  const behavior = productBehavior(nextProductType, body, {
+    isSellable: existing.isSellable,
+    requiresProduction: existing.requiresProduction,
+    isStockTracked: existing.isStockTracked,
+    isRecipeIngredient: existing.isRecipeIngredient,
+    allowNegativeStock: existing.allowNegativeStock,
+  });
 
   return prisma.$transaction(async (tx) => {
     const product = await tx.product.update({
@@ -110,11 +120,13 @@ export async function updateProduct(currentUser: AuthenticatedUser, productId: s
         name: optionalString(body.name) ?? existing.name,
         sku: optionalString(body.sku) ?? existing.sku,
         barcode: optionalString(body.barcode) ?? existing.barcode,
-        productType: optionalEnum(body.productType, "productType", productTypes) ?? existing.productType,
+        productType: nextProductType,
         unit: optionalEnum(body.unit, "unit", productUnits) ?? existing.unit,
-        isSellable: optionalBoolean(body.isSellable) ?? existing.isSellable,
-        requiresProduction: optionalBoolean(body.requiresProduction) ?? existing.requiresProduction,
-        isStockTracked: optionalBoolean(body.isStockTracked) ?? existing.isStockTracked,
+        isSellable: behavior.isSellable,
+        requiresProduction: behavior.requiresProduction,
+        isStockTracked: behavior.isStockTracked,
+        isRecipeIngredient: behavior.isRecipeIngredient,
+        allowNegativeStock: behavior.allowNegativeStock,
         status: optionalEnum(body.status, "status", ["active", "inactive", "deleted"] as const) ?? existing.status,
         updatedAt: new Date(),
       },
@@ -282,7 +294,7 @@ export async function createInventoryAdjustment(currentUser: AuthenticatedUser, 
 
   return prisma.$transaction(async (tx) => {
     const movement = await applyInventoryMovement(tx, {
-      currentUser,
+      organizationId: currentUser.organizationId,
       branchId,
       productId,
       movementType: direction === "in" ? "manual_adjustment_in" : "manual_adjustment_out",
@@ -290,6 +302,7 @@ export async function createInventoryAdjustment(currentUser: AuthenticatedUser, 
       reason,
       referenceType: "manual_adjustment",
       referenceId: null,
+      createdByUserId: currentUser.id,
     });
 
     await tx.auditLog.create({
@@ -423,7 +436,7 @@ export async function closeProductionBatch(
 
     for (const item of batch.productionBatchItemProductionBatch) {
       const movement = await applyInventoryMovement(tx, {
-        currentUser,
+        organizationId: currentUser.organizationId,
         branchId: batch.branchId,
         productId: item.productId,
         movementType: "production_in",
@@ -431,6 +444,7 @@ export async function closeProductionBatch(
         reason: "Produccion diaria",
         referenceType: "production_batch",
         referenceId: batch.id,
+        createdByUserId: currentUser.id,
       });
       movements.push(movement);
     }
@@ -488,7 +502,7 @@ export async function createWasteRecord(currentUser: AuthenticatedUser, input: u
 
   return prisma.$transaction(async (tx) => {
     const movement = await applyInventoryMovement(tx, {
-      currentUser,
+      organizationId: currentUser.organizationId,
       branchId,
       productId,
       movementType: "waste_out",
@@ -496,6 +510,7 @@ export async function createWasteRecord(currentUser: AuthenticatedUser, input: u
       reason: wasteReason,
       referenceType: "waste_record",
       referenceId: null,
+      createdByUserId: currentUser.id,
     });
 
     const wasteRecord = await tx.wasteRecord.create({
@@ -542,110 +557,10 @@ export async function createWasteRecord(currentUser: AuthenticatedUser, input: u
   });
 }
 
-export function calculateStockQuantity(
-  currentQuantity: string,
-  movementType: InventoryMovementKind,
-  quantity: string,
-) {
-  const current = toMillis(currentQuantity);
-  const delta = toMillis(quantity);
-  const next = ["production_in", "manual_adjustment_in"].includes(movementType)
-    ? current + delta
-    : current - delta;
-
-  return (next / 1000).toFixed(3);
-}
+export { calculateStockQuantity };
 
 async function assertInventoryOperationAllowed(currentUser: AuthenticatedUser, deniedMessage: string) {
   await assertOrganizationOperational(currentUser.organizationId, deniedMessage);
-}
-
-async function applyInventoryMovement(
-  tx: Prisma.TransactionClient,
-  input: {
-    currentUser: AuthenticatedUser;
-    branchId: string;
-    productId: string;
-    movementType: InventoryMovementKind;
-    quantity: string;
-    reason: string;
-    referenceType: string;
-    referenceId: string | null;
-  },
-) {
-  const product = await tx.product.findFirst({
-    where: {
-      id: input.productId,
-      organizationId: input.currentUser.organizationId,
-      status: "active",
-    },
-  });
-
-  if (!product) {
-    throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
-  }
-
-  if (!product.isStockTracked) {
-    throw new DomainError(400, "PRODUCT_NOT_STOCK_TRACKED", "Producto sin control de inventario.");
-  }
-
-  const stock = await tx.inventoryStock.upsert({
-    where: {
-      branchId_productId: {
-        branchId: input.branchId,
-        productId: input.productId,
-      },
-    },
-    update: {},
-    create: {
-      organizationId: input.currentUser.organizationId,
-      branchId: input.branchId,
-      productId: input.productId,
-      quantity: "0.000",
-      reservedQuantity: "0.000",
-      minimumQuantity: "0.000",
-    },
-  });
-
-  const nextQuantity = calculateStockQuantity(
-    normalizeQuantity(stock.quantity),
-    input.movementType,
-    input.quantity,
-  );
-
-  if (Number(nextQuantity) < 0) {
-    throw new DomainError(409, "INSUFFICIENT_STOCK", "Stock insuficiente.");
-  }
-
-  const movement = await tx.inventoryMovement.create({
-    data: {
-      organizationId: input.currentUser.organizationId,
-      branchId: input.branchId,
-      productId: input.productId,
-      movementType: input.movementType,
-      quantity: input.quantity,
-      unit: product.unit,
-      reason: input.reason,
-      referenceType: input.referenceType,
-      referenceId: input.referenceId,
-      createdByUserId: input.currentUser.id,
-    },
-  });
-
-  await tx.inventoryStock.update({
-    where: {
-      branchId_productId: {
-        branchId: input.branchId,
-        productId: input.productId,
-      },
-    },
-    data: {
-      quantity: nextQuantity,
-      updatedAt: new Date(),
-    },
-  });
-
-  return movement;
 }
 
 async function getProductOrThrow(organizationId: string, productId: string) {
@@ -661,6 +576,55 @@ async function getProductOrThrow(organizationId: string, productId: string) {
   }
 
   return product;
+}
+
+export function productBehavior(
+  productType: (typeof productTypes)[number],
+  body: Record<string, unknown>,
+  existing?: {
+    isSellable: boolean;
+    requiresProduction: boolean;
+    isStockTracked: boolean;
+    isRecipeIngredient: boolean;
+    allowNegativeStock: boolean;
+  },
+) {
+  const input = {
+    isSellable: optionalBoolean(body.isSellable),
+    requiresProduction: optionalBoolean(body.requiresProduction),
+    isStockTracked: optionalBoolean(body.isStockTracked),
+    isRecipeIngredient: optionalBoolean(body.isRecipeIngredient),
+    allowNegativeStock: optionalBoolean(body.allowNegativeStock),
+  };
+
+  if (productType === "raw_material") {
+    return {
+      isSellable: false,
+      requiresProduction: false,
+      isStockTracked: true,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+    };
+  }
+
+  if (productType === "packaging") {
+    return {
+      isSellable: false,
+      requiresProduction: false,
+      isStockTracked: true,
+      isRecipeIngredient: input.isRecipeIngredient ?? existing?.isRecipeIngredient ?? false,
+      allowNegativeStock: false,
+    };
+  }
+
+  return {
+    isSellable: input.isSellable ?? existing?.isSellable ?? true,
+    requiresProduction:
+      input.requiresProduction ?? existing?.requiresProduction ?? ["tortilla", "masa"].includes(productType),
+    isStockTracked: input.isStockTracked ?? existing?.isStockTracked ?? productType !== "service",
+    isRecipeIngredient: input.isRecipeIngredient ?? existing?.isRecipeIngredient ?? false,
+    allowNegativeStock: input.allowNegativeStock ?? existing?.allowNegativeStock ?? false,
+  };
 }
 
 async function assertProductionProduct(organizationId: string, productId: string) {
@@ -933,10 +897,6 @@ function normalizeQuantity(value: Prisma.Decimal | string | number) {
   return Number(value).toFixed(3);
 }
 
-function toMillis(value: Prisma.Decimal | string | number) {
-  return Math.round(Number(value) * 1000);
-}
-
 function serializeProduct(product: {
   id: string;
   organizationId: string;
@@ -949,6 +909,8 @@ function serializeProduct(product: {
   isSellable: boolean;
   requiresProduction: boolean;
   isStockTracked: boolean;
+  isRecipeIngredient: boolean;
+  allowNegativeStock: boolean;
   status: string;
   category?: { id: string; name: string } | null;
   productPackageConfigProduct?: {
@@ -971,6 +933,8 @@ function serializeProduct(product: {
     isSellable: product.isSellable,
     requiresProduction: product.requiresProduction,
     isStockTracked: product.isStockTracked,
+    isRecipeIngredient: product.isRecipeIngredient,
+    allowNegativeStock: product.allowNegativeStock,
     status: product.status,
     packageConfig: product.productPackageConfigProduct
       ? {

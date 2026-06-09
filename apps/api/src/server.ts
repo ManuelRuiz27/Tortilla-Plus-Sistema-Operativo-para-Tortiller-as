@@ -57,6 +57,15 @@ import {
   quoteSale,
 } from "./services/sale-service.js";
 import {
+  activateRecipeVersion,
+  archiveRecipeVersion,
+  createRecipe,
+  createRecipeVersion,
+  getRecipe,
+  listRecipes,
+  updateRecipe,
+} from "./services/recipe-service.js";
+import {
   configureCustomerCredit,
   createCustomer,
   getCustomerBalance,
@@ -846,7 +855,7 @@ async function route(request: IncomingMessage, response: ServerResponse) {
 
   if (method === "GET" && path === "/api/v1/products") {
     const currentUser = await authenticate(request);
-    sendJson(response, 200, await listProducts(currentUser));
+    sendJson(response, 200, await listProducts(currentUser, Object.fromEntries(url.searchParams.entries())));
     return;
   }
 
@@ -911,6 +920,52 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/waste-records") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createWasteRecord(currentUser, await readJson(request)));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/recipes") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listRecipes(currentUser, Object.fromEntries(url.searchParams.entries())));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/recipes") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createRecipe(currentUser, await readJson(request)));
+    return;
+  }
+
+  const recipeVersionCreateMatch = path.match(/^\/api\/v1\/recipes\/([^/]+)\/versions$/);
+  if (method === "POST" && recipeVersionCreateMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createRecipeVersion(currentUser, recipeVersionCreateMatch[1], await readJson(request)));
+    return;
+  }
+
+  const recipeMatch = path.match(/^\/api\/v1\/recipes\/([^/]+)$/);
+  if (method === "GET" && recipeMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getRecipe(currentUser, recipeMatch[1]));
+    return;
+  }
+
+  if (method === "PATCH" && recipeMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await updateRecipe(currentUser, recipeMatch[1], await readJson(request)));
+    return;
+  }
+
+  const recipeVersionActivateMatch = path.match(/^\/api\/v1\/recipe-versions\/([^/]+)\/activate$/);
+  if (method === "PATCH" && recipeVersionActivateMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await activateRecipeVersion(currentUser, recipeVersionActivateMatch[1]));
+    return;
+  }
+
+  const recipeVersionArchiveMatch = path.match(/^\/api\/v1\/recipe-versions\/([^/]+)\/archive$/);
+  if (method === "PATCH" && recipeVersionArchiveMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await archiveRecipeVersion(currentUser, recipeVersionArchiveMatch[1]));
     return;
   }
 

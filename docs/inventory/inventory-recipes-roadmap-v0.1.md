@@ -79,6 +79,9 @@ Cerrar las decisiones que cambian el modelo antes de tocar codigo.
 
 ## 5. Sprint R1 - Base de datos y contrato de dominio
 
+**Estado:** Completado.  
+**Migracion:** `apps/api/prisma/migrations/0012_inventory_recipes_core/migration.sql`
+
 ### Objetivo
 
 Preparar el schema para recetas sin cambiar todavia el comportamiento de POS ni reparto.
@@ -109,15 +112,20 @@ Preparar el schema para recetas sin cambiar todavia el comportamiento de POS ni 
 
 ### Definition of Done
 
-- `npm run db:validate -w @tortilla-plus/api` pasa.
-- `npm run build -w @tortilla-plus/api` pasa.
-- Migracion Prisma queda versionada.
-- El flujo actual de produccion manual no se rompe.
-- La deuda detectada queda registrada en el log.
+- `npm run db:validate -w @tortilla-plus/api` pasa. Completado.
+- `npm run build -w @tortilla-plus/api` pasa. Completado.
+- Migracion Prisma queda versionada. Completado.
+- El flujo actual de produccion manual no se rompe. Completado por compatibilidad de schema; queda sujeto a QA de R2/R5.
+- La deuda detectada queda registrada en el log. Completado.
+- Auditoria post R1 sin deuda bloqueante para iniciar R2. Completado.
 
 ---
 
 ## 6. Sprint R2 - InventoryLedgerService
+
+**Estado:** Completado para alcance R2.  
+**Servicio:** `apps/api/src/services/inventory-ledger-service.ts`  
+**Migracion:** `apps/api/prisma/migrations/0013_inventory_ledger_reference_uniqueness/migration.sql`
 
 ### Objetivo
 
@@ -142,15 +150,19 @@ Centralizar movimientos de inventario antes de introducir produccion por receta.
 
 ### Definition of Done
 
-- Ajustes manuales usan ledger.
-- Produccion manual usa ledger.
-- Tests existentes pasan.
-- Hay pruebas de idempotencia o bloqueo de duplicados.
-- La deuda pendiente de POS/reparto queda priorizada.
+- Ajustes manuales usan ledger. Completado.
+- Produccion manual usa ledger. Completado.
+- Mermas usan ledger. Completado como extension del alcance.
+- Tests existentes pasan. Completado.
+- Hay pruebas de idempotencia o bloqueo de duplicados. Completado con prueba unitaria e indice unico parcial.
+- La deuda pendiente de POS/reparto queda priorizada. Completado.
 
 ---
 
 ## 7. Sprint R3 - Productos e insumos
+
+**Estado:** Completado.  
+**Deuda tecnica previa:** POS/reparto ya delegan movimientos al ledger y bloquean productos no operables antes de iniciar R3 funcional.
 
 ### Objetivo
 
@@ -167,14 +179,21 @@ Permitir registrar insumos y bloquear que entren a flujos de venta o reparto.
 
 ### Definition of Done
 
-- No se puede vender `raw_material`.
-- No se puede cargar `raw_material` o `packaging` en ruta.
-- Insumos aparecen en inventario si son stockeables.
-- POS y reparto mantienen comportamiento anterior con tortilla, masa, package y retail.
+- No se puede vender `raw_material`. Completado.
+- No se puede cargar `raw_material` o `packaging` en ruta. Completado.
+- Insumos aparecen en inventario si son stockeables. Completado.
+- POS y reparto mantienen comportamiento anterior con tortilla, masa, package y retail. Completado.
+- `GET /api/v1/products` soporta filtros `productType`, `isRecipeIngredient` e `isSellable`. Completado.
+- API y tipos frontend reconocen `raw_material` y `packaging`. Completado.
 
 ---
 
 ## 8. Sprint R4 - RecipeService
+
+**Estado:** Completado.  
+**Servicio:** `apps/api/src/services/recipe-service.ts`  
+**Rutas:** `apps/api/src/server.ts`  
+**Pruebas:** `apps/api/tests/recipe-service.test.ts`
 
 ### Objetivo
 
@@ -183,27 +202,41 @@ Crear recetas versionadas sin afectar inventario.
 ### Alcance
 
 - Crear `RecipeService`.
-- Crear receta con version inicial.
-- Crear nueva version.
-- Listar recetas.
-- Obtener detalle con version e ingredientes.
-- Activar version.
-- Archivar receta.
-- Validar output e ingredientes.
-- Validar duplicados.
-- Validar pertenencia a organizacion y sucursal.
+- Crear receta con version inicial. Completado.
+- Crear nueva version. Completado.
+- Listar recetas. Completado.
+- Obtener detalle con version e ingredientes. Completado.
+- Activar version. Completado.
+- Archivar receta mediante cambio de `status` y archivar versiones no activas. Completado.
+- Validar output e ingredientes. Completado.
+- Validar duplicados. Completado.
+- Validar pertenencia a organizacion y sucursal. Completado.
+- Agregar permisos `recipes.view` y `recipes.manage`. Completado.
+- Exponer endpoints backend minimos de recetas/versiones. Completado como adelanto de R6.
 
 ### Definition of Done
 
-- Receta sin ingredientes se bloquea.
-- Output no puede repetirse como ingrediente.
-- Ingredientes deben ser stockeables.
-- Cambios relevantes crean version nueva.
-- Solo una version queda activa por receta.
+- Receta sin ingredientes se bloquea. Completado.
+- Output no puede repetirse como ingrediente. Completado.
+- Ingredientes deben ser stockeables. Completado.
+- Unidades alternativas se aceptan solo con `UnitConversion` activa y se guardan normalizadas a unidad base. Completado.
+- Cambios relevantes crean version nueva. Completado.
+- Solo una version queda activa por receta. Completado.
+- `npm run db:validate -w @tortilla-plus/api` pasa. Completado.
+- `npm run build -w @tortilla-plus/api` pasa. Completado.
+- `npm run test -w @tortilla-plus/api` pasa. Completado.
+
+### Deuda tecnica post R4
+
+- `INV-REC-DEBT-019`: Resuelta antes de R5. `RecipeService` normaliza cantidades con conversion activa hacia la unidad base del producto.
+- Sin deuda critica o alta abierta que bloquee R5.
 
 ---
 
 ## 9. Sprint R5 - ProductionRecipeService
+
+**Estado:** Listo para iniciar.  
+**Deuda tecnica previa:** conversiones de receta cerradas; R5 puede trabajar con cantidades normalizadas a unidad base.
 
 ### Objetivo
 
@@ -320,6 +353,7 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 ### Gate R-B - Antes de frontend
 
 - API de recetas completa.
+- Recetas guardan cantidades normalizadas para consumo de inventario.
 - Produccion por receta modifica inventario real.
 - Doble cierre bloqueado.
 
@@ -334,9 +368,35 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 
 ## 14. Riesgos activos
 
-- Movimientos de inventario duplicados por no centralizar antes de recetas.
-- POS o reparto vendiendo/cargando insumos por falta de validacion backend.
 - Recetas visuales que no afectan inventario.
-- Conversiones de unidad ambiguas.
 - Tolerancias de rendimiento sin autorizacion clara.
 - Deuda tecnica no cerrada antes de avanzar al siguiente sprint.
+
+---
+
+## 15. Cobertura implementada hasta ahora
+
+### R0-R1
+
+- Decisiones funcionales registradas en `docs/inventory/inventory-recipes-r0-decisions-v0.1.md`.
+- Schema y migracion base para insumos, conversiones, recetas, versiones, ingredientes y produccion por receta.
+
+### R2
+
+- `InventoryLedgerService` centraliza movimientos de inventario.
+- Ajustes manuales, produccion manual, mermas, POS y reparto delegan movimientos al ledger.
+- Indice unico parcial protege movimientos duplicados con referencia.
+
+### R3
+
+- Productos soportan `raw_material` y `packaging`.
+- Backend bloquea venta/carga de productos no operables.
+- API y tipos frontend reconocen nuevos tipos y filtros.
+
+### R4
+
+- `RecipeService` crea, lista, consulta, versiona, activa y archiva recetas/versiones sin tocar stock.
+- Permisos `recipes.view` y `recipes.manage` agregados al catalogo.
+- Endpoints backend minimos de recetas/versiones disponibles.
+- Validaciones de receta cubren ingredientes vacios, duplicados, output como ingrediente, pertenencia tenant/sucursal, producto stockeable y conversiones de unidad.
+- Cantidades de receta se persisten normalizadas a la unidad base del producto cuando se usa `UnitConversion`.

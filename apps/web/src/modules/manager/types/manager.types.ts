@@ -29,7 +29,7 @@ export type PendingWithdrawal = {
 export type InventoryItem = {
   productId: string;
   productName: string;
-  productType: "tortilla" | "masa" | "package" | "retail" | "service";
+  productType: "tortilla" | "masa" | "package" | "retail" | "service" | "raw_material" | "packaging";
   currentStock: number;
   minimumStock: number;
   unit: "kg" | "piece" | "package" | "liter" | "service";
@@ -50,11 +50,13 @@ export type ManagerProduct = {
   name: string;
   sku?: string;
   barcode?: string | null;
-  productType: "tortilla" | "masa" | "package" | "retail" | "service";
+  productType: "tortilla" | "masa" | "package" | "retail" | "service" | "raw_material" | "packaging";
   unit: "kg" | "piece" | "package" | "liter" | "service";
   isSellable: boolean;
   isStockTracked: boolean;
   requiresProduction: boolean;
+  isRecipeIngredient?: boolean;
+  allowNegativeStock?: boolean;
   status: "active" | "inactive";
 };
 

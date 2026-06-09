@@ -8,6 +8,21 @@
 
 ---
 
+## 0. Estado de implementacion al 2026-06-09
+
+Este documento sigue siendo la especificacion base del parche. El estado real del repo ya cubre:
+
+- R0: decisiones funcionales y deuda inicial registradas.
+- R1: schema Prisma y migracion base para `raw_material`, `packaging`, `UnitConversion`, recetas, versiones, ingredientes y campos de produccion por receta.
+- R2: `InventoryLedgerService` como punto central para movimientos de inventario, con bloqueo de duplicados por referencia.
+- R3: productos/insumos operativos, filtros backend y bloqueo de venta/carga de insumos en POS y reparto.
+- R4: `RecipeService`, permisos, endpoints minimos de recetas/versiones y validaciones de recetas sin afectar stock.
+- Deuda pre R5: `INV-REC-DEBT-019` resuelta; las cantidades de receta se normalizan a unidad base usando `UnitConversion` activa cuando la unidad capturada difiere de la unidad base del producto.
+
+El siguiente avance funcional es R5: cerrar produccion por receta con snapshots de ingredientes y movimientos reales de inventario via ledger.
+
+---
+
 ## 1. Contexto
 
 Durante el análisis de prospectos de cliente se detectó que varias tortillerías no compran masa terminada, sino que producen su propia materia prima a partir de ingredientes como maíz, cal, harina de maíz, harina de trigo, agua y otros complementos.

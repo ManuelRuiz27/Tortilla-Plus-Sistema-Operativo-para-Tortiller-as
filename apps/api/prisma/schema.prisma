@@ -58,6 +58,7 @@ model Organization {
   productCategoryOrganization           ProductCategory[]           @relation("ProductCategory_organization")
   productionBatchOrganization           ProductionBatch[]           @relation("ProductionBatch_organization")
   productOrganization                   Product[]                   @relation("Product_organization")
+  recipeOrganization                    Recipe[]                    @relation("Recipe_organization")
   reconciliationBatchOrganization       ReconciliationBatch[]       @relation("ReconciliationBatch_organization")
   saasPaymentOrganization               SaasPayment[]               @relation("SaasPayment_organization")
   saasOneTimeChargeOrganization         SaasOneTimeCharge[]         @relation("SaasOneTimeCharge_organization")
@@ -65,6 +66,7 @@ model Organization {
   saleReturnOrganization                SaleReturn[]                @relation("SaleReturn_organization")
   saleOrganization                      Sale[]                      @relation("Sale_organization")
   subscriptionOrganization              Subscription[]              @relation("Subscription_organization")
+  unitConversionOrganization            UnitConversion[]            @relation("UnitConversion_organization")
   userRoleOrganization                  UserRole[]                  @relation("UserRole_organization")
   userOrganization                      User[]                      @relation("User_organization")
   wasteRecordOrganization               WasteRecord[]               @relation("WasteRecord_organization")
@@ -127,6 +129,7 @@ model Branch {
   paymentTerminalReferenceBranch PaymentTerminalReference[]  @relation("PaymentTerminalReference_branch")
   posDeviceBranch                PosDevice[]                 @relation("PosDevice_branch")
   productionBatchBranch          ProductionBatch[]           @relation("ProductionBatch_branch")
+  recipeBranch                   Recipe[]                    @relation("Recipe_branch")
   reconciliationBatchBranch      ReconciliationBatch[]       @relation("ReconciliationBatch_branch")
   salePaymentBranch              SalePayment[]               @relation("SalePayment_branch")
   saleReturnBranch               SaleReturn[]                @relation("SaleReturn_branch")
@@ -180,26 +183,26 @@ model PlanFeature {
 }
 
 model Subscription {
-  id                           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId               String               @map("organization_id") @db.Uuid
-  planId                       String               @map("plan_id") @db.Uuid
-  status                       SubscriptionStatus   @default(trial)
-  billingPeriod                BillingPeriod        @default(monthly) @map("billing_period")
-  provider                     SubscriptionProvider @default(mercadopago)
-  providerSubscriptionId       String?              @map("provider_subscription_id") @db.VarChar(180)
-  startedAt                    DateTime?            @map("started_at") @db.Timestamptz(6)
-  currentPeriodStart           DateTime?            @map("current_period_start") @db.Timestamptz(6)
-  currentPeriodEnd             DateTime?            @map("current_period_end") @db.Timestamptz(6)
-  graceUntil                   DateTime?            @map("grace_until") @db.Timestamptz(6)
-  cancelledAt                  DateTime?            @map("cancelled_at") @db.Timestamptz(6)
-  createdAt                    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                    DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
-  saasPaymentSubscription      SaasPayment[]        @relation("SaasPayment_subscription")
-  billingCycleSubscription     BillingCycle[]       @relation("BillingCycle_subscription")
-  saasOneTimeChargeSubscription SaasOneTimeCharge[] @relation("SaasOneTimeCharge_subscription")
-  subscriptionItemSubscription SubscriptionItem[]   @relation("SubscriptionItem_subscription")
-  organization                 Organization         @relation("Subscription_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
-  plan                         Plan                 @relation("Subscription_plan", fields: [planId], references: [id], onUpdate: NoAction)
+  id                            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                String               @map("organization_id") @db.Uuid
+  planId                        String               @map("plan_id") @db.Uuid
+  status                        SubscriptionStatus   @default(trial)
+  billingPeriod                 BillingPeriod        @default(monthly) @map("billing_period")
+  provider                      SubscriptionProvider @default(mercadopago)
+  providerSubscriptionId        String?              @map("provider_subscription_id") @db.VarChar(180)
+  startedAt                     DateTime?            @map("started_at") @db.Timestamptz(6)
+  currentPeriodStart            DateTime?            @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd              DateTime?            @map("current_period_end") @db.Timestamptz(6)
+  graceUntil                    DateTime?            @map("grace_until") @db.Timestamptz(6)
+  cancelledAt                   DateTime?            @map("cancelled_at") @db.Timestamptz(6)
+  createdAt                     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                     DateTime             @default(now()) @map("updated_at") @db.Timestamptz(6)
+  saasPaymentSubscription       SaasPayment[]        @relation("SaasPayment_subscription")
+  billingCycleSubscription      BillingCycle[]       @relation("BillingCycle_subscription")
+  saasOneTimeChargeSubscription SaasOneTimeCharge[]  @relation("SaasOneTimeCharge_subscription")
+  subscriptionItemSubscription  SubscriptionItem[]   @relation("SubscriptionItem_subscription")
+  organization                  Organization         @relation("Subscription_organization", fields: [organizationId], references: [id], onUpdate: NoAction)
+  plan                          Plan                 @relation("Subscription_plan", fields: [planId], references: [id], onUpdate: NoAction)
 
   @@index([organizationId], map: "idx_subscriptions_organization")
   @@index([status], map: "idx_subscriptions_status")
@@ -251,26 +254,26 @@ model SaasPayment {
 }
 
 model BillingCycle {
-  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId        String             @map("organization_id") @db.Uuid
-  subscriptionId        String             @map("subscription_id") @db.Uuid
-  periodStart           DateTime           @map("period_start") @db.Date
-  periodEnd             DateTime           @map("period_end") @db.Date
-  status                BillingCycleStatus @default(pending)
-  subtotal              Decimal            @default(0) @db.Decimal(12, 2)
-  taxTotal              Decimal            @default(0) @map("tax_total") @db.Decimal(12, 2)
-  total                 Decimal            @default(0) @db.Decimal(12, 2)
-  currency              String             @default("MXN") @db.Char(3)
-  dueDate               DateTime           @map("due_date") @db.Date
-  paidAt                DateTime?          @map("paid_at") @db.Timestamptz(6)
-  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
-  billingCycleItemCycle BillingCycleItem[] @relation("BillingCycleItem_billingCycle")
-  saasPaymentCycle      SaasPayment[]      @relation("SaasPayment_billingCycle")
-  cfdiUsageCounterCycle CfdiUsageCounter[] @relation("CfdiUsageCounter_billingCycle")
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String              @map("organization_id") @db.Uuid
+  subscriptionId         String              @map("subscription_id") @db.Uuid
+  periodStart            DateTime            @map("period_start") @db.Date
+  periodEnd              DateTime            @map("period_end") @db.Date
+  status                 BillingCycleStatus  @default(pending)
+  subtotal               Decimal             @default(0) @db.Decimal(12, 2)
+  taxTotal               Decimal             @default(0) @map("tax_total") @db.Decimal(12, 2)
+  total                  Decimal             @default(0) @db.Decimal(12, 2)
+  currency               String              @default("MXN") @db.Char(3)
+  dueDate                DateTime            @map("due_date") @db.Date
+  paidAt                 DateTime?           @map("paid_at") @db.Timestamptz(6)
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  billingCycleItemCycle  BillingCycleItem[]  @relation("BillingCycleItem_billingCycle")
+  saasPaymentCycle       SaasPayment[]       @relation("SaasPayment_billingCycle")
+  cfdiUsageCounterCycle  CfdiUsageCounter[]  @relation("CfdiUsageCounter_billingCycle")
   saasOneTimeChargeCycle SaasOneTimeCharge[] @relation("SaasOneTimeCharge_billingCycle")
-  organization          Organization       @relation("BillingCycle_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  subscription          Subscription       @relation("BillingCycle_subscription", fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           Organization        @relation("BillingCycle_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subscription           Subscription        @relation("BillingCycle_subscription", fields: [subscriptionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([subscriptionId, periodStart, periodEnd], map: "uq_billing_cycle_subscription_period")
   @@index([organizationId], map: "idx_billing_cycles_organization")
@@ -279,22 +282,22 @@ model BillingCycle {
 }
 
 model CfdiUsageCounter {
-  id                     String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId         String       @map("organization_id") @db.Uuid
-  billingCycleId         String?      @map("billing_cycle_id") @db.Uuid
-  periodStart            DateTime     @map("period_start") @db.Date
-  periodEnd              DateTime     @map("period_end") @db.Date
-  includedLimit          Int          @default(0) @map("included_limit")
-  usedCount              Int          @default(0) @map("used_count")
-  globalInvoiceCount     Int          @default(0) @map("global_invoice_count")
-  individualInvoiceCount Int          @default(0) @map("individual_invoice_count")
-  overageCount           Int          @default(0) @map("overage_count")
-  overageUnitPrice       Decimal      @default(6.00) @map("overage_unit_price") @db.Decimal(12, 2)
-  currency               String       @default("MXN") @db.Char(3)
-  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  id                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId         String        @map("organization_id") @db.Uuid
+  billingCycleId         String?       @map("billing_cycle_id") @db.Uuid
+  periodStart            DateTime      @map("period_start") @db.Date
+  periodEnd              DateTime      @map("period_end") @db.Date
+  includedLimit          Int           @default(0) @map("included_limit")
+  usedCount              Int           @default(0) @map("used_count")
+  globalInvoiceCount     Int           @default(0) @map("global_invoice_count")
+  individualInvoiceCount Int           @default(0) @map("individual_invoice_count")
+  overageCount           Int           @default(0) @map("overage_count")
+  overageUnitPrice       Decimal       @default(6.00) @map("overage_unit_price") @db.Decimal(12, 2)
+  currency               String        @default("MXN") @db.Char(3)
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
   billingCycle           BillingCycle? @relation("CfdiUsageCounter_billingCycle", fields: [billingCycleId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  organization           Organization @relation("CfdiUsageCounter_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization           Organization  @relation("CfdiUsageCounter_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([organizationId, periodStart, periodEnd], map: "uq_cfdi_usage_org_period")
   @@index([billingCycleId], map: "idx_cfdi_usage_billing_cycle")
@@ -525,35 +528,42 @@ model ProductCategory {
 }
 
 model Product {
-  id                              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                  String                 @map("organization_id") @db.Uuid
-  categoryId                      String?                @map("category_id") @db.Uuid
-  name                            String                 @db.VarChar(160)
-  sku                             String?                @db.VarChar(80)
-  barcode                         String?                @db.VarChar(120)
-  productType                     ProductType            @map("product_type")
-  unit                            ProductUnit
-  isSellable                      Boolean                @default(true) @map("is_sellable")
-  requiresProduction              Boolean                @default(false) @map("requires_production")
-  isStockTracked                  Boolean                @default(true) @map("is_stock_tracked")
-  status                          GenericStatus          @default(active)
-  createdAt                       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                       DateTime               @default(now()) @map("updated_at") @db.Timestamptz(6)
-  branchProductPriceProduct       BranchProductPrice[]   @relation("BranchProductPrice_product")
-  customerProductPriceProduct     CustomerProductPrice[] @relation("CustomerProductPrice_product")
-  deliveryOrderItemProduct        DeliveryOrderItem[]    @relation("DeliveryOrderItem_product")
-  deliveryReturnItemProduct       DeliveryReturnItem[]   @relation("DeliveryReturnItem_product")
-  inventoryMovementProduct        InventoryMovement[]    @relation("InventoryMovement_product")
-  inventoryStockProduct           InventoryStock[]       @relation("InventoryStock_product")
-  invoiceItemProduct              InvoiceItem[]          @relation("InvoiceItem_product")
-  productPackageConfigBaseProduct ProductPackageConfig[] @relation("ProductPackageConfig_baseProduct")
-  productPackageConfigProduct     ProductPackageConfig?  @relation("ProductPackageConfig_product")
-  productionBatchItemProduct      ProductionBatchItem[]  @relation("ProductionBatchItem_product")
-  category                        ProductCategory?       @relation("Product_category", fields: [categoryId], references: [id], onUpdate: NoAction)
-  organization                    Organization           @relation("Product_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  saleItemProduct                 SaleItem[]             @relation("SaleItem_product")
-  saleReturnItemProduct           SaleReturnItem[]       @relation("SaleReturnItem_product")
-  wasteRecordProduct              WasteRecord[]          @relation("WasteRecord_product")
+  id                               String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                   String                      @map("organization_id") @db.Uuid
+  categoryId                       String?                     @map("category_id") @db.Uuid
+  name                             String                      @db.VarChar(160)
+  sku                              String?                     @db.VarChar(80)
+  barcode                          String?                     @db.VarChar(120)
+  productType                      ProductType                 @map("product_type")
+  unit                             ProductUnit
+  isSellable                       Boolean                     @default(true) @map("is_sellable")
+  requiresProduction               Boolean                     @default(false) @map("requires_production")
+  isStockTracked                   Boolean                     @default(true) @map("is_stock_tracked")
+  isRecipeIngredient               Boolean                     @default(false) @map("is_recipe_ingredient")
+  allowNegativeStock               Boolean                     @default(false) @map("allow_negative_stock")
+  status                           GenericStatus               @default(active)
+  createdAt                        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                        DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branchProductPriceProduct        BranchProductPrice[]        @relation("BranchProductPrice_product")
+  customerProductPriceProduct      CustomerProductPrice[]      @relation("CustomerProductPrice_product")
+  deliveryOrderItemProduct         DeliveryOrderItem[]         @relation("DeliveryOrderItem_product")
+  deliveryReturnItemProduct        DeliveryReturnItem[]        @relation("DeliveryReturnItem_product")
+  inventoryMovementProduct         InventoryMovement[]         @relation("InventoryMovement_product")
+  inventoryStockProduct            InventoryStock[]            @relation("InventoryStock_product")
+  invoiceItemProduct               InvoiceItem[]               @relation("InvoiceItem_product")
+  productPackageConfigBaseProduct  ProductPackageConfig[]      @relation("ProductPackageConfig_baseProduct")
+  productPackageConfigProduct      ProductPackageConfig?       @relation("ProductPackageConfig_product")
+  productionBatchOutputProduct     ProductionBatch[]           @relation("ProductionBatch_outputProduct")
+  productionBatchIngredientProduct ProductionBatchIngredient[] @relation("ProductionBatchIngredient_product")
+  productionBatchItemProduct       ProductionBatchItem[]       @relation("ProductionBatchItem_product")
+  category                         ProductCategory?            @relation("Product_category", fields: [categoryId], references: [id], onUpdate: NoAction)
+  organization                     Organization                @relation("Product_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipeIngredientProduct          RecipeIngredient[]          @relation("RecipeIngredient_product")
+  recipeOutputProduct              Recipe[]                    @relation("Recipe_outputProduct")
+  saleItemProduct                  SaleItem[]                  @relation("SaleItem_product")
+  saleReturnItemProduct            SaleReturnItem[]            @relation("SaleReturnItem_product")
+  unitConversionProduct            UnitConversion[]            @relation("UnitConversion_product")
+  wasteRecordProduct               WasteRecord[]               @relation("WasteRecord_product")
 
   @@unique([organizationId, barcode], map: "uq_products_org_barcode")
   @@unique([organizationId, sku], map: "uq_products_org_sku")
@@ -572,6 +582,87 @@ model ProductPackageConfig {
   product            Product  @relation("ProductPackageConfig_product", fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("product_package_configs")
+}
+
+model UnitConversion {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  fromUnit       String        @map("from_unit") @db.VarChar(40)
+  toUnit         ProductUnit   @map("to_unit")
+  factor         Decimal       @db.Decimal(12, 6)
+  name           String        @db.VarChar(120)
+  status         GenericStatus @default(active)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  organization   Organization  @relation("UnitConversion_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product        Product       @relation("UnitConversion_product", fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organizationId, productId, fromUnit, name], map: "uq_unit_conversions_org_product_from_name")
+  @@index([organizationId], map: "idx_unit_conversions_org")
+  @@index([productId], map: "idx_unit_conversions_product")
+  @@map("unit_conversions")
+}
+
+model Recipe {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  branchId         String?         @map("branch_id") @db.Uuid
+  name             String          @db.VarChar(160)
+  outputProductId  String          @map("output_product_id") @db.Uuid
+  currentVersionId String?         @map("current_version_id") @db.Uuid
+  status           GenericStatus   @default(active)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+  branch           Branch?         @relation("Recipe_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  currentVersion   RecipeVersion?  @relation("Recipe_currentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  organization     Organization    @relation("Recipe_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  outputProduct    Product         @relation("Recipe_outputProduct", fields: [outputProductId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  versions         RecipeVersion[] @relation("RecipeVersion_recipe")
+
+  @@index([branchId], map: "idx_recipes_branch")
+  @@index([currentVersionId], map: "idx_recipes_current_version")
+  @@index([organizationId], map: "idx_recipes_org")
+  @@index([outputProductId], map: "idx_recipes_output_product")
+  @@map("recipes")
+}
+
+model RecipeVersion {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipeId               String             @map("recipe_id") @db.Uuid
+  version                Int
+  expectedOutputQuantity Decimal            @map("expected_output_quantity") @db.Decimal(12, 3)
+  outputUnit             ProductUnit        @map("output_unit")
+  notes                  String?
+  status                 GenericStatus      @default(active)
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime           @default(now()) @map("updated_at") @db.Timestamptz(6)
+  currentForRecipes      Recipe[]           @relation("Recipe_currentVersion")
+  ingredients            RecipeIngredient[] @relation("RecipeIngredient_recipeVersion")
+  productionBatches      ProductionBatch[]  @relation("ProductionBatch_recipeVersion")
+  recipe                 Recipe             @relation("RecipeVersion_recipe", fields: [recipeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([recipeId, version], map: "uq_recipe_versions_recipe_version")
+  @@index([recipeId], map: "idx_recipe_versions_recipe")
+  @@map("recipe_versions")
+}
+
+model RecipeIngredient {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipeVersionId String        @map("recipe_version_id") @db.Uuid
+  productId       String        @map("product_id") @db.Uuid
+  quantity        Decimal       @db.Decimal(12, 3)
+  unit            ProductUnit
+  isOptional      Boolean       @default(false) @map("is_optional")
+  wasteFactor     Decimal?      @map("waste_factor") @db.Decimal(5, 2)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  product         Product       @relation("RecipeIngredient_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipeVersion   RecipeVersion @relation("RecipeIngredient_recipeVersion", fields: [recipeVersionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([recipeVersionId, productId], map: "uq_recipe_ingredients_version_product")
+  @@index([productId], map: "idx_recipe_ingredients_product")
+  @@map("recipe_ingredients")
 }
 
 model BranchProductPrice {
@@ -613,49 +704,63 @@ model InventoryStock {
 }
 
 model InventoryMovement {
-  id                                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                      String                @map("organization_id") @db.Uuid
-  branchId                            String                @map("branch_id") @db.Uuid
-  productId                           String                @map("product_id") @db.Uuid
-  movementType                        InventoryMovementType @map("movement_type")
-  quantity                            Decimal               @db.Decimal(12, 3)
-  unit                                ProductUnit
-  reason                              String?
-  referenceType                       String?               @map("reference_type") @db.VarChar(80)
-  referenceId                         String?               @map("reference_id") @db.Uuid
-  createdByUserId                     String                @map("created_by_user_id") @db.Uuid
-  authorizedByUserId                  String?               @map("authorized_by_user_id") @db.Uuid
-  createdAt                           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  deliveryReturnItemInventoryMovement DeliveryReturnItem[]  @relation("DeliveryReturnItem_inventoryMovement")
-  authorizedByUser                    User?                 @relation("InventoryMovement_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  branch                              Branch                @relation("InventoryMovement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser                       User                  @relation("InventoryMovement_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                        Organization          @relation("InventoryMovement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  product                             Product               @relation("InventoryMovement_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  saleReturnItemInventoryMovement     SaleReturnItem[]      @relation("SaleReturnItem_inventoryMovement")
-  wasteRecordInventoryMovement        WasteRecord[]         @relation("WasteRecord_inventoryMovement")
+  id                                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                             String                      @map("organization_id") @db.Uuid
+  branchId                                   String                      @map("branch_id") @db.Uuid
+  productId                                  String                      @map("product_id") @db.Uuid
+  movementType                               InventoryMovementType       @map("movement_type")
+  quantity                                   Decimal                     @db.Decimal(12, 3)
+  unit                                       ProductUnit
+  reason                                     String?
+  referenceType                              String?                     @map("reference_type") @db.VarChar(80)
+  referenceId                                String?                     @map("reference_id") @db.Uuid
+  createdByUserId                            String                      @map("created_by_user_id") @db.Uuid
+  authorizedByUserId                         String?                     @map("authorized_by_user_id") @db.Uuid
+  createdAt                                  DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  deliveryReturnItemInventoryMovement        DeliveryReturnItem[]        @relation("DeliveryReturnItem_inventoryMovement")
+  productionBatchIngredientInventoryMovement ProductionBatchIngredient[] @relation("ProductionBatchIngredient_inventoryMovement")
+  authorizedByUser                           User?                       @relation("InventoryMovement_authorizedByUser", fields: [authorizedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  branch                                     Branch                      @relation("InventoryMovement_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                              User                        @relation("InventoryMovement_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                               Organization                @relation("InventoryMovement_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product                                    Product                     @relation("InventoryMovement_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  saleReturnItemInventoryMovement            SaleReturnItem[]            @relation("SaleReturnItem_inventoryMovement")
+  wasteRecordInventoryMovement               WasteRecord[]               @relation("WasteRecord_inventoryMovement")
 
   @@index([createdAt], map: "idx_inventory_movements_created_at")
   @@map("inventory_movements")
 }
 
 model ProductionBatch {
-  id                                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organizationId                     String                @map("organization_id") @db.Uuid
-  branchId                           String                @map("branch_id") @db.Uuid
-  productionDate                     DateTime              @map("production_date") @db.Date
-  status                             ProductionBatchStatus @default(open)
-  createdByUserId                    String                @map("created_by_user_id") @db.Uuid
-  closedByUserId                     String?               @map("closed_by_user_id") @db.Uuid
-  closedAt                           DateTime?             @map("closed_at") @db.Timestamptz(6)
-  createdAt                          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                          DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
-  productionBatchItemProductionBatch ProductionBatchItem[] @relation("ProductionBatchItem_productionBatch")
-  branch                             Branch                @relation("ProductionBatch_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  closedByUser                       User?                 @relation("ProductionBatch_closedByUser", fields: [closedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser                      User                  @relation("ProductionBatch_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  organization                       Organization          @relation("ProductionBatch_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                                       String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId                           String                      @map("organization_id") @db.Uuid
+  branchId                                 String                      @map("branch_id") @db.Uuid
+  productionDate                           DateTime                    @map("production_date") @db.Date
+  status                                   ProductionBatchStatus       @default(open)
+  recipeVersionId                          String?                     @map("recipe_version_id") @db.Uuid
+  productionMode                           ProductionMode              @default(manual) @map("production_mode")
+  outputProductId                          String?                     @map("output_product_id") @db.Uuid
+  expectedOutputQuantity                   Decimal?                    @map("expected_output_quantity") @db.Decimal(12, 3)
+  actualOutputQuantity                     Decimal?                    @map("actual_output_quantity") @db.Decimal(12, 3)
+  outputUnit                               ProductUnit?                @map("output_unit")
+  yieldPercentage                          Decimal?                    @map("yield_percentage") @db.Decimal(6, 2)
+  varianceReason                           String?                     @map("variance_reason")
+  createdByUserId                          String                      @map("created_by_user_id") @db.Uuid
+  closedByUserId                           String?                     @map("closed_by_user_id") @db.Uuid
+  closedAt                                 DateTime?                   @map("closed_at") @db.Timestamptz(6)
+  createdAt                                DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                                DateTime                    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  productionBatchIngredientProductionBatch ProductionBatchIngredient[] @relation("ProductionBatchIngredient_productionBatch")
+  productionBatchItemProductionBatch       ProductionBatchItem[]       @relation("ProductionBatchItem_productionBatch")
+  branch                                   Branch                      @relation("ProductionBatch_branch", fields: [branchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  closedByUser                             User?                       @relation("ProductionBatch_closedByUser", fields: [closedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser                            User                        @relation("ProductionBatch_createdByUser", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organization                             Organization                @relation("ProductionBatch_organization", fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  outputProduct                            Product?                    @relation("ProductionBatch_outputProduct", fields: [outputProductId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipeVersion                            RecipeVersion?              @relation("ProductionBatch_recipeVersion", fields: [recipeVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@index([outputProductId], map: "idx_production_batches_output_product")
+  @@index([recipeVersionId], map: "idx_production_batches_recipe_version")
   @@map("production_batches")
 }
 
@@ -672,6 +777,25 @@ model ProductionBatchItem {
 
   @@unique([productionBatchId, productId], map: "uq_production_batch_product")
   @@map("production_batch_items")
+}
+
+model ProductionBatchIngredient {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productionBatchId   String             @map("production_batch_id") @db.Uuid
+  productId           String             @map("product_id") @db.Uuid
+  expectedQuantity    Decimal            @map("expected_quantity") @db.Decimal(12, 3)
+  actualQuantity      Decimal            @map("actual_quantity") @db.Decimal(12, 3)
+  unit                ProductUnit
+  inventoryMovementId String?            @map("inventory_movement_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  inventoryMovement   InventoryMovement? @relation("ProductionBatchIngredient_inventoryMovement", fields: [inventoryMovementId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product             Product            @relation("ProductionBatchIngredient_product", fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  productionBatch     ProductionBatch    @relation("ProductionBatchIngredient_productionBatch", fields: [productionBatchId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([inventoryMovementId], map: "idx_production_batch_ingredients_movement")
+  @@index([productId], map: "idx_production_batch_ingredients_product")
+  @@index([productionBatchId], map: "idx_production_batch_ingredients_batch")
+  @@map("production_batch_ingredients")
 }
 
 model WasteRecord {
@@ -1863,6 +1987,8 @@ enum ProductType {
   package
   retail
   service
+  raw_material
+  packaging
 
   @@map("product_type")
 }
@@ -1888,6 +2014,7 @@ enum SaleMode {
 
 enum InventoryMovementType {
   production_in
+  production_input_out
   sale_out
   route_load_out
   route_return_in
@@ -1906,6 +2033,13 @@ enum ProductionBatchStatus {
   cancelled
 
   @@map("production_batch_status")
+}
+
+enum ProductionMode {
+  manual
+  recipe_based
+
+  @@map("production_mode")
 }
 
 enum WasteReason {

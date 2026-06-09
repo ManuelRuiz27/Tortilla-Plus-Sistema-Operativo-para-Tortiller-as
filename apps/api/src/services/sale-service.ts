@@ -4,6 +4,7 @@ import { DomainError } from "../lib/domain-error.js";
 import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { applyInventoryMovement } from "./inventory-ledger-service.js";
 import { runIdempotent } from "./idempotency-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
 import { assertFeatureAvailable } from "./subscription-service.js";
@@ -100,6 +101,10 @@ export async function quoteSale(currentUser: AuthenticatedUser, input: unknown) 
 
     if (!product) {
       throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
+    }
+
+    if (!product.isSellable) {
+      throw new DomainError(400, "PRODUCT_NOT_SELLABLE", "Producto no vendible en POS.");
     }
 
     const price = await resolveBranchPrice(
@@ -950,56 +955,22 @@ async function createSaleInventoryMovement(
           1000).toFixed(3)
       : normalizeQuantity(item.quantity);
 
-  const stock = await tx.inventoryStock.upsert({
-    where: {
-      branchId_productId: {
-        branchId,
-        productId: stockProductId,
-      },
-    },
-    update: {},
-    create: {
-      organizationId: currentUser.organizationId,
-      branchId,
-      productId: stockProductId,
-      quantity: "0.000",
-      reservedQuantity: "0.000",
-      minimumQuantity: "0.000",
-    },
-  });
-
   const allowsNegative = ["tortilla", "masa"].includes(stockProduct.productType);
 
-  const movement = await tx.inventoryMovement.create({
-    data: {
-      organizationId: currentUser.organizationId,
-      branchId,
-      productId: stockProductId,
-      movementType: "sale_out",
-      quantity,
-      unit: stockProduct.unit,
-      reason: "Venta POS",
-      referenceType: "sale_item",
-      referenceId: item.id,
-      createdByUserId: currentUser.id,
-    },
+  const movement = await applyInventoryMovement(tx, {
+    organizationId: currentUser.organizationId,
+    branchId,
+    productId: stockProductId,
+    movementType: "sale_out",
+    quantity,
+    reason: "Venta POS",
+    referenceType: "sale_item",
+    referenceId: item.id,
+    createdByUserId: currentUser.id,
+    allowNegative: allowsNegative,
+    insufficientStockCode: "NEGATIVE_STOCK_NOT_ALLOWED",
+    insufficientStockMessage: "Stock insuficiente para producto retail.",
   });
-
-  const stockUpdate = await tx.inventoryStock.updateMany({
-    where: {
-      branchId,
-      productId: stockProductId,
-      ...(allowsNegative ? {} : { quantity: { gte: quantity } }),
-    },
-    data: {
-      quantity: { decrement: quantity },
-      updatedAt: new Date(),
-    },
-  });
-
-  if (stockUpdate.count !== 1) {
-    throw new DomainError(409, "NEGATIVE_STOCK_NOT_ALLOWED", "Stock insuficiente para producto retail.");
-  }
 
   const updatedStock = await tx.inventoryStock.findUniqueOrThrow({
     where: {
@@ -1019,7 +990,7 @@ async function createSaleInventoryMovement(
         userId: currentUser.id,
         action: "negative_stock_sale_allowed",
         entityType: "inventory_stock",
-        entityId: stock.id,
+        entityId: updatedStock.id,
         afterSnapshot: {
           productId: stockProductId,
           quantity: nextQuantity,
@@ -1063,12 +1034,6 @@ async function createReturnInventoryMovement(
     return null;
   }
 
-  const stockProduct = await tx.product.findFirstOrThrow({
-    where: {
-      id: stockProductId,
-      organizationId: currentUser.organizationId,
-    },
-  });
   const quantity =
     product.productType === "package"
       ? ((toMillis(returnItem.quantity) / 1000) *
@@ -1077,53 +1042,18 @@ async function createReturnInventoryMovement(
       : returnItem.quantity;
   const movementType = returnItem.inventoryCondition === "sellable" ? "return_in" : "return_waste";
 
-  const movement = await tx.inventoryMovement.create({
-    data: {
-      organizationId: currentUser.organizationId,
-      branchId,
-      productId: stockProductId,
-      movementType,
-      quantity,
-      unit: stockProduct.unit,
-      reason: "Devolucion de venta",
-      referenceType: "sale_return_item",
-      referenceId: null,
-      createdByUserId: currentUser.id,
-    },
+  const movement = await applyInventoryMovement(tx, {
+    organizationId: currentUser.organizationId,
+    branchId,
+    productId: stockProductId,
+    movementType,
+    quantity,
+    reason: "Devolucion de venta",
+    referenceType: "sale_return_item",
+    referenceId: null,
+    createdByUserId: currentUser.id,
+    affectsStock: returnItem.inventoryCondition === "sellable",
   });
-
-  if (returnItem.inventoryCondition === "sellable") {
-    const stock = await tx.inventoryStock.upsert({
-      where: {
-        branchId_productId: {
-          branchId,
-          productId: stockProductId,
-        },
-      },
-      update: {},
-      create: {
-        organizationId: currentUser.organizationId,
-        branchId,
-        productId: stockProductId,
-        quantity: "0.000",
-        reservedQuantity: "0.000",
-        minimumQuantity: "0.000",
-      },
-    });
-
-    await tx.inventoryStock.update({
-      where: {
-        branchId_productId: {
-          branchId,
-          productId: stockProductId,
-        },
-      },
-      data: {
-        quantity: addQuantity(stock.quantity, quantity),
-        updatedAt: new Date(),
-      },
-    });
-  }
 
   return movement;
 }

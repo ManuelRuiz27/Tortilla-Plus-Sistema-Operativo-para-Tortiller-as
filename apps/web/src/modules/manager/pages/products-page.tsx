@@ -9,7 +9,15 @@ import { StatusBadge } from "../../../shared/components/status-badge";
 import { labelProductType, labelStatus, labelUnit } from "../../../shared/utils/labels";
 import type { ManagerProduct } from "../types/manager.types";
 
-const productTypes: Array<ManagerProduct["productType"]> = ["tortilla", "masa", "package", "retail", "service"];
+const productTypes: Array<ManagerProduct["productType"]> = [
+  "tortilla",
+  "masa",
+  "package",
+  "retail",
+  "service",
+  "raw_material",
+  "packaging",
+];
 const productUnits: Array<ManagerProduct["unit"]> = ["kg", "piece", "package", "liter", "service"];
 
 type ProductFormState = {

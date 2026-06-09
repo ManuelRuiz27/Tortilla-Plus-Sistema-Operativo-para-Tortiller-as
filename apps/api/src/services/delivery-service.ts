@@ -4,6 +4,7 @@ import { DomainError } from "../lib/domain-error.js";
 import { verifySecret } from "../lib/password.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthenticatedUser } from "./auth-service.js";
+import { applyInventoryMovement } from "./inventory-ledger-service.js";
 import { runIdempotent } from "./idempotency-service.js";
 import { assertOrganizationOperational } from "./operational-access-service.js";
 import { assertBranchAccess, assertPermission } from "./permission-service.js";
@@ -907,37 +908,20 @@ async function createDeliveryInventoryOut(
   item: { id: string; productId: string; quantityLoaded: Prisma.Decimal },
 ) {
   const stockTarget = await resolveStockTarget(tx, currentUser.organizationId, item.productId, normalizeQuantity(item.quantityLoaded));
-  const stock = await tx.inventoryStock.findUnique({
-    where: { branchId_productId: { branchId, productId: stockTarget.productId } },
+
+  return applyInventoryMovement(tx, {
+    organizationId: currentUser.organizationId,
+    branchId,
+    productId: stockTarget.productId,
+    movementType: "route_load_out",
+    quantity: stockTarget.quantity,
+    reason: "Carga de ruta",
+    referenceType: "delivery_order_item",
+    referenceId: item.id,
+    createdByUserId: currentUser.id,
+    allowNegative: false,
+    insufficientStockMessage: "Stock insuficiente para cargar ruta.",
   });
-  const current = normalizeQuantity(stock?.quantity ?? "0.000");
-  const next = subtractQuantity(current, stockTarget.quantity);
-
-  if (Number(next) < 0) {
-    throw new DomainError(409, "INSUFFICIENT_STOCK", "Stock insuficiente para cargar ruta.");
-  }
-
-  const movement = await tx.inventoryMovement.create({
-    data: {
-      organizationId: currentUser.organizationId,
-      branchId,
-      productId: stockTarget.productId,
-      movementType: "route_load_out",
-      quantity: stockTarget.quantity,
-      unit: stockTarget.unit,
-      reason: "Carga de ruta",
-      referenceType: "delivery_order_item",
-      referenceId: item.id,
-      createdByUserId: currentUser.id,
-    },
-  });
-
-  await tx.inventoryStock.update({
-    where: { branchId_productId: { branchId, productId: stockTarget.productId } },
-    data: { quantity: next, updatedAt: new Date() },
-  });
-
-  return movement;
 }
 
 async function createDeliveryReturnMovement(
@@ -949,39 +933,20 @@ async function createDeliveryReturnMovement(
 ) {
   const stockTarget = await resolveStockTarget(tx, currentUser.organizationId, item.productId, normalizeQuantity(item.quantity));
   const movementType = action === "return_to_inventory" ? "route_return_in" : "return_waste";
-  const movement = await tx.inventoryMovement.create({
-    data: {
-      organizationId: currentUser.organizationId,
-      branchId,
-      productId: stockTarget.productId,
-      movementType,
-      quantity: stockTarget.quantity,
-      unit: stockTarget.unit,
-      reason: "Revision devolucion de ruta",
-      referenceType: "delivery_return_item",
-      referenceId: item.id,
-      createdByUserId: currentUser.id,
-    },
+  const movement = await applyInventoryMovement(tx, {
+    organizationId: currentUser.organizationId,
+    branchId,
+    productId: stockTarget.productId,
+    movementType,
+    quantity: stockTarget.quantity,
+    reason: "Revision devolucion de ruta",
+    referenceType: "delivery_return_item",
+    referenceId: item.id,
+    createdByUserId: currentUser.id,
+    affectsStock: action === "return_to_inventory",
   });
 
-  if (action === "return_to_inventory") {
-    const stock = await tx.inventoryStock.upsert({
-      where: { branchId_productId: { branchId, productId: stockTarget.productId } },
-      update: {},
-      create: {
-        organizationId: currentUser.organizationId,
-        branchId,
-        productId: stockTarget.productId,
-        quantity: "0.000",
-        reservedQuantity: "0.000",
-        minimumQuantity: "0.000",
-      },
-    });
-    await tx.inventoryStock.update({
-      where: { branchId_productId: { branchId, productId: stockTarget.productId } },
-      data: { quantity: addQuantity(stock.quantity, stockTarget.quantity), updatedAt: new Date() },
-    });
-  } else {
+  if (action === "mark_as_waste") {
     await tx.wasteRecord.create({
       data: {
         organizationId: currentUser.organizationId,
@@ -1009,6 +974,8 @@ async function resolveStockTarget(
     where: { id: productId, organizationId },
     include: { productPackageConfigProduct: true },
   });
+  assertDeliveryLoadableProduct(product.productType);
+
   if (product.productType === "package") {
     const baseProductId = product.productPackageConfigProduct?.baseProductId;
     if (!baseProductId) {
@@ -1022,6 +989,12 @@ async function resolveStockTarget(
     };
   }
   return { productId: product.id, quantity, unit: product.unit };
+}
+
+function assertDeliveryLoadableProduct(productType: string) {
+  if (productType === "raw_material" || productType === "packaging") {
+    throw new DomainError(400, "PRODUCT_NOT_DELIVERABLE", "Producto no cargable en ruta.");
+  }
 }
 
 async function calculateExpectedCash(
@@ -1057,6 +1030,8 @@ async function resolveDeliveryPrice(
   const product = await tx.product.findFirstOrThrow({
     where: { id: productId, organizationId },
   });
+  assertDeliveryLoadableProduct(product.productType);
+
   const saleMode = product.productType === "package" ? "by_package" : product.unit === "piece" ? "by_unit" : "by_kg";
 
   const customerPrice = await tx.customerProductPrice.findFirst({
@@ -1273,10 +1248,6 @@ function addMoney(left: Prisma.Decimal | string | number, right: Prisma.Decimal 
 
 function subtractMoney(left: Prisma.Decimal | string | number, right: Prisma.Decimal | string | number) {
   return centsToMoney(toCents(left) - toCents(right));
-}
-
-function addQuantity(left: Prisma.Decimal | string | number, right: Prisma.Decimal | string | number) {
-  return ((toMillis(left) + toMillis(right)) / 1000).toFixed(3);
 }
 
 function subtractQuantity(left: Prisma.Decimal | string | number, right: Prisma.Decimal | string | number) {

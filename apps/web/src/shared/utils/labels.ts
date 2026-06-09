@@ -57,6 +57,8 @@ const productTypeLabels: Record<string, string> = {
   package: "Paquete",
   retail: "Mostrador",
   service: "Servicio",
+  raw_material: "Insumo",
+  packaging: "Empaque",
 };
 
 const unitLabels: Record<string, string> = {

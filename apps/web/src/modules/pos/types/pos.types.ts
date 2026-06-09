@@ -1,6 +1,6 @@
 export type PosSaleMode = "by_kg" | "by_amount" | "by_package" | "by_unit";
 
-export type PosProductType = "tortilla" | "masa" | "package" | "retail" | "service";
+export type PosProductType = "tortilla" | "masa" | "package" | "retail" | "service" | "raw_material" | "packaging";
 
 export type PosUnit = "kg" | "piece" | "package" | "liter" | "service";
 

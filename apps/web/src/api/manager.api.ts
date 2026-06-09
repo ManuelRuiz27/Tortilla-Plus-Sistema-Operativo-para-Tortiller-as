@@ -64,6 +64,8 @@ type ApiProduct = {
   isSellable?: boolean;
   isStockTracked?: boolean;
   requiresProduction?: boolean;
+  isRecipeIngredient?: boolean;
+  allowNegativeStock?: boolean;
   status?: string;
 };
 
@@ -197,7 +199,7 @@ type ApiProductionBatch = {
   }>;
 };
 
-const productTypes = new Set(["tortilla", "masa", "package", "retail", "service"]);
+const productTypes = new Set(["tortilla", "masa", "package", "retail", "service", "raw_material", "packaging"]);
 const productUnits = new Set(["kg", "piece", "package", "liter", "service"]);
 const saleModes = new Set(["by_kg", "by_amount", "by_package", "by_unit"]);
 const customerTypes = new Set(["tienda", "puesto", "comedor", "repartidor", "cliente_frecuente", "empresa", "otro"]);
@@ -248,6 +250,8 @@ function mapManagerProduct(product: ApiProduct): ManagerProduct {
     isSellable: product.isSellable ?? true,
     isStockTracked: product.isStockTracked ?? false,
     requiresProduction: product.requiresProduction ?? false,
+    isRecipeIngredient: product.isRecipeIngredient ?? false,
+    allowNegativeStock: product.allowNegativeStock ?? false,
     status: product.status === "inactive" ? "inactive" : "active"
   };
 }
@@ -570,6 +574,8 @@ export function createManagerProductRequest(payload: {
       isSellable: payload.isSellable,
       isStockTracked: payload.isStockTracked,
       requiresProduction: payload.requiresProduction,
+      isRecipeIngredient: false,
+      allowNegativeStock: false,
       status: "active"
     });
   }

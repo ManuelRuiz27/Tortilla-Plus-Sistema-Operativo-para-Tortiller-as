@@ -12,6 +12,8 @@ type ApiProduct = {
   isSellable?: boolean;
   isStockTracked?: boolean;
   requiresProduction?: boolean;
+  isRecipeIngredient?: boolean;
+  allowNegativeStock?: boolean;
   status?: string;
 };
 
@@ -29,7 +31,7 @@ type ApiInventoryStock = {
   quantity: string | number;
 };
 
-const productTypes = new Set<PosProductType>(["tortilla", "masa", "package", "retail", "service"]);
+const productTypes = new Set<PosProductType>(["tortilla", "masa", "package", "retail", "service", "raw_material", "packaging"]);
 const productUnits = new Set<PosUnit>(["kg", "piece", "package", "liter", "service"]);
 const saleModes = new Set<PosSaleMode>(["by_kg", "by_amount", "by_package", "by_unit"]);
 
