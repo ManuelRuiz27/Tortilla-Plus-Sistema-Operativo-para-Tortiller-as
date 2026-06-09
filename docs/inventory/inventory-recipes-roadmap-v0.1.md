@@ -46,6 +46,9 @@ La deuda critica de un sprint se vuelve prioridad del siguiente avance antes de 
 
 ## 4. Sprint R0 - Preparacion y decisiones
 
+**Estado:** Cerrado para iniciar Sprint R1.  
+**Decisiones:** `docs/inventory/inventory-recipes-r0-decisions-v0.1.md`
+
 ### Objetivo
 
 Cerrar las decisiones que cambian el modelo antes de tocar codigo.
@@ -63,15 +66,14 @@ Cerrar las decisiones que cambian el modelo antes de tocar codigo.
 
 ### Definition of Done
 
-- Decisiones minimas registradas.
-- Primer corte de deuda tecnica creado.
-- Scope de R1 aprobado.
+- Decisiones minimas registradas. Completado.
+- Primer corte de deuda tecnica creado. Completado.
+- Scope de R1 aprobado. Completado.
 
 ### Deuda que bloquea el siguiente sprint si no se resuelve
 
-- Decidir salida de receta en V1.
-- Decidir politica de stock negativo para insumos.
-- Decidir si empaques afectan produccion o venta.
+- Ninguna deuda bloqueante queda abierta para iniciar R1.
+- Las decisiones no bloqueantes quedaron registradas como deuda futura en el log.
 
 ---
 
@@ -93,6 +95,8 @@ Preparar el schema para recetas sin cambiar todavia el comportamiento de POS ni 
 - Extender `ProductionBatch`.
 - Agregar `ProductionBatchIngredient`.
 - Agregar tipos de movimiento necesarios para consumo por produccion.
+- Preferir `Recipe.currentVersionId` sobre `Recipe.currentVersion Int` si Prisma/migracion lo permiten sin complejidad excesiva.
+- Mantener campos nuevos de `ProductionBatch` como nullable/default para no romper produccion manual.
 - Crear migracion Prisma.
 - Actualizar seed solo si hace falta para que el entorno local siga funcionando.
 - Agregar tests unitarios minimos de calculos y validaciones puras si aplica.
@@ -336,4 +340,3 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 - Conversiones de unidad ambiguas.
 - Tolerancias de rendimiento sin autorizacion clara.
 - Deuda tecnica no cerrada antes de avanzar al siguiente sprint.
-

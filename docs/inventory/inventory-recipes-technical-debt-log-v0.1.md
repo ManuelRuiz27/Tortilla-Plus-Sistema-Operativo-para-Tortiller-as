@@ -58,7 +58,11 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 | INV-REC-DEBT-007 | Media | Abierta | Conversiones | No existe `UnitConversion`; unidades como cubeta/costal no se pueden modelar de forma auditable. | Sprint R1 | Revisar constraint unica si `name` fuera nullable. |
 | INV-REC-DEBT-008 | Media | Abierta | API | No hay endpoint para consultar movimientos de inventario con filtros. | Sprint R6 | Necesario para auditoria operativa. |
 | INV-REC-DEBT-009 | Media | Abierta | Pruebas | Tests unitarios actuales cubren utilidades pequenas, pero no cubren idempotencia ni transacciones de inventario centralizado. | Sprint R2/R6 | Agregar pruebas conforme se refactoriza. |
-| INV-REC-DEBT-010 | Media | Abierta | Decisiones funcionales | Siguen abiertas decisiones de salida de receta, masa->tortilla, agua, empaques, tolerancia y PIN por variacion alta. | Sprint R0 | Algunas bloquean validaciones finales. |
+| INV-REC-DEBT-010 | Media | Resuelta | Decisiones funcionales | Decisiones de salida de receta, masa->tortilla, agua, empaques, tolerancia y PIN por variacion alta quedaron registradas en R0. | Sprint R0 | Ver `inventory-recipes-r0-decisions-v0.1.md`. |
+| INV-REC-DEBT-011 | Media | Abierta | Configuracion | Tolerancia de rendimiento sera fija en V1; configuracion por organizacion queda pendiente. | Futuro post R8 | No bloquea R1. |
+| INV-REC-DEBT-012 | Baja | Abierta | Produccion | Agua queda como dato informativo en V1; si un cliente requiere control real, habra que modelarla como insumo inventariable. | Futuro | No bloquea R1. |
+| INV-REC-DEBT-013 | Media | Abierta | Produccion | Flujo formal `masa -> tortilla` queda preparado pero no se implementa como segundo paso obligatorio en V1. | Futuro post R5 | No bloquea R1; el modelo debe no cerrarle la puerta. |
+| INV-REC-DEBT-014 | Media | Abierta | Empaques | Descuento de empaques en venta queda fuera de V1; solo se descuentan en produccion si son ingrediente de receta. | Futuro post R7 | No bloquea R1. |
 
 ---
 
@@ -67,11 +71,15 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 ### Sprint R0 - Preparacion y decisiones
 
 **Objetivo del sprint:** cerrar decisiones minimas y preparar R1.  
-**Estado:** Pendiente.  
+**Estado:** Cerrado.  
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| INV-REC-DEBT-010 | Media | Abierta | Decisiones funcionales pendientes. | Registrar decisiones antes de implementar reglas de produccion. |
+| INV-REC-DEBT-010 | Media | Resuelta | Decisiones funcionales pendientes. | Registradas en `inventory-recipes-r0-decisions-v0.1.md`. |
+| INV-REC-DEBT-011 | Media | Abierta | Tolerancia configurable por organizacion fuera de V1. | Revisar despues de validar flujo operativo. |
+| INV-REC-DEBT-012 | Baja | Abierta | Agua informativa, no inventariable. | Reabrir si cliente requiere control de agua. |
+| INV-REC-DEBT-013 | Media | Abierta | `masa -> tortilla` no obligatorio en V1. | Evaluar como mejora despues de produccion por receta basica. |
+| INV-REC-DEBT-014 | Media | Abierta | Empaques no se descuentan en venta en V1. | Evaluar despues de pantalla de cierre y POS. |
 
 ### Sprint R1 - Base de datos y contrato de dominio
 
@@ -181,4 +189,3 @@ Antes de iniciar un nuevo sprint:
 3. Resolver deuda alta que afecte el nuevo alcance.
 4. Marcar deuda aceptada temporalmente solo con justificacion.
 5. Actualizar este archivo con estado real.
-
