@@ -104,7 +104,7 @@ export async function quoteSale(currentUser: AuthenticatedUser, input: unknown) 
     }
 
     if (!product.isSellable) {
-      throw new DomainError(400, "PRODUCT_NOT_SELLABLE", "Producto no vendible en POS.");
+      throw new DomainError(400, "PRODUCT_NOT_SELLABLE", "Producto no vendible.");
     }
 
     const price = await resolveBranchPrice(
@@ -235,6 +235,10 @@ async function createSaleItem(
 
     if (!product) {
       throw new DomainError(404, "PRODUCT_NOT_FOUND", "Producto no encontrado.");
+    }
+
+    if (!product.isSellable) {
+      throw new DomainError(400, "PRODUCT_NOT_SELLABLE", "Producto no vendible.");
     }
 
     const price = await resolveBranchPrice(

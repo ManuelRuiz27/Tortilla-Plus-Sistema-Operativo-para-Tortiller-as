@@ -11,6 +11,19 @@ import { assertFeatureAvailable } from "./subscription-service.js";
 const productTypes = ["tortilla", "masa", "package", "retail", "service", "raw_material", "packaging"] as const;
 const productUnits = ["kg", "piece", "package", "liter", "service"] as const;
 const saleModes = ["by_kg", "by_amount", "by_package", "by_unit"] as const;
+const genericStatuses = ["active", "inactive", "deleted"] as const;
+const inventoryMovementTypes = [
+  "manual_adjustment_in",
+  "manual_adjustment_out",
+  "production_in",
+  "production_input_out",
+  "sale_out",
+  "waste_out",
+  "route_load_out",
+  "route_return_in",
+  "return_in",
+  "return_waste",
+] as const;
 const wasteReasons = [
   "tortilla_rota",
   "masa_echada_a_perder",
@@ -236,6 +249,88 @@ export async function setBranchPrice(currentUser: AuthenticatedUser, input: unkn
   });
 }
 
+export async function listUnitConversions(currentUser: AuthenticatedUser, productId: string) {
+  await assertFeatureAvailable(currentUser, "inventory_basic");
+  await assertPermission(currentUser.id, "products.view");
+  await getProductOrThrow(currentUser.organizationId, productId);
+
+  const conversions = await prisma.unitConversion.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      productId,
+      status: { not: "deleted" },
+    },
+    orderBy: [{ status: "asc" }, { name: "asc" }],
+  });
+
+  return { data: conversions.map(serializeUnitConversion) };
+}
+
+export async function createUnitConversion(currentUser: AuthenticatedUser, productId: string, input: unknown) {
+  await assertFeatureAvailable(currentUser, "inventory_basic");
+  await assertPermission(currentUser.id, "products.manage");
+  const body = asRecord(input);
+  const fromUnit = asString(body.fromUnit, "fromUnit");
+  const toUnit = asEnum(body.toUnit, "toUnit", productUnits);
+  const factor = asConversionFactor(body.factor, "factor");
+  const name = asString(body.name, "name");
+  const product = await getProductOrThrow(currentUser.organizationId, productId);
+  assertConversionTarget(product.unit, toUnit);
+
+  const conversion = await prisma.unitConversion.create({
+    data: {
+      organizationId: currentUser.organizationId,
+      productId,
+      fromUnit,
+      toUnit,
+      factor,
+      name,
+      status: "active",
+    },
+  });
+
+  return { data: serializeUnitConversion(conversion) };
+}
+
+export async function updateUnitConversion(currentUser: AuthenticatedUser, conversionId: string, input: unknown) {
+  await assertFeatureAvailable(currentUser, "inventory_basic");
+  await assertPermission(currentUser.id, "products.manage");
+  const body = asRecord(input);
+  const existing = await getUnitConversionOrThrow(currentUser.organizationId, conversionId);
+  const toUnit = optionalEnum(body.toUnit, "toUnit", productUnits) ?? existing.toUnit;
+  assertConversionTarget(existing.product.unit, toUnit);
+
+  const updated = await prisma.unitConversion.update({
+    where: { id: existing.id },
+    data: {
+      fromUnit: optionalString(body.fromUnit) ?? existing.fromUnit,
+      toUnit,
+      factor: body.factor === undefined ? existing.factor : asConversionFactor(body.factor, "factor"),
+      name: optionalString(body.name) ?? existing.name,
+      status: optionalEnum(body.status, "status", genericStatuses) ?? existing.status,
+      updatedAt: new Date(),
+    },
+  });
+
+  return { data: serializeUnitConversion(updated) };
+}
+
+export async function deleteUnitConversion(currentUser: AuthenticatedUser, conversionId: string) {
+  await assertFeatureAvailable(currentUser, "inventory_basic");
+  await assertPermission(currentUser.id, "products.manage");
+  const existing = await getUnitConversionOrThrow(currentUser.organizationId, conversionId);
+
+  const deleted = await prisma.unitConversion.update({
+    where: { id: existing.id },
+    data: {
+      status: "deleted",
+      updatedAt: new Date(),
+    },
+  });
+
+  return { data: serializeUnitConversion(deleted) };
+}
+
 export async function getBranchInventory(currentUser: AuthenticatedUser, branchId: string) {
   await assertFeatureAvailable(currentUser, "inventory_basic");
   await assertPermission(currentUser.id, "inventory.view");
@@ -319,6 +414,51 @@ export async function createInventoryAdjustment(currentUser: AuthenticatedUser, 
 
     return { data: serializeInventoryMovement(movement) };
   });
+}
+
+export async function listInventoryMovements(currentUser: AuthenticatedUser, input: unknown = {}) {
+  await assertFeatureAvailable(currentUser, "inventory_basic");
+  await assertPermission(currentUser.id, "inventory.view");
+  const query = asLooseRecord(input);
+  const branchId = optionalString(query.branchId);
+  const productId = optionalString(query.productId);
+  const movementType = optionalEnum(query.movementType, "movementType", inventoryMovementTypes);
+  const referenceType = optionalString(query.referenceType);
+  const referenceId = optionalString(query.referenceId);
+  const createdFrom = optionalDateTime(query.createdFrom, "createdFrom");
+  const createdTo = optionalDateTime(query.createdTo, "createdTo");
+  const limit = optionalPositiveInteger(query.limit, "limit") ?? 100;
+
+  if (branchId) {
+    await assertBranchAccess(currentUser, branchId);
+  }
+
+  const movements = await prisma.inventoryMovement.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      ...(branchId ? { branchId } : {}),
+      ...(productId ? { productId } : {}),
+      ...(movementType ? { movementType } : {}),
+      ...(referenceType ? { referenceType } : {}),
+      ...(referenceId ? { referenceId } : {}),
+      ...(createdFrom || createdTo
+        ? {
+            createdAt: {
+              ...(createdFrom ? { gte: createdFrom } : {}),
+              ...(createdTo ? { lte: createdTo } : {}),
+            },
+          }
+        : {}),
+    },
+    include: {
+      product: true,
+      branch: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(limit, 500),
+  });
+
+  return { data: movements.map(serializeInventoryMovementDetail) };
 }
 
 export async function createProductionBatch(currentUser: AuthenticatedUser, input: unknown) {
@@ -753,6 +893,27 @@ async function getProductPayload(
   return serializeProduct(product);
 }
 
+async function getUnitConversionOrThrow(organizationId: string, conversionId: string) {
+  const conversion = await prisma.unitConversion.findFirst({
+    where: {
+      id: conversionId,
+      organizationId,
+      status: { not: "deleted" },
+    },
+    include: { product: true },
+  });
+  if (!conversion) {
+    throw new DomainError(404, "UNIT_CONVERSION_NOT_FOUND", "Conversion de unidad no encontrada.");
+  }
+  return conversion;
+}
+
+function assertConversionTarget(productUnit: string, toUnit: string) {
+  if (productUnit !== toUnit) {
+    throw new DomainError(400, "INVALID_UNIT_CONVERSION", "La conversion debe apuntar a la unidad base del producto.");
+  }
+}
+
 function asRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new DomainError(400, "INVALID_REQUEST", "Body invalido.");
@@ -833,6 +994,27 @@ function optionalEnum<T extends readonly string[]>(
   return asEnum(value, field, values);
 }
 
+function optionalDateTime(value: unknown, field: string): Date | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new DomainError(400, "INVALID_REQUEST", `Fecha invalida: ${field}.`);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new DomainError(400, "INVALID_REQUEST", `Fecha invalida: ${field}.`);
+  }
+  return date;
+}
+
+function optionalPositiveInteger(value: unknown, field: string): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new DomainError(400, "INVALID_REQUEST", `Entero positivo invalido: ${field}.`);
+  }
+  return parsed;
+}
+
 function asMoney(value: unknown, field: string): string {
   if (typeof value !== "number" && typeof value !== "string") {
     throw new DomainError(400, "INVALID_REQUEST", `Campo requerido: ${field}.`);
@@ -845,6 +1027,20 @@ function asMoney(value: unknown, field: string): string {
   }
 
   return amount.toFixed(2);
+}
+
+function asConversionFactor(value: unknown, field: string): string {
+  if (typeof value !== "number" && typeof value !== "string") {
+    throw new DomainError(400, "INVALID_REQUEST", `Campo requerido: ${field}.`);
+  }
+
+  const factor = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(factor) || factor <= 0) {
+    throw new DomainError(400, "INVALID_REQUEST", `Factor invalido: ${field}.`);
+  }
+
+  return factor.toFixed(6);
 }
 
 function asQuantity(value: unknown, field: string): string {
@@ -987,6 +1183,32 @@ function serializeBranchPrice(price: {
   };
 }
 
+function serializeUnitConversion(conversion: {
+  id: string;
+  organizationId: string;
+  productId: string;
+  fromUnit: string;
+  toUnit: string;
+  factor: Prisma.Decimal;
+  name: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: conversion.id,
+    organizationId: conversion.organizationId,
+    productId: conversion.productId,
+    fromUnit: conversion.fromUnit,
+    toUnit: conversion.toUnit,
+    factor: Number(conversion.factor).toFixed(6),
+    name: conversion.name,
+    status: conversion.status,
+    createdAt: conversion.createdAt,
+    updatedAt: conversion.updatedAt,
+  };
+}
+
 function serializeInventoryStock(stock: {
   id: string;
   organizationId: string;
@@ -1079,6 +1301,38 @@ function serializeInventoryMovement(movement: {
     createdByUserId: movement.createdByUserId,
     authorizedByUserId: movement.authorizedByUserId,
     createdAt: movement.createdAt,
+  };
+}
+
+function serializeInventoryMovementDetail(movement: {
+  id: string;
+  organizationId: string;
+  branchId: string;
+  productId: string;
+  movementType: string;
+  quantity: Prisma.Decimal;
+  unit: string;
+  reason: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  createdByUserId: string;
+  authorizedByUserId: string | null;
+  createdAt: Date;
+  product?: { id: string; name: string; sku: string | null; productType: string; unit: string } | null;
+  branch?: { id: string; name: string } | null;
+}) {
+  return {
+    ...serializeInventoryMovement(movement),
+    product: movement.product
+      ? {
+          id: movement.product.id,
+          name: movement.product.name,
+          sku: movement.product.sku,
+          productType: movement.product.productType,
+          unit: movement.product.unit,
+        }
+      : null,
+    branch: movement.branch ? { id: movement.branch.id, name: movement.branch.name } : null,
   };
 }
 

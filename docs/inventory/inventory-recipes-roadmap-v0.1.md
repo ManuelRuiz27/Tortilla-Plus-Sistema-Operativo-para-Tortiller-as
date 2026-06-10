@@ -229,14 +229,19 @@ Crear recetas versionadas sin afectar inventario.
 ### Deuda tecnica post R4
 
 - `INV-REC-DEBT-019`: Resuelta antes de R5. `RecipeService` normaliza cantidades con conversion activa hacia la unidad base del producto.
+- `INV-REC-DEBT-020`: Resuelta antes de R5. `RecipeService` exige `isRecipeIngredient=true` para aceptar productos como ingredientes.
+- `INV-REC-DEBT-002`: Confirmada/corregida antes de R5. `createSaleItem` bloquea productos con `isSellable=false`.
 - Sin deuda critica o alta abierta que bloquee R5.
 
 ---
 
 ## 9. Sprint R5 - ProductionRecipeService
 
-**Estado:** Listo para iniciar.  
-**Deuda tecnica previa:** conversiones de receta cerradas; R5 puede trabajar con cantidades normalizadas a unidad base.
+**Estado:** Completado para alcance backend.  
+**Servicio:** `apps/api/src/services/production-recipe-service.ts`  
+**Rutas:** `apps/api/src/server.ts`  
+**Pruebas:** `apps/api/tests/production-recipe-service.test.ts`, `apps/api/tests/integration/recipe-operational-flow.test.ts`  
+**Deuda tecnica previa:** conversiones de receta cerradas; ingredientes no autorizados bloqueados; POS bloquea productos no vendibles desde backend.
 
 ### Objetivo
 
@@ -244,29 +249,50 @@ Hacer operativo el lote por receta con movimientos reales de inventario.
 
 ### Alcance
 
-- Crear lote desde `recipeVersionId`.
-- Calcular ingredientes esperados.
-- Crear snapshot en `ProductionBatchIngredient`.
-- Permitir actualizar insumos reales.
-- Permitir capturar salida real.
-- Calcular rendimiento.
-- Cerrar lote con transaccion.
-- Descontar insumos reales via `InventoryLedgerService`.
-- Aumentar producto producido via `InventoryLedgerService`.
-- Bloquear doble cierre.
-- Registrar auditoria.
+- Crear lote desde `recipeVersionId`. Completado.
+- Calcular ingredientes esperados. Completado.
+- Crear snapshot en `ProductionBatchIngredient`. Completado.
+- Permitir actualizar insumos reales. Completado.
+- Permitir capturar salida real. Completado.
+- Calcular rendimiento. Completado.
+- Cerrar lote con transaccion. Completado.
+- Descontar insumos reales via `InventoryLedgerService`. Completado.
+- Aumentar producto producido via `InventoryLedgerService`. Completado.
+- Bloquear doble cierre. Completado.
+- Registrar auditoria. Completado.
 
 ### Definition of Done
 
-- Cierre descuenta insumos.
-- Cierre aumenta masa/tortilla.
-- Cierre deja movimientos auditables.
-- Doble cierre no duplica stock.
-- Version historica de receta no se altera.
+- Cierre descuenta insumos. Completado por servicio; prueba de integracion agregada.
+- Cierre aumenta masa/tortilla. Completado por servicio; prueba de integracion agregada.
+- Cierre deja movimientos auditables. Completado.
+- Doble cierre no duplica stock. Completado por bloqueo de lote cerrado.
+- Version historica de receta no se altera. Completado: el lote usa snapshot en `ProductionBatchIngredient`.
+- `npm run db:validate -w @tortilla-plus/api` pasa. Completado.
+- `npm run build -w @tortilla-plus/api` pasa. Completado.
+- `npm run test -w @tortilla-plus/api` pasa. Completado.
+- Integracion R5 pasa contra PostgreSQL local. Completado.
+
+### Endpoints R5 agregados
+
+- `POST /api/v1/production/recipe-batches`
+- `PATCH /api/v1/production/recipe-batches/{id}/actuals`
+- `PATCH /api/v1/production/recipe-batches/{id}/close`
+
+### Deuda tecnica post R5
+
+- Sin deuda critica o alta detectada en el codigo R5.
+- `INV-REC-DEBT-021`: Resuelta; PostgreSQL local levantado con Docker, migraciones/seed aplicados e integracion R5 ejecutada.
+- `INV-REC-DEBT-008`: Resuelta antes de R6 con `GET /api/v1/inventory/movements`.
 
 ---
 
 ## 10. Sprint R6 - Endpoints y QA backend
+
+**Estado:** Completado para alcance backend.  
+**Rutas:** `apps/api/src/server.ts`  
+**Servicios:** `apps/api/src/services/inventory-service.ts`, `apps/api/src/services/recipe-service.ts`, `apps/api/src/services/production-recipe-service.ts`  
+**Pruebas:** `apps/api/tests/integration/recipe-operational-flow.test.ts`  
 
 ### Objetivo
 
@@ -274,19 +300,42 @@ Exponer API completa y cubrir flujos principales.
 
 ### Alcance
 
-- Endpoints de conversiones.
-- Endpoints de recetas.
-- Endpoints de produccion por receta.
-- Endpoint de movimientos de inventario.
-- Tests QA-INV-REC-001 a QA-INV-REC-020 segun prioridad.
-- Actualizar OpenAPI o addendum si aplica.
+- Endpoints de conversiones. Completado.
+- Endpoints de recetas. Completado desde R4.
+- Endpoints de produccion por receta. Completado desde R5.
+- Endpoint de movimientos de inventario. Completado antes de iniciar R6.
+- Tests QA-INV-REC-001 a QA-INV-REC-020 segun prioridad. Cobertura principal backend completada.
+- Actualizar OpenAPI o addendum si aplica. Documentado en especificacion base y roadmap.
 
 ### Definition of Done
 
-- API permite operar el flujo completo sin frontend.
-- Tests principales pasan.
-- Errores de dominio son consistentes.
-- Auditoria y movimientos se pueden consultar.
+- API permite operar el flujo completo sin frontend. Completado.
+- Tests principales pasan. Completado.
+- Errores de dominio son consistentes. Completado para conversiones, recetas, POS y produccion por receta.
+- Auditoria y movimientos se pueden consultar. Completado.
+
+### Endpoints R6 agregados
+
+- `GET /api/v1/products/{productId}/unit-conversions`
+- `POST /api/v1/products/{productId}/unit-conversions`
+- `PATCH /api/v1/unit-conversions/{id}`
+- `DELETE /api/v1/unit-conversions/{id}`
+- `GET /api/v1/inventory/movements`
+
+### Validacion R6
+
+- `npm run db:validate -w @tortilla-plus/api`: Completado.
+- `npm run build -w @tortilla-plus/api`: Completado.
+- `npm run test -w @tortilla-plus/api`: Completado.
+- `npm run test:integration -w @tortilla-plus/api`: Completado, 51/51 pruebas.
+- Integracion especifica `recipe-operational-flow.test.js`: cubierta dentro de la suite, 5/5 pruebas.
+
+### Deuda tecnica post R6
+
+- Sin deuda critica o alta abierta que bloquee R7.
+- `INV-REC-DEBT-023`: Resuelta; CRUD backend de `UnitConversion` agregado con validacion hacia unidad base del producto.
+- `INV-REC-DEBT-024`: Resuelta; cierre por receta aplica tolerancia fija de rendimiento, motivo obligatorio y autorizacion por variacion alta.
+- La deuda futura aceptada temporalmente se mantiene fuera del alcance backend R6.
 
 ---
 
@@ -400,3 +449,17 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 - Endpoints backend minimos de recetas/versiones disponibles.
 - Validaciones de receta cubren ingredientes vacios, duplicados, output como ingrediente, pertenencia tenant/sucursal, producto stockeable y conversiones de unidad.
 - Cantidades de receta se persisten normalizadas a la unidad base del producto cuando se usa `UnitConversion`.
+
+### R5
+
+- `ProductionRecipeService` crea lotes desde receta, guarda snapshot de insumos, captura reales y cierra con movimientos de inventario.
+- El cierre descuenta insumos reales, ingresa producto producido y bloquea doble cierre.
+- La integracion backend verifica receta, version activa, conversiones, cierre de lote y movimientos auditables.
+
+### R6
+
+- API backend expone conversiones de unidad por producto.
+- API backend expone consulta de movimientos de inventario con filtros operativos.
+- Los endpoints de recetas y produccion por receta quedan disponibles junto con pruebas principales.
+- Produccion por receta aplica reglas V1 de variacion: motivo desde 3% y autorizacion `production.authorize_variance` arriba de 10%.
+- PostgreSQL local fue validado con migraciones, seed e integracion backend.

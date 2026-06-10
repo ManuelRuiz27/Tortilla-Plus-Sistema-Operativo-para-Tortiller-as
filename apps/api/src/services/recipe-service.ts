@@ -38,6 +38,12 @@ export function validateRecipeIngredientSet(outputProductId: string, ingredients
   }
 }
 
+export function assertRecipeIngredientAllowed(product: { isRecipeIngredient: boolean }) {
+  if (!product.isRecipeIngredient) {
+    throw new DomainError(400, "INVALID_RECIPE_INGREDIENT", "Producto no permitido como ingrediente de receta.");
+  }
+}
+
 export function applyRecipeUnitConversion(quantity: string, factor: string | number | Prisma.Decimal) {
   const numericQuantity = Number(quantity);
   const numericFactor = Number(factor);
@@ -361,6 +367,7 @@ async function normalizeRecipeVersionInput(
     if (!product.isStockTracked) {
       throw new DomainError(400, "PRODUCT_NOT_STOCK_TRACKED", "Ingrediente sin control de inventario.");
     }
+    assertRecipeIngredientAllowed(product);
     const normalizedIngredient = await normalizeProductQuantity(
       tx,
       organizationId,

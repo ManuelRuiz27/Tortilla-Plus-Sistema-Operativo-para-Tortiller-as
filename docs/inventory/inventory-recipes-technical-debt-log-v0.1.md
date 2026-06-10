@@ -50,24 +50,27 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 | ID | Severidad | Estado | Area | Deuda | Prioridad siguiente avance | Notas |
 |---|---|---|---|---|---|---|
 | INV-REC-DEBT-001 | Critica | Resuelta | Inventario | `InventoryLedgerService` ya existe y `inventory-service.ts` lo usa para ajustes, produccion manual y mermas. | Sprint R2 | Remanentes de POS/reparto se separan en `INV-REC-DEBT-015` e `INV-REC-DEBT-016`. |
-| INV-REC-DEBT-002 | Alta | Resuelta | POS | `createSaleItem` valida `isSellable` y bloquea productos no vendibles en backend. | Pre R3 | Resuelto antes de avanzar a R3 funcional. |
+| INV-REC-DEBT-002 | Alta | Resuelta | POS | `createSaleItem` valida `isSellable === true` y bloquea productos no vendibles en backend con `PRODUCT_NOT_SELLABLE`. | Auditoria pre R5 | Confirmado/corregido en auditoria R1-R4; aplica a `addSaleItem`, `addSaleItems` y `checkoutSale`. |
 | INV-REC-DEBT-003 | Alta | Resuelta | Reparto | Ruta bloquea explicitamente `raw_material` y `packaging` al crear/cotizar pedido y al resolver carga de stock. | Pre R3 | Resuelto antes de avanzar a R3 funcional. |
 | INV-REC-DEBT-004 | Alta | Resuelta | Inventario | El ledger bloquea duplicados por referencia y existe indice unico parcial para movimientos con `referenceType` y `referenceId`. | Sprint R2 | Aplica a flujos que ya usan ledger. POS/reparto se cubren al migrarlos. |
 | INV-REC-DEBT-005 | Alta | Resuelta | Modelo de datos | `ProductType` ya contempla `raw_material` y `packaging`; `Product` ya tiene `isRecipeIngredient` y `allowNegativeStock`. | Sprint R1 | Resuelto en migracion `0012_inventory_recipes_core`. |
-| INV-REC-DEBT-006 | Alta | Aceptada temporalmente | Produccion | `ProductionBatch` ya tiene contrato de schema para receta, salida esperada/real, rendimiento y snapshot de insumos; falta comportamiento operativo. | Sprint R5 | Aceptada porque R1 solo cubre contrato de datos. Se revisa al iniciar R5. |
+| INV-REC-DEBT-006 | Alta | Resuelta | Produccion | `ProductionBatch` ya tiene comportamiento operativo por receta: snapshot de insumos, salida real, rendimiento y cierre con ledger. | Sprint R5 | Resuelto con `ProductionRecipeService`. |
 | INV-REC-DEBT-007 | Media | Resuelta | Conversiones | `UnitConversion` ya existe con conversion por organizacion/producto y `name` obligatorio para evitar duplicados con `NULL`. | Sprint R1 | Resuelto en migracion `0012_inventory_recipes_core`. |
-| INV-REC-DEBT-008 | Media | Abierta | API | No hay endpoint para consultar movimientos de inventario con filtros. | Sprint R6 | Necesario para auditoria operativa. |
+| INV-REC-DEBT-008 | Media | Resuelta | API | `GET /api/v1/inventory/movements` consulta movimientos con filtros por sucursal, producto, tipo, referencia, fechas y limite. | Pre R6 | Resuelto antes de iniciar R6. |
 | INV-REC-DEBT-009 | Media | Resuelta | Pruebas | Se agregaron pruebas unitarias para calculo de ledger y referencia duplicada sin re-aplicar stock. | Sprint R2 | Queda pendiente QA de integracion por flujo cuando POS/reparto migren al ledger. |
 | INV-REC-DEBT-010 | Media | Resuelta | Decisiones funcionales | Decisiones de salida de receta, masa->tortilla, agua, empaques, tolerancia y PIN por variacion alta quedaron registradas en R0. | Sprint R0 | Ver `inventory-recipes-r0-decisions-v0.1.md`. |
-| INV-REC-DEBT-011 | Media | Abierta | Configuracion | Tolerancia de rendimiento sera fija en V1; configuracion por organizacion queda pendiente. | Futuro post R8 | No bloquea R1. |
-| INV-REC-DEBT-012 | Baja | Abierta | Produccion | Agua queda como dato informativo en V1; si un cliente requiere control real, habra que modelarla como insumo inventariable. | Futuro | No bloquea R1. |
-| INV-REC-DEBT-013 | Media | Abierta | Produccion | Flujo formal `masa -> tortilla` queda preparado pero no se implementa como segundo paso obligatorio en V1. | Futuro post R5 | No bloquea R1; el modelo debe no cerrarle la puerta. |
-| INV-REC-DEBT-014 | Media | Abierta | Empaques | Descuento de empaques en venta queda fuera de V1; solo se descuentan en produccion si son ingrediente de receta. | Futuro post R7 | No bloquea R1. |
+| INV-REC-DEBT-011 | Media | Aceptada temporalmente | Configuracion | Configuracion de tolerancia de rendimiento por organizacion se difiere; V1 aplica tolerancia fija en backend. | Futuro post R8 | Aceptada porque la regla fija ya esta implementada y no requiere configuracion por tenant para operar V1. Revision: post R8. |
+| INV-REC-DEBT-012 | Baja | Aceptada temporalmente | Produccion | Agua queda como dato informativo en V1; si un cliente requiere control real, habra que modelarla como insumo inventariable. | Futuro | Aceptada porque no bloquea produccion por receta; se reabre solo si un cliente exige control de agua. |
+| INV-REC-DEBT-013 | Media | Aceptada temporalmente | Produccion | Flujo formal `masa -> tortilla` queda preparado pero no se implementa como segundo paso obligatorio en V1. | Futuro post R8 | Aceptada porque R5 soporta recetas con salida masa o tortilla y no cierra la puerta al segundo paso. |
+| INV-REC-DEBT-014 | Media | Aceptada temporalmente | Empaques | Descuento de empaques en venta queda fuera de V1; solo se descuentan en produccion si son ingrediente de receta. | Futuro post R8 | Aceptada porque POS/reparto ya estan protegidos y R5 puede consumir empaques si la receta los incluye. |
 | INV-REC-DEBT-015 | Alta | Resuelta | POS | POS delega movimientos de venta y devolucion al `InventoryLedgerService`. | Pre R3 | Resuelto antes de avanzar a R3 funcional. |
 | INV-REC-DEBT-016 | Alta | Resuelta | Reparto | Reparto delega carga y devoluciones al `InventoryLedgerService`. | Pre R3 | Resuelto antes de avanzar a R3 funcional. |
 | INV-REC-DEBT-017 | Media | Resuelta | Productos | API no filtraba productos por `productType`, `isRecipeIngredient` ni `isSellable`. | Sprint R3 | Resuelto en R3. |
 | INV-REC-DEBT-018 | Media | Resuelta | Frontend | Tipos/labels frontend no reconocian `raw_material` ni `packaging`. | Sprint R3 | Resuelto en R3 con ajuste minimo. |
 | INV-REC-DEBT-019 | Media | Resuelta | Recetas/conversiones | `RecipeService` normaliza cantidades con `UnitConversion` activa cuando la unidad capturada difiere de la unidad base del producto. | Pre R5 | Resuelto antes de iniciar R5; se persisten cantidades en unidad base para evitar conversiones tardias al cerrar produccion. |
+| INV-REC-DEBT-020 | Alta | Resuelta | Recetas | `RecipeService` ahora valida `isRecipeIngredient=true` para impedir que productos stockeables no autorizados sean consumidos como insumos. | Auditoria pre R5 | Resuelto antes de iniciar R5; mantiene permitido `raw_material`, `packaging` y `masa` solo si estan marcados como ingrediente de receta. |
+| INV-REC-DEBT-023 | Media | Resuelta | Conversiones/API | API backend ya expone CRUD de `UnitConversion` y valida que toda conversion apunte a la unidad base del producto. | Sprint R6 | Resuelto en R6 con endpoints de listado, alta, edicion y baja logica de conversiones. |
+| INV-REC-DEBT-024 | Alta | Resuelta | Produccion | `ProductionRecipeService` ahora aplica tolerancia fija de rendimiento: motivo desde 3% y autorizacion desde mas de 10%. | Post R6 | Resuelto antes de R7; agrega permiso `production.authorize_variance` y audita autorizador en movimientos de cierre. |
 
 ---
 
@@ -81,10 +84,10 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
 | INV-REC-DEBT-010 | Media | Resuelta | Decisiones funcionales pendientes. | Registradas en `inventory-recipes-r0-decisions-v0.1.md`. |
-| INV-REC-DEBT-011 | Media | Abierta | Tolerancia configurable por organizacion fuera de V1. | Revisar despues de validar flujo operativo. |
-| INV-REC-DEBT-012 | Baja | Abierta | Agua informativa, no inventariable. | Reabrir si cliente requiere control de agua. |
-| INV-REC-DEBT-013 | Media | Abierta | `masa -> tortilla` no obligatorio en V1. | Evaluar como mejora despues de produccion por receta basica. |
-| INV-REC-DEBT-014 | Media | Abierta | Empaques no se descuentan en venta en V1. | Evaluar despues de pantalla de cierre y POS. |
+| INV-REC-DEBT-011 | Media | Aceptada temporalmente | Tolerancia configurable por organizacion fuera de V1. | Revisar post R8 si clientes requieren umbrales por tenant. |
+| INV-REC-DEBT-012 | Baja | Aceptada temporalmente | Agua informativa, no inventariable. | Reabrir si cliente requiere control de agua. |
+| INV-REC-DEBT-013 | Media | Aceptada temporalmente | `masa -> tortilla` no obligatorio en V1. | Evaluar como mejora despues de produccion por receta basica. |
+| INV-REC-DEBT-014 | Media | Aceptada temporalmente | Empaques no se descuentan en venta en V1. | Evaluar post R8; en V1 se descuentan si son ingrediente de receta. |
 
 ### Sprint R1 - Base de datos y contrato de dominio
 
@@ -95,7 +98,7 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
 | INV-REC-DEBT-005 | Alta | Resuelta | Product types y campos faltantes en `Product`. | Migracion Prisma creada. |
-| INV-REC-DEBT-006 | Alta | Aceptada temporalmente | Produccion no soporta comportamiento operativo por receta. | Resolver en R5 con `ProductionRecipeService`; no bloquea R2. |
+| INV-REC-DEBT-006 | Alta | Resuelta | Produccion no soportaba comportamiento operativo por receta. | Resuelto en R5 con `ProductionRecipeService`. |
 | INV-REC-DEBT-007 | Media | Resuelta | Conversiones de unidad inexistentes. | Modelo agregado con `name` obligatorio. |
 
 ### Auditoria post R2 - Deuda cerrada antes de R3
@@ -104,7 +107,7 @@ Antes de avanzar a R3 funcional se cerro la deuda tecnica de POS y reparto que s
 
 | ID | Severidad | Estado | Accion siguiente |
 |---|---|---|---|
-| INV-REC-DEBT-002 | Alta | Resuelta | POS bloquea productos no vendibles. |
+| INV-REC-DEBT-002 | Alta | Resuelta | POS bloquea productos no vendibles desde `createSaleItem`. |
 | INV-REC-DEBT-003 | Alta | Resuelta | Reparto bloquea insumos. |
 | INV-REC-DEBT-015 | Alta | Resuelta | POS usa ledger. |
 | INV-REC-DEBT-016 | Alta | Resuelta | Reparto usa ledger. |
@@ -144,32 +147,42 @@ Antes de avanzar a R3 funcional se cerro la deuda tecnica de POS y reparto que s
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
 | INV-REC-DEBT-019 | Media | Resuelta | Las recetas quedaban restringidas a la unidad base del producto; `UnitConversion` no se aplicaba en alta/versionado. | `RecipeService` acepta unidad distinta solo si existe conversion activa hacia la unidad base y guarda la cantidad normalizada. |
+| INV-REC-DEBT-020 | Alta | Resuelta | `RecipeService` aceptaba ingredientes por ser stockeables, sin exigir `isRecipeIngredient=true`. | Validacion backend agregada con `INVALID_RECIPE_INGREDIENT`. |
 
 ### Auditoria pre R5 - Deuda cerrada antes de produccion por receta
 
-Antes de iniciar R5 se cerro la deuda tecnica de conversiones en recetas:
+Antes de iniciar R5 se cerraron los bloqueantes detectados en la auditoria R1-R4:
 
 | ID | Severidad | Estado | Accion siguiente |
 |---|---|---|---|
+| INV-REC-DEBT-002 | Alta | Resuelta | POS no puede vender productos con `isSellable=false` por backend. |
 | INV-REC-DEBT-019 | Media | Resuelta | R5 puede calcular snapshots y consumos sobre cantidades ya normalizadas a la unidad base del producto. |
+| INV-REC-DEBT-020 | Alta | Resuelta | R5 solo recibira ingredientes autorizados explicitamente con `isRecipeIngredient=true`. |
+
+**Estado pre R5:** R4 queda listo para avanzar a R5 despues de estas correcciones. No queda deuda critica o alta abierta que bloquee `ProductionRecipeService`.
 
 ### Sprint R5 - ProductionRecipeService
 
 **Objetivo del sprint:** cierre de lote por receta con inventario real.  
-**Estado:** Pendiente.  
+**Estado:** Completado para alcance backend.  
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| TBD | Critica | Abierta | Deuda a registrar durante el sprint. | Ninguna deuda critica debe quedar abierta sin aceptacion explicita. |
+| INV-REC-DEBT-021 | Baja | Resuelta | Prueba de integracion R5 no pudo ejecutarse localmente porque PostgreSQL no respondia en `localhost:5432`. | PostgreSQL se levanto con Docker, se aplicaron migraciones/seed y `recipe-operational-flow.test.js` paso 3/3. |
+| INV-REC-DEBT-022 | Alta | Resuelta | Produccion por receta necesitaba descontar insumos, ingresar salida y bloquear doble cierre. | `ProductionRecipeService` creado con cierre transaccional via `InventoryLedgerService`. |
 
 ### Sprint R6 - Endpoints y QA backend
 
 **Objetivo del sprint:** API completa y pruebas.  
-**Estado:** Pendiente.  
+**Estado:** Completado para alcance backend.  
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| INV-REC-DEBT-008 | Media | Abierta | Falta endpoint de movimientos. | Agregar consulta filtrable de movimientos. |
+| INV-REC-DEBT-008 | Media | Resuelta | Faltaba endpoint de movimientos. | `GET /api/v1/inventory/movements` agregado. |
+| INV-REC-DEBT-023 | Media | Resuelta | Faltaban endpoints operativos de conversiones de unidad. | CRUD backend de `UnitConversion` agregado y validado con integracion. |
+| INV-REC-DEBT-024 | Alta | Resuelta | R0 definia tolerancia fija y autorizacion por variacion alta, pero R5 solo calculaba rendimiento. | Cierre de lote por receta exige motivo entre 3% y 10%, exige autorizador con `production.authorize_variance` arriba de 10%, y registra autorizador en movimientos. |
+
+**Estado post R6:** sin deuda critica o alta abierta que bloquee R7. Las deudas `INV-REC-DEBT-011` a `INV-REC-DEBT-014` siguen aceptadas temporalmente porque son decisiones funcionales futuras, no bloqueantes del backend R6; `INV-REC-DEBT-011` ya cuenta con regla fija backend y solo difiere configuracion por organizacion.
 
 ### Sprint R7 - Frontend minimo operativo
 
@@ -178,7 +191,7 @@ Antes de iniciar R5 se cerro la deuda tecnica de conversiones en recetas:
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| TBD | Media | Abierta | Deuda a registrar durante el sprint. | Priorizar en R8. |
+| N/A | N/A | N/A | Sin deuda registrada aun. | Registrar hallazgos al iniciar R7. |
 
 ### Sprint R8 - Hardening y reportabilidad base
 
@@ -187,7 +200,7 @@ Antes de iniciar R5 se cerro la deuda tecnica de conversiones en recetas:
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| TBD | Alta | Abierta | Deuda remanente del parche. | Resolver o aceptar temporalmente con fecha. |
+| N/A | N/A | N/A | Sin deuda remanente registrada del parche actual. | Registrar hallazgos al iniciar R8. |
 
 ---
 

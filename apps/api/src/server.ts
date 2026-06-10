@@ -35,14 +35,24 @@ import {
   createInventoryAdjustment,
   createProduct,
   createProductionBatch,
+  createUnitConversion,
   createWasteRecord,
+  deleteUnitConversion,
   getBranchInventory,
   getBranchPrices,
+  listInventoryMovements,
   listProductionBatches,
   listProducts,
+  listUnitConversions,
   setBranchPrice,
   updateProduct,
+  updateUnitConversion,
 } from "./services/inventory-service.js";
+import {
+  closeProductionRecipeBatch,
+  createProductionBatchFromRecipe,
+  updateProductionRecipeBatchActuals,
+} from "./services/production-recipe-service.js";
 import {
   addSaleItem,
   addSaleItems,
@@ -872,6 +882,32 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  const productUnitConversionsMatch = path.match(/^\/api\/v1\/products\/([^/]+)\/unit-conversions$/);
+  if (method === "GET" && productUnitConversionsMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listUnitConversions(currentUser, productUnitConversionsMatch[1]));
+    return;
+  }
+
+  if (method === "POST" && productUnitConversionsMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createUnitConversion(currentUser, productUnitConversionsMatch[1], await readJson(request)));
+    return;
+  }
+
+  const unitConversionMatch = path.match(/^\/api\/v1\/unit-conversions\/([^/]+)$/);
+  if (method === "PATCH" && unitConversionMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await updateUnitConversion(currentUser, unitConversionMatch[1], await readJson(request)));
+    return;
+  }
+
+  if (method === "DELETE" && unitConversionMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await deleteUnitConversion(currentUser, unitConversionMatch[1]));
+    return;
+  }
+
   const branchPricesMatch = path.match(/^\/api\/v1\/prices\/branch\/([^/]+)$/);
   if (method === "GET" && branchPricesMatch) {
     const currentUser = await authenticate(request);
@@ -898,6 +934,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/inventory/movements") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await listInventoryMovements(currentUser, Object.fromEntries(url.searchParams.entries())));
+    return;
+  }
+
   if (method === "POST" && path === "/api/v1/production/batches") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createProductionBatch(currentUser, await readJson(request)));
@@ -907,6 +949,26 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "GET" && path === "/api/v1/production/batches") {
     const currentUser = await authenticate(request);
     sendJson(response, 200, await listProductionBatches(currentUser, Object.fromEntries(url.searchParams.entries())));
+    return;
+  }
+
+  if (method === "POST" && path === "/api/v1/production/recipe-batches") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 201, await createProductionBatchFromRecipe(currentUser, await readJson(request)));
+    return;
+  }
+
+  const updateProductionRecipeBatchActualsMatch = path.match(/^\/api\/v1\/production\/recipe-batches\/([^/]+)\/actuals$/);
+  if (method === "PATCH" && updateProductionRecipeBatchActualsMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await updateProductionRecipeBatchActuals(currentUser, updateProductionRecipeBatchActualsMatch[1], await readJson(request)));
+    return;
+  }
+
+  const closeProductionRecipeBatchMatch = path.match(/^\/api\/v1\/production\/recipe-batches\/([^/]+)\/close$/);
+  if (method === "PATCH" && closeProductionRecipeBatchMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await closeProductionRecipeBatch(currentUser, closeProductionRecipeBatchMatch[1], await readJson(request)));
     return;
   }
 

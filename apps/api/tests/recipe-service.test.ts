@@ -4,6 +4,7 @@ import test from "node:test";
 import { DomainError } from "../src/lib/domain-error.js";
 import {
   applyRecipeUnitConversion,
+  assertRecipeIngredientAllowed,
   validateRecipeIngredientSet,
   validateRecipeIngredientShape,
 } from "../src/services/recipe-service.js";
@@ -66,6 +67,17 @@ test("recipe ingredient set rejects output product as ingredient", () => {
     () => validateRecipeIngredientSet("output-1", [{ productId: "output-1" }]),
     (error) => error instanceof DomainError && error.code === "RECIPE_OUTPUT_CANNOT_BE_INGREDIENT",
   );
+});
+
+test("recipe ingredient validation rejects stockable products not authorized as recipe ingredients", () => {
+  assert.throws(
+    () => assertRecipeIngredientAllowed({ isRecipeIngredient: false }),
+    (error) => error instanceof DomainError && error.code === "INVALID_RECIPE_INGREDIENT",
+  );
+});
+
+test("recipe ingredient validation accepts authorized recipe ingredients", () => {
+  assert.doesNotThrow(() => assertRecipeIngredientAllowed({ isRecipeIngredient: true }));
 });
 
 test("recipe unit conversion normalizes quantities with active conversion factor", () => {

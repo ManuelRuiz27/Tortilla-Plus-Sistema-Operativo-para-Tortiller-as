@@ -291,6 +291,63 @@ test("POS checkout endpoint is atomic and idempotent", async () => {
   assert.equal(saleCount, 1);
 });
 
+test("POS checkout blocks raw materials even when active and priced", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Non sellable checkout block test",
+    })).data;
+  }
+
+  const suffix = Date.now();
+  const rawMaterial = await prisma.product.create({
+    data: {
+      organizationId: cashier.organizationId,
+      name: `Maiz no vendible POS ${suffix}`,
+      sku: `RAW-POS-${suffix}`,
+      productType: "raw_material",
+      unit: "kg",
+      isSellable: false,
+      requiresProduction: false,
+      isStockTracked: true,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+      status: "active",
+    },
+  });
+  await prisma.branchProductPrice.create({
+    data: {
+      organizationId: cashier.organizationId,
+      branchId,
+      productId: rawMaterial.id,
+      saleMode: "by_kg",
+      price: "10.00",
+      currency: "MXN",
+      activeFrom: new Date(),
+      status: "active",
+    },
+  });
+
+  await assert.rejects(
+    () => checkoutSale(cashier, {
+      branchId,
+      clientGeneratedId: `integration-non-sellable-checkout-${suffix}`,
+      items: [{ productId: rawMaterial.id, saleMode: "by_kg", quantity: "1.000" }],
+      payments: [{ paymentMethod: "cash", amount: "10.00" }],
+    }, `integration-non-sellable-checkout-${suffix}`),
+    (error) =>
+      error instanceof DomainError &&
+      error.statusCode === 400 &&
+      error.code === "PRODUCT_NOT_SELLABLE" &&
+      error.message === "Producto no vendible.",
+  );
+});
+
 test("POS checkout rolls back completely when payment total does not match", async () => {
   const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
   const cashier = asAuthenticatedUser(cashierSession);

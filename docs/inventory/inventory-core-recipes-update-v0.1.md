@@ -17,9 +17,12 @@ Este documento sigue siendo la especificacion base del parche. El estado real de
 - R2: `InventoryLedgerService` como punto central para movimientos de inventario, con bloqueo de duplicados por referencia.
 - R3: productos/insumos operativos, filtros backend y bloqueo de venta/carga de insumos en POS y reparto.
 - R4: `RecipeService`, permisos, endpoints minimos de recetas/versiones y validaciones de recetas sin afectar stock.
-- Deuda pre R5: `INV-REC-DEBT-019` resuelta; las cantidades de receta se normalizan a unidad base usando `UnitConversion` activa cuando la unidad capturada difiere de la unidad base del producto.
+- R5: `ProductionRecipeService` backend para crear lote desde receta, capturar reales, calcular rendimiento y cerrar con movimientos de inventario.
+- R6: endpoints backend de conversiones, recetas, produccion por receta y movimientos disponibles; QA backend principal ejecutado.
+- Deuda post R6: regla fija de variacion de produccion cubierta; entre 3% y 10% exige motivo, arriba de 10% exige motivo y autorizacion con `production.authorize_variance`.
+- Deuda pre R5: `INV-REC-DEBT-002`, `INV-REC-DEBT-019` e `INV-REC-DEBT-020` resueltas; POS bloquea productos no vendibles desde backend, las cantidades de receta se normalizan a unidad base usando `UnitConversion` activa, y `RecipeService` solo acepta ingredientes con `isRecipeIngredient=true`.
 
-El siguiente avance funcional es R5: cerrar produccion por receta con snapshots de ingredientes y movimientos reales de inventario via ledger.
+El siguiente avance funcional es R7: frontend minimo operativo para insumos, recetas y cierre de lotes por receta.
 
 ---
 
@@ -581,10 +584,10 @@ Cambios:
 - Resolver paquete contra producto base desde lógica compartida.
 ```
 
-Decisión pendiente:
+Decision R0 aplicada:
 
 ```txt
-¿Ruta permite stock negativo de tortilla/masa igual que POS?
+Ruta no permite stock negativo en V1. Reparto representa producto fisico cargado y debe bloquear insuficiencia.
 ```
 
 ---
@@ -1310,21 +1313,23 @@ QA-INV-REC-020 producción usa fecha local de sucursal.
 
 ---
 
-## 14. Decisiones pendientes antes de desarrollo
+## 14. Decisiones R0 aplicadas
 
-Estas decisiones deben cerrarse antes de codificar:
+Las decisiones previas al desarrollo quedaron cerradas en `docs/inventory/inventory-recipes-r0-decisions-v0.1.md`.
+
+Resumen operativo vigente:
 
 ```txt
-1. ¿La receta produce masa o tortilla directamente en V1?
-2. ¿Se modelará masa → tortilla como segundo paso desde el inicio?
-3. ¿Ruta permitirá stock negativo para tortilla/masa igual que POS?
-4. ¿Raw materials pueden quedar en negativo con autorización?
-5. ¿Toda devolución no vendible debe crear WasteRecord?
-6. ¿Agua se controlará como insumo inventariable o solo informativo?
-7. ¿Empaques se descuentan en producción o en venta?
-8. ¿Las conversiones como cubeta serán por producto y organización?
-9. ¿La tolerancia de rendimiento será global o configurable por organización?
-10. ¿El cierre de producción requerirá PIN si hay variación alta?
+1. Una receta puede producir masa o tortilla directamente en V1.
+2. Masa -> tortilla queda preparado, pero no es segundo paso obligatorio en V1.
+3. Ruta no permite stock negativo.
+4. POS conserva la politica actual de negativo para tortilla/masa.
+5. Raw materials y packaging no pueden quedar negativos en V1.
+6. Agua queda informativa, no inventariable.
+7. Empaques se descuentan en produccion si son ingrediente de receta.
+8. Conversiones son por organizacion y producto.
+9. Tolerancia de rendimiento es fija en V1.
+10. Variacion de 3% a 10% exige motivo; variacion mayor a 10% exige motivo y autorizacion `production.authorize_variance`.
 ```
 
 ---
