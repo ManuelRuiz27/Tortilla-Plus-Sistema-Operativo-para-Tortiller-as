@@ -40,7 +40,7 @@ export function buildDemoLogin(role: "cashier" | "manager", email: string): Logi
   const roles: UserRole[] = role === "manager" ? ["manager"] : ["cashier"];
   const permissions =
     role === "manager"
-      ? ["cash.open", "cash.movements.view", "inventory.manage", "products.manage"]
+      ? ["cash.open", "cash.movements.view", "inventory.manage", "products.view", "products.manage", "production.manage", "recipes.view", "recipes.manage"]
       : ["cash.open", "sales.create", "payments.create"];
 
   return {
@@ -271,7 +271,8 @@ export function buildDemoProduction(): ProductionBatch[] {
 }
 
 export function buildDemoManagerProducts(): ManagerProduct[] {
-  return buildDemoPosProducts("branch-principal").map((product) => ({
+  return [
+    ...buildDemoPosProducts("branch-principal").map((product) => ({
     id: product.id,
     name: product.name,
     sku: product.sku ?? undefined,
@@ -281,8 +282,37 @@ export function buildDemoManagerProducts(): ManagerProduct[] {
     isSellable: product.isSellable,
     isStockTracked: product.isStockTracked,
     requiresProduction: product.requiresProduction,
-    status: product.status === "active" ? "active" : "inactive"
-  }));
+    isRecipeIngredient: product.productType === "masa",
+    allowNegativeStock: false,
+    status: product.status === "active" ? "active" as const : "inactive" as const
+  })),
+    {
+      id: "prod-maiz",
+      name: "Maiz",
+      sku: "MAIZ-KG",
+      productType: "raw_material",
+      unit: "kg",
+      isSellable: false,
+      isStockTracked: true,
+      requiresProduction: false,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+      status: "active"
+    },
+    {
+      id: "prod-cal",
+      name: "Cal",
+      sku: "CAL-KG",
+      productType: "raw_material",
+      unit: "kg",
+      isSellable: false,
+      isStockTracked: true,
+      requiresProduction: false,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+      status: "active"
+    }
+  ];
 }
 
 export function buildDemoPrices(): ManagerPrice[] {

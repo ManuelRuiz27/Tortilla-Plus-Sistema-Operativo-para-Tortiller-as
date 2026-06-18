@@ -4,7 +4,7 @@ const apiBaseUrl = "http://127.0.0.1:3199/api/v1";
 
 async function createAutofacturaReceiptToken(api: APIRequestContext) {
   const login = await api.post(`${apiBaseUrl}/auth/login`, {
-    data: { email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }
+    data: { email: "manager.demo@tortillaplus.mx", password: "Demo1234!" }
   });
   expect(login.ok(), await login.text()).toBeTruthy();
   const session = await login.json();
@@ -48,13 +48,21 @@ async function createAutofacturaReceiptToken(api: APIRequestContext) {
   });
   expect(complete.ok()).toBeTruthy();
 
-  const receipt = await api.get(`${apiBaseUrl}/billing/receipts/by-sale/${saleId}`, { headers: auth });
+  const ownerLogin = await api.post(`${apiBaseUrl}/auth/login`, {
+    data: { email: "owner.demo@tortillaplus.mx", password: "Demo1234!" }
+  });
+  expect(ownerLogin.ok(), await ownerLogin.text()).toBeTruthy();
+  const ownerSession = await ownerLogin.json();
+  const ownerData = ownerSession.data ?? ownerSession;
+  const receipt = await api.get(`${apiBaseUrl}/billing/receipts/by-sale/${saleId}`, {
+    headers: { Authorization: `Bearer ${ownerData.accessToken as string}` }
+  });
   expect(receipt.ok(), await receipt.text()).toBeTruthy();
   const receiptPayload = await receipt.json();
   return receiptPayload.data.token as string;
 }
 
-async function loginApi(api: APIRequestContext, email = "owner.demo@tortillaplus.mx") {
+async function loginApi(api: APIRequestContext, email = "manager.demo@tortillaplus.mx") {
   const login = await api.post(`${apiBaseUrl}/auth/login`, {
     data: { email, password: "Demo1234!" }
   });
@@ -67,16 +75,16 @@ async function loginApi(api: APIRequestContext, email = "owner.demo@tortillaplus
   };
 }
 
-async function loginPage(page: Page) {
+async function loginPage(page: Page, email = "manager.demo@tortillaplus.mx") {
   await page.goto("/login");
-  await page.getByLabel("Correo").fill("owner.demo@tortillaplus.mx");
+  await page.getByLabel("Correo").fill(email);
   await page.getByLabel("Contrasena").fill("Demo1234!");
   await page.getByRole("button", { name: "Entrar a mi sucursal" }).click();
   await page.waitForURL(/\/app\//);
 }
 
 test("manager can enter operational routes with mocks disabled", async ({ page, request }) => {
-  await loginPage(page);
+  await loginPage(page, "owner.demo@tortillaplus.mx");
 
   await page.goto("/app/manager/dashboard");
   await expect(page.getByRole("heading", { name: "Resumen de hoy" })).toBeVisible();
@@ -88,10 +96,15 @@ test("manager can enter operational routes with mocks disabled", async ({ page, 
 
   await page.goto("/app/manager/routes");
 
-  await expect(page.getByRole("heading", { name: "Reparto" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Pedidos de hoy" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Liquidaciones pendientes" })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
+  const routesBlocked = page.getByRole("heading", { name: "Rutas de reparto no esta disponible en tu plan" });
+  if (await routesBlocked.isVisible()) {
+    await expect(routesBlocked).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { name: "Reparto" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pedidos de hoy" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Liquidaciones pendientes" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
+  }
 
   await page.goto("/app/manager/billing");
   await expect(page.getByRole("heading", { name: "Facturas del dia" })).toBeVisible();

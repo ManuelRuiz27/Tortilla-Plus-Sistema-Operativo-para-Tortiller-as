@@ -71,6 +71,8 @@ Si una deuda no se atiende en el siguiente avance, debe quedar marcada como `Ace
 | INV-REC-DEBT-020 | Alta | Resuelta | Recetas | `RecipeService` ahora valida `isRecipeIngredient=true` para impedir que productos stockeables no autorizados sean consumidos como insumos. | Auditoria pre R5 | Resuelto antes de iniciar R5; mantiene permitido `raw_material`, `packaging` y `masa` solo si estan marcados como ingrediente de receta. |
 | INV-REC-DEBT-023 | Media | Resuelta | Conversiones/API | API backend ya expone CRUD de `UnitConversion` y valida que toda conversion apunte a la unidad base del producto. | Sprint R6 | Resuelto en R6 con endpoints de listado, alta, edicion y baja logica de conversiones. |
 | INV-REC-DEBT-024 | Alta | Resuelta | Produccion | `ProductionRecipeService` ahora aplica tolerancia fija de rendimiento: motivo desde 3% y autorizacion desde mas de 10%. | Post R6 | Resuelto antes de R7; agrega permiso `production.authorize_variance` y audita autorizador en movimientos de cierre. |
+| INV-REC-DEBT-025 | Media | Resuelta | Frontend/API | Detalle de lote por receta requeria endpoint de lectura directa para soportar URL recuperable. | Sprint R7 | Resuelto con `GET /api/v1/production/recipe-batches/{id}` y pantalla de cierre conectada. |
+| INV-REC-DEBT-026 | Media | Resuelta | QA/E2E | El entorno e2e no configuraba CORS para el servidor frontend de prueba, ejecutaba workers paralelos contra DB compartida y algunos tests usaban roles incorrectos para caja/facturacion. | Sprint R8 | Resuelto con `CORS_ORIGINS`, `workers=1` y ajuste de roles por flujo. |
 
 ---
 
@@ -187,20 +189,24 @@ Antes de iniciar R5 se cerraron los bloqueantes detectados en la auditoria R1-R4
 ### Sprint R7 - Frontend minimo operativo
 
 **Objetivo del sprint:** pantallas minimas para operar recetas.  
-**Estado:** Pendiente.  
+**Estado:** Completado para alcance frontend minimo.  
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| N/A | N/A | N/A | Sin deuda registrada aun. | Registrar hallazgos al iniciar R7. |
+| INV-REC-DEBT-025 | Media | Resuelta | La pantalla de cierre necesitaba consultar un lote por receta por URL, pero solo existian acciones de crear/actualizar/cerrar. | `GET /api/v1/production/recipe-batches/{id}` agregado y conectado al detalle frontend. |
+
+**Estado post R7:** sin deuda critica o alta abierta. Queda pendiente QA visual/e2e amplio como parte de R8.
 
 ### Sprint R8 - Hardening y reportabilidad base
 
 **Objetivo del sprint:** cierre de deuda critica y release operativo.  
-**Estado:** Pendiente.  
+**Estado:** Completado.  
 
 | ID | Severidad | Estado | Deuda | Resolucion esperada |
 |---|---|---|---|---|
-| N/A | N/A | N/A | Sin deuda remanente registrada del parche actual. | Registrar hallazgos al iniciar R8. |
+| INV-REC-DEBT-026 | Media | Resuelta | Configuracion e2e incompleta para validar frontend contra API real: CORS, concurrencia sobre DB compartida y roles por flujo. | Suite e2e completa pasa 7/7 con servidor frontend de prueba, API real y datos seed consistentes. |
+
+**Estado post R8:** sin deuda critica o alta abierta. El parche de inventario con recetas queda listo para piloto operativo. La reportabilidad avanzada de rendimiento, consumo historico y merma detallada queda como fase futura sobre los movimientos auditables existentes, no como bloqueante del parche R0-R8.
 
 ---
 

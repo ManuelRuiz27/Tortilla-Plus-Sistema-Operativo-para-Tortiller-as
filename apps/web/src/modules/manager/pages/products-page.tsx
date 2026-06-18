@@ -30,6 +30,8 @@ type ProductFormState = {
   isSellable: boolean;
   isStockTracked: boolean;
   requiresProduction: boolean;
+  isRecipeIngredient: boolean;
+  allowNegativeStock: boolean;
   status: ManagerProduct["status"];
 };
 
@@ -42,6 +44,8 @@ const emptyForm: ProductFormState = {
   isSellable: true,
   isStockTracked: true,
   requiresProduction: false,
+  isRecipeIngredient: false,
+  allowNegativeStock: false,
   status: "active"
 };
 
@@ -56,6 +60,8 @@ function formFromProduct(product: ManagerProduct): ProductFormState {
     isSellable: product.isSellable,
     isStockTracked: product.isStockTracked,
     requiresProduction: product.requiresProduction,
+    isRecipeIngredient: product.isRecipeIngredient ?? false,
+    allowNegativeStock: product.allowNegativeStock ?? false,
     status: product.status
   };
 }
@@ -91,6 +97,12 @@ export function ProductsPage() {
     if (form.productType === "service") {
       setForm((current) => ({ ...current, unit: "service", isStockTracked: false, requiresProduction: false }));
     }
+    if (form.productType === "raw_material") {
+      setForm((current) => ({ ...current, isSellable: false, isStockTracked: true, requiresProduction: false, isRecipeIngredient: true, allowNegativeStock: false }));
+    }
+    if (form.productType === "packaging") {
+      setForm((current) => ({ ...current, isSellable: false, isStockTracked: true, requiresProduction: false, allowNegativeStock: false }));
+    }
   }, [form.productType]);
 
   function updateForm(partial: Partial<ProductFormState>) {
@@ -108,7 +120,9 @@ export function ProductsPage() {
       unit: form.unit,
       isSellable: form.isSellable,
       isStockTracked: form.isStockTracked,
-      requiresProduction: form.requiresProduction
+      requiresProduction: form.requiresProduction,
+      isRecipeIngredient: form.isRecipeIngredient,
+      allowNegativeStock: form.allowNegativeStock
     };
 
     if (form.id) {
@@ -157,6 +171,8 @@ export function ProductsPage() {
             <label className="flex items-center gap-2"><input checked={form.isSellable} onChange={(event) => updateForm({ isSellable: event.target.checked })} type="checkbox" /> Se vende</label>
             <label className="flex items-center gap-2"><input checked={form.isStockTracked} onChange={(event) => updateForm({ isStockTracked: event.target.checked })} type="checkbox" /> Lleva inventario</label>
             <label className="flex items-center gap-2"><input checked={form.requiresProduction} onChange={(event) => updateForm({ requiresProduction: event.target.checked })} type="checkbox" /> Se produce</label>
+            <label className="flex items-center gap-2"><input checked={form.isRecipeIngredient} onChange={(event) => updateForm({ isRecipeIngredient: event.target.checked })} type="checkbox" /> Ingrediente</label>
+            <label className="flex items-center gap-2"><input checked={form.allowNegativeStock} onChange={(event) => updateForm({ allowNegativeStock: event.target.checked })} type="checkbox" /> Permite negativo</label>
             {form.id ? (
               <select className="h-9 rounded-md border border-tp-border px-2 text-sm" onChange={(event) => updateForm({ status: event.target.value as ManagerProduct["status"] })} value={form.status}>
                 <option value="active">Activo</option>
@@ -192,7 +208,7 @@ export function ProductsPage() {
                 <td className="px-4 py-3">{labelProductType(product.productType)}</td>
                 <td className="px-4 py-3">{labelUnit(product.unit)}</td>
                 <td className="px-4 py-3 text-xs text-tp-muted">
-                  {[product.isSellable ? "se vende" : null, product.isStockTracked ? "inventario" : null, product.requiresProduction ? "produccion" : null].filter(Boolean).join(" / ") || "-"}
+                  {[product.isSellable ? "se vende" : null, product.isStockTracked ? "inventario" : null, product.requiresProduction ? "produccion" : null, product.isRecipeIngredient ? "ingrediente" : null].filter(Boolean).join(" / ") || "-"}
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge tone={product.status === "active" ? "success" : "warning"}>{labelStatus(product.status)}</StatusBadge>

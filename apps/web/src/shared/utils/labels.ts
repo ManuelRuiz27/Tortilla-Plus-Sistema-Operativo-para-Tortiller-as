@@ -125,6 +125,16 @@ const movementLabels: Record<string, string> = {
   payment: "Pago",
   credit: "Credito",
   debit: "Cargo",
+  production_in: "Entrada de produccion",
+  production_input_out: "Consumo de insumo",
+  manual_adjustment_in: "Ajuste entrada",
+  manual_adjustment_out: "Ajuste salida",
+  sale_out: "Venta",
+  route_load_out: "Carga de ruta",
+  route_return_in: "Devolucion ruta",
+  waste_out: "Merma",
+  return_in: "Devolucion",
+  return_waste: "Devolucion no vendible",
 };
 
 export function labelStatus(value?: string | null): string {

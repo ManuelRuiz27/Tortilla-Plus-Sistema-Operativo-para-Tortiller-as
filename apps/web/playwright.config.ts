@@ -8,6 +8,7 @@ const rootDir = path.resolve(currentDir, "../..");
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
+  workers: 1,
   expect: {
     timeout: 10_000
   },
@@ -26,6 +27,7 @@ export default defineConfig({
       command: "npm run build -w @tortilla-plus/api && npm run db:seed -w @tortilla-plus/api && npm run start -w @tortilla-plus/api",
       cwd: rootDir,
       env: {
+        CORS_ORIGINS: "http://127.0.0.1:5179",
         DATABASE_URL: "postgresql://tortilla_plus:tortilla_plus_dev@localhost:5432/tortilla_plus?schema=public",
         HOST: "127.0.0.1",
         JWT_SECRET: "change_me_in_local_development",

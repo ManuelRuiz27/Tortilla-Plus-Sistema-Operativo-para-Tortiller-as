@@ -51,6 +51,7 @@ import {
 import {
   closeProductionRecipeBatch,
   createProductionBatchFromRecipe,
+  getProductionRecipeBatch,
   updateProductionRecipeBatchActuals,
 } from "./services/production-recipe-service.js";
 import {
@@ -955,6 +956,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (method === "POST" && path === "/api/v1/production/recipe-batches") {
     const currentUser = await authenticate(request);
     sendJson(response, 201, await createProductionBatchFromRecipe(currentUser, await readJson(request)));
+    return;
+  }
+
+  const getProductionRecipeBatchMatch = path.match(/^\/api\/v1\/production\/recipe-batches\/([^/]+)$/);
+  if (method === "GET" && getProductionRecipeBatchMatch) {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getProductionRecipeBatch(currentUser, getProductionRecipeBatchMatch[1]));
     return;
   }
 

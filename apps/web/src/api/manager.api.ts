@@ -30,6 +30,7 @@ import type {
   DeliveryRoute,
   DeliverySettlement,
   InventoryItem,
+  InventoryMovement,
   ManagerDashboardSummary,
   ManagerCustomer,
   ManagerPrice,
@@ -43,7 +44,13 @@ import type {
   MercadoPagoBranchConfig,
   MercadoPagoPosConfig,
   MercadoPagoProvisioningSummary,
-  MercadoPagoTerminal
+  MercadoPagoTerminal,
+  ProductionRecipeBatch,
+  Recipe,
+  RecipeIngredient,
+  RecipeProductRef,
+  RecipeVersion,
+  UnitConversion
 } from "../modules/manager/types/manager.types";
 
 type ApiInventoryStock = {
@@ -197,6 +204,96 @@ type ApiProductionBatch = {
     producedQuantity: string | number;
     product?: { sku?: string | null; name?: string | null } | null;
   }>;
+};
+
+type ApiRecipeProductRef = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  productType?: string;
+  unit?: string;
+};
+
+type ApiRecipeIngredient = {
+  id: string;
+  productId: string;
+  product?: ApiRecipeProductRef | null;
+  quantity: string | number;
+  unit?: string;
+  isOptional?: boolean;
+  wasteFactor?: string | number | null;
+};
+
+type ApiRecipeVersion = {
+  id: string;
+  recipeId: string;
+  version: number;
+  expectedOutputQuantity: string | number;
+  outputUnit?: string;
+  notes?: string | null;
+  status?: string;
+  ingredients?: ApiRecipeIngredient[];
+};
+
+type ApiRecipe = {
+  id: string;
+  branchId?: string | null;
+  name: string;
+  outputProductId: string;
+  outputProduct?: ApiRecipeProductRef | null;
+  currentVersionId?: string | null;
+  currentVersion?: ApiRecipeVersion | null;
+  versionCount?: number;
+  status?: string;
+};
+
+type ApiProductionRecipeBatch = {
+  id: string;
+  branchId: string;
+  productionDate: string;
+  status: string;
+  recipeVersionId?: string | null;
+  outputProductId?: string | null;
+  outputProduct?: ApiRecipeProductRef | null;
+  expectedOutputQuantity?: string | number | null;
+  actualOutputQuantity?: string | number | null;
+  outputUnit?: string | null;
+  yieldPercentage?: string | number | null;
+  varianceReason?: string | null;
+  ingredients?: Array<{
+    id: string;
+    productId: string;
+    product?: ApiRecipeProductRef | null;
+    expectedQuantity: string | number;
+    actualQuantity: string | number;
+    unit?: string;
+    inventoryMovementId?: string | null;
+  }>;
+};
+
+type ApiUnitConversion = {
+  id: string;
+  productId: string;
+  fromUnit: string;
+  toUnit?: string;
+  factor: string | number;
+  name: string;
+  status?: string;
+};
+
+type ApiInventoryMovement = {
+  id: string;
+  branchId: string;
+  productId: string;
+  movementType: string;
+  quantity: string | number;
+  unit?: string;
+  reason?: string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  authorizedByUserId?: string | null;
+  createdAt: string;
+  product?: ApiRecipeProductRef | null;
 };
 
 const productTypes = new Set(["tortilla", "masa", "package", "retail", "service", "raw_material", "packaging"]);
@@ -407,6 +504,122 @@ function mapProductionBatch(batch: ApiProductionBatch): ProductionBatch {
   };
 }
 
+function mapRecipeProductRef(product: ApiRecipeProductRef | null | undefined): RecipeProductRef | null {
+  if (!product) return null;
+  return {
+    id: product.id,
+    name: product.name,
+    sku: product.sku,
+    productType: productType(product.productType),
+    unit: productUnit(product.unit)
+  };
+}
+
+function mapRecipeIngredient(ingredient: ApiRecipeIngredient): RecipeIngredient {
+  return {
+    id: ingredient.id,
+    productId: ingredient.productId,
+    product: mapRecipeProductRef(ingredient.product),
+    quantity: Number(ingredient.quantity),
+    unit: productUnit(ingredient.unit),
+    isOptional: ingredient.isOptional ?? false,
+    wasteFactor: ingredient.wasteFactor == null ? null : Number(ingredient.wasteFactor)
+  };
+}
+
+function recipeVersionStatus(value: string | undefined): RecipeVersion["status"] {
+  if (value === "inactive" || value === "deleted") return value;
+  return "active";
+}
+
+function mapRecipeVersion(version: ApiRecipeVersion): RecipeVersion {
+  return {
+    id: version.id,
+    recipeId: version.recipeId,
+    version: version.version,
+    expectedOutputQuantity: Number(version.expectedOutputQuantity),
+    outputUnit: productUnit(version.outputUnit),
+    notes: version.notes ?? null,
+    status: recipeVersionStatus(version.status),
+    ingredients: (version.ingredients ?? []).map(mapRecipeIngredient)
+  };
+}
+
+function recipeStatus(value: string | undefined): Recipe["status"] {
+  if (value === "inactive" || value === "deleted") return value;
+  return "active";
+}
+
+function mapRecipe(recipe: ApiRecipe): Recipe {
+  return {
+    id: recipe.id,
+    branchId: recipe.branchId ?? null,
+    name: recipe.name,
+    outputProductId: recipe.outputProductId,
+    outputProduct: mapRecipeProductRef(recipe.outputProduct),
+    currentVersionId: recipe.currentVersionId ?? null,
+    currentVersion: recipe.currentVersion ? mapRecipeVersion(recipe.currentVersion) : null,
+    versionCount: recipe.versionCount ?? (recipe.currentVersion ? 1 : 0),
+    status: recipeStatus(recipe.status)
+  };
+}
+
+function mapProductionRecipeBatch(batch: ApiProductionRecipeBatch): ProductionRecipeBatch {
+  return {
+    id: batch.id,
+    branchId: batch.branchId,
+    productionDate: new Date(batch.productionDate).toLocaleDateString(),
+    status: batch.status === "closed" ? "closed" : "open",
+    recipeVersionId: batch.recipeVersionId ?? null,
+    outputProductId: batch.outputProductId ?? null,
+    outputProduct: mapRecipeProductRef(batch.outputProduct),
+    expectedOutputQuantity: batch.expectedOutputQuantity == null ? null : Number(batch.expectedOutputQuantity),
+    actualOutputQuantity: batch.actualOutputQuantity == null ? null : Number(batch.actualOutputQuantity),
+    outputUnit: batch.outputUnit ? productUnit(batch.outputUnit) : null,
+    yieldPercentage: batch.yieldPercentage == null ? null : Number(batch.yieldPercentage),
+    varianceReason: batch.varianceReason ?? null,
+    ingredients:
+      batch.ingredients?.map((ingredient) => ({
+        id: ingredient.id,
+        productId: ingredient.productId,
+        product: mapRecipeProductRef(ingredient.product),
+        expectedQuantity: Number(ingredient.expectedQuantity),
+        actualQuantity: Number(ingredient.actualQuantity),
+        unit: productUnit(ingredient.unit),
+        inventoryMovementId: ingredient.inventoryMovementId ?? null
+      })) ?? []
+  };
+}
+
+function mapUnitConversion(conversion: ApiUnitConversion): UnitConversion {
+  return {
+    id: conversion.id,
+    productId: conversion.productId,
+    fromUnit: conversion.fromUnit,
+    toUnit: productUnit(conversion.toUnit),
+    factor: Number(conversion.factor),
+    name: conversion.name,
+    status: conversion.status === "inactive" || conversion.status === "deleted" ? conversion.status : "active"
+  };
+}
+
+function mapInventoryMovement(movement: ApiInventoryMovement): InventoryMovement {
+  return {
+    id: movement.id,
+    branchId: movement.branchId,
+    productId: movement.productId,
+    movementType: movement.movementType,
+    quantity: Number(movement.quantity),
+    unit: productUnit(movement.unit),
+    reason: movement.reason ?? null,
+    referenceType: movement.referenceType ?? null,
+    referenceId: movement.referenceId ?? null,
+    authorizedByUserId: movement.authorizedByUserId ?? null,
+    createdAt: movement.createdAt,
+    product: mapRecipeProductRef(movement.product)
+  };
+}
+
 export function managerDashboardRequest(filters: { branchId?: string | null } = {}): Promise<ManagerDashboardSummary> {
   if (!useMocks) {
     const params = new URLSearchParams();
@@ -544,6 +757,259 @@ export function closeProductionBatchRequest(batchId: string): Promise<void> {
   });
 }
 
+export async function recipesRequest(): Promise<Recipe[]> {
+  if (useMocks) {
+    const products = buildDemoManagerProducts();
+    const masa = products.find((product) => product.productType === "masa") ?? products[0];
+    const ingredient = products.find((product) => product.productType === "raw_material") ?? products[0];
+    return Promise.resolve([
+      {
+        id: "recipe-demo",
+        branchId: null,
+        name: "Masa base",
+        outputProductId: masa.id,
+        outputProduct: masa,
+        currentVersionId: "recipe-version-demo",
+        currentVersion: {
+          id: "recipe-version-demo",
+          recipeId: "recipe-demo",
+          version: 1,
+          expectedOutputQuantity: 33,
+          outputUnit: "kg",
+          notes: null,
+          status: "active",
+          ingredients: [
+            {
+              id: "recipe-ingredient-demo",
+              productId: ingredient.id,
+              product: ingredient,
+              quantity: 25,
+              unit: "kg",
+              isOptional: false,
+              wasteFactor: null
+            }
+          ]
+        },
+        versionCount: 1,
+        status: "active"
+      }
+    ]);
+  }
+
+  return httpClient<ApiRecipe[]>("/recipes").then((recipes) => recipes.map(mapRecipe));
+}
+
+export function createRecipeRequest(payload: {
+  branchId?: string | null;
+  name: string;
+  outputProductId: string;
+  expectedOutputQuantity: string;
+  outputUnit: ManagerProduct["unit"];
+  ingredients: Array<{ productId: string; quantity: string; unit: ManagerProduct["unit"] }>;
+}): Promise<Recipe> {
+  if (useMocks) {
+    return recipesRequest().then((recipes) => ({ ...recipes[0], id: `recipe-${Date.now()}`, name: payload.name }));
+  }
+
+  return httpClient<ApiRecipe>("/recipes", {
+    method: "POST",
+    body: payload
+  }).then(mapRecipe);
+}
+
+export function createRecipeVersionRequest(payload: {
+  recipeId: string;
+  expectedOutputQuantity: string;
+  outputUnit: ManagerProduct["unit"];
+  notes?: string;
+  ingredients: Array<{ productId: string; quantity: string; unit: ManagerProduct["unit"] }>;
+}): Promise<RecipeVersion> {
+  const { recipeId, ...body } = payload;
+  if (useMocks) {
+    return Promise.resolve({
+      id: `recipe-version-${Date.now()}`,
+      recipeId,
+      version: 2,
+      expectedOutputQuantity: Number(payload.expectedOutputQuantity),
+      outputUnit: payload.outputUnit,
+      notes: payload.notes ?? null,
+      status: "active",
+      ingredients: []
+    });
+  }
+
+  return httpClient<ApiRecipeVersion>(`/recipes/${recipeId}/versions`, {
+    method: "POST",
+    body
+  }).then(mapRecipeVersion);
+}
+
+export function activateRecipeVersionRequest(versionId: string): Promise<RecipeVersion> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: versionId,
+      recipeId: "recipe-demo",
+      version: 1,
+      expectedOutputQuantity: 33,
+      outputUnit: "kg",
+      notes: null,
+      status: "active",
+      ingredients: []
+    });
+  }
+
+  return httpClient<ApiRecipeVersion>(`/recipe-versions/${versionId}/activate`, { method: "PATCH" }).then(mapRecipeVersion);
+}
+
+export function createProductionRecipeBatchRequest(payload: {
+  branchId: string;
+  recipeVersionId: string;
+  expectedOutputQuantity: string;
+  productionDate: string;
+}): Promise<ProductionRecipeBatch> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: `recipe-batch-${Date.now()}`,
+      branchId: payload.branchId,
+      productionDate: payload.productionDate,
+      status: "open",
+      recipeVersionId: payload.recipeVersionId,
+      outputProductId: "prod-masa",
+      outputProduct: buildDemoManagerProducts().find((product) => product.id === "prod-masa") ?? null,
+      expectedOutputQuantity: Number(payload.expectedOutputQuantity),
+      actualOutputQuantity: Number(payload.expectedOutputQuantity),
+      outputUnit: "kg",
+      yieldPercentage: 100,
+      varianceReason: null,
+      ingredients: []
+    });
+  }
+
+  return httpClient<ApiProductionRecipeBatch>("/production/recipe-batches", {
+    method: "POST",
+    body: payload
+  }).then(mapProductionRecipeBatch);
+}
+
+export function productionRecipeBatchRequest(batchId: string): Promise<ProductionRecipeBatch> {
+  if (useMocks) {
+    return createProductionRecipeBatchRequest({
+      branchId: "branch-principal",
+      recipeVersionId: "recipe-version-demo",
+      productionDate: new Date().toISOString().slice(0, 10),
+      expectedOutputQuantity: "33.000"
+    });
+  }
+
+  return httpClient<ApiProductionRecipeBatch>(`/production/recipe-batches/${batchId}`).then(mapProductionRecipeBatch);
+}
+
+export function updateProductionRecipeBatchActualsRequest(payload: {
+  batchId: string;
+  actualOutputQuantity?: string;
+  varianceReason?: string;
+  ingredients?: Array<{ productionBatchIngredientId: string; actualQuantity: string }>;
+}): Promise<ProductionRecipeBatch> {
+  const { batchId, ...body } = payload;
+  if (useMocks) {
+    return productionRecipeBatchRequest(batchId);
+  }
+
+  return httpClient<ApiProductionRecipeBatch>(`/production/recipe-batches/${batchId}/actuals`, {
+    method: "PATCH",
+    body
+  }).then(mapProductionRecipeBatch);
+}
+
+export function closeProductionRecipeBatchRequest(payload: {
+  batchId: string;
+  actualOutputQuantity?: string;
+  varianceReason?: string;
+  authorizedByUserId?: string;
+  ingredients?: Array<{ productionBatchIngredientId: string; actualQuantity: string }>;
+}): Promise<{ batch: ProductionRecipeBatch; movements: InventoryMovement[] }> {
+  const { batchId, ...body } = payload;
+  if (useMocks) {
+    return productionRecipeBatchRequest(batchId).then((batch) => ({ batch: { ...batch, status: "closed" }, movements: [] }));
+  }
+
+  return httpClient<{ batch: ApiProductionRecipeBatch; movements: ApiInventoryMovement[] }>(`/production/recipe-batches/${batchId}/close`, {
+    method: "PATCH",
+    body
+  }).then((result) => ({
+    batch: mapProductionRecipeBatch(result.batch),
+    movements: result.movements.map(mapInventoryMovement)
+  }));
+}
+
+export function unitConversionsRequest(productId: string): Promise<UnitConversion[]> {
+  if (useMocks) {
+    return Promise.resolve([]);
+  }
+
+  return httpClient<ApiUnitConversion[]>(`/products/${productId}/unit-conversions`).then((items) => items.map(mapUnitConversion));
+}
+
+export function createUnitConversionRequest(payload: {
+  productId: string;
+  fromUnit: string;
+  toUnit: ManagerProduct["unit"];
+  factor: string;
+  name: string;
+}): Promise<UnitConversion> {
+  const { productId, ...body } = payload;
+  if (useMocks) {
+    return Promise.resolve({
+      id: `conversion-${Date.now()}`,
+      productId,
+      fromUnit: payload.fromUnit,
+      toUnit: payload.toUnit,
+      factor: Number(payload.factor),
+      name: payload.name,
+      status: "active"
+    });
+  }
+
+  return httpClient<ApiUnitConversion>(`/products/${productId}/unit-conversions`, {
+    method: "POST",
+    body
+  }).then(mapUnitConversion);
+}
+
+export function deleteUnitConversionRequest(conversionId: string): Promise<UnitConversion> {
+  if (useMocks) {
+    return Promise.resolve({
+      id: conversionId,
+      productId: "product-demo",
+      fromUnit: "costal",
+      toUnit: "kg",
+      factor: 25,
+      name: "Conversion demo",
+      status: "deleted"
+    });
+  }
+
+  return httpClient<ApiUnitConversion>(`/unit-conversions/${conversionId}`, { method: "DELETE" }).then(mapUnitConversion);
+}
+
+export function inventoryMovementsRequest(filters: {
+  branchId?: string | null;
+  referenceType?: string;
+  referenceId?: string;
+  limit?: number;
+}): Promise<InventoryMovement[]> {
+  if (useMocks) {
+    return Promise.resolve([]);
+  }
+
+  const params = new URLSearchParams();
+  if (filters.branchId) params.set("branchId", filters.branchId);
+  if (filters.referenceType) params.set("referenceType", filters.referenceType);
+  if (filters.referenceId) params.set("referenceId", filters.referenceId);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  return httpClient<ApiInventoryMovement[]>(`/inventory/movements?${params.toString()}`).then((items) => items.map(mapInventoryMovement));
+}
+
 export async function managerProductsRequest(): Promise<ManagerProduct[]> {
   if (useMocks) {
     return Promise.resolve(buildDemoManagerProducts());
@@ -562,6 +1028,8 @@ export function createManagerProductRequest(payload: {
   isSellable: boolean;
   isStockTracked: boolean;
   requiresProduction: boolean;
+  isRecipeIngredient?: boolean;
+  allowNegativeStock?: boolean;
 }): Promise<ManagerProduct> {
   if (useMocks) {
     return Promise.resolve({
@@ -574,8 +1042,8 @@ export function createManagerProductRequest(payload: {
       isSellable: payload.isSellable,
       isStockTracked: payload.isStockTracked,
       requiresProduction: payload.requiresProduction,
-      isRecipeIngredient: false,
-      allowNegativeStock: false,
+      isRecipeIngredient: payload.isRecipeIngredient ?? false,
+      allowNegativeStock: payload.allowNegativeStock ?? false,
       status: "active"
     });
   }
@@ -596,6 +1064,8 @@ export function updateManagerProductRequest(payload: {
   isSellable: boolean;
   isStockTracked: boolean;
   requiresProduction: boolean;
+  isRecipeIngredient?: boolean;
+  allowNegativeStock?: boolean;
   status: ManagerProduct["status"];
 }): Promise<ManagerProduct> {
   const { id, ...body } = payload;

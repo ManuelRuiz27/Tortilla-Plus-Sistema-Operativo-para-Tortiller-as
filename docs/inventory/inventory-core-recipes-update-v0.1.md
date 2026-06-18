@@ -19,10 +19,12 @@ Este documento sigue siendo la especificacion base del parche. El estado real de
 - R4: `RecipeService`, permisos, endpoints minimos de recetas/versiones y validaciones de recetas sin afectar stock.
 - R5: `ProductionRecipeService` backend para crear lote desde receta, capturar reales, calcular rendimiento y cerrar con movimientos de inventario.
 - R6: endpoints backend de conversiones, recetas, produccion por receta y movimientos disponibles; QA backend principal ejecutado.
+- R7: frontend minimo operativo para insumos, recetas, nuevo lote por receta y cierre de lote.
+- R8: hardening completado con e2e frontend/API, pruebas de integracion backend y documentacion final del parche.
 - Deuda post R6: regla fija de variacion de produccion cubierta; entre 3% y 10% exige motivo, arriba de 10% exige motivo y autorizacion con `production.authorize_variance`.
 - Deuda pre R5: `INV-REC-DEBT-002`, `INV-REC-DEBT-019` e `INV-REC-DEBT-020` resueltas; POS bloquea productos no vendibles desde backend, las cantidades de receta se normalizan a unidad base usando `UnitConversion` activa, y `RecipeService` solo acepta ingredientes con `isRecipeIngredient=true`.
 
-El siguiente avance funcional es R7: frontend minimo operativo para insumos, recetas y cierre de lotes por receta.
+El parche R0-R8 queda listo para piloto operativo. La siguiente fase funcional recomendada es reportabilidad avanzada sobre rendimiento, consumo historico y merma detallada, usando los movimientos auditables existentes.
 
 ---
 

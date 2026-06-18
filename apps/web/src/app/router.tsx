@@ -8,9 +8,13 @@ import { CustomersPage } from "../modules/manager/pages/customers-page";
 import { DashboardPage } from "../modules/manager/pages/dashboard-page";
 import { NotFoundPage } from "../modules/manager/pages/not-found-page";
 import { InventoryPage } from "../modules/manager/pages/inventory-page";
+import { InputsPage } from "../modules/manager/pages/inputs-page";
 import { PricesPage } from "../modules/manager/pages/prices-page";
+import { ProductionRecipeBatchPage } from "../modules/manager/pages/production-recipe-batch-page";
+import { ProductionRecipeNewPage } from "../modules/manager/pages/production-recipe-new-page";
 import { ProductionPage } from "../modules/manager/pages/production-page";
 import { ProductsPage } from "../modules/manager/pages/products-page";
+import { RecipesPage } from "../modules/manager/pages/recipes-page";
 import { ReconciliationPage } from "../modules/manager/pages/reconciliation-page";
 import { ReportsPage } from "../modules/manager/pages/reports-page";
 import { RouteDetailPage } from "../modules/manager/pages/route-detail-page";
@@ -137,11 +141,15 @@ export function AppRouter() {
         <Route element={<Navigate replace to="/app/manager/cash" />} path="cash/closing" />
         <Route element={<WithdrawalsPage />} path="withdrawals" />
         <Route element={<InventoryPage />} path="inventory" />
+        <Route element={<InputsPage />} path="inventory/inputs" />
         <Route element={<ProductsPage />} path="inventory/products" />
         <Route element={<PricesPage />} path="inventory/prices" />
         <Route element={<ProductionPage />} path="inventory/production" />
         <Route element={<InventoryPage />} path="inventory/waste" />
         <Route element={<ProductionPage />} path="production" />
+        <Route element={<RecipesPage />} path="production/recipes" />
+        <Route element={<ProductionRecipeNewPage />} path="production/new" />
+        <Route element={<ProductionRecipeBatchPage />} path="production/batches/:batchId" />
         <Route element={<ProductsPage />} path="products" />
         <Route element={<PricesPage />} path="prices" />
         <Route element={<CustomersPage />} path="customers" />

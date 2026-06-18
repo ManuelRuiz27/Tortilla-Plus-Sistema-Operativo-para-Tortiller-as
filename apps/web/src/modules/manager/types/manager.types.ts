@@ -45,6 +45,98 @@ export type ProductionBatch = {
   status: "open" | "closed";
 };
 
+export type UnitConversion = {
+  id: string;
+  productId: string;
+  fromUnit: string;
+  toUnit: ManagerProduct["unit"];
+  factor: number;
+  name: string;
+  status: "active" | "inactive" | "deleted";
+};
+
+export type RecipeProductRef = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  productType: ManagerProduct["productType"];
+  unit: ManagerProduct["unit"];
+};
+
+export type RecipeIngredient = {
+  id: string;
+  productId: string;
+  product: RecipeProductRef | null;
+  quantity: number;
+  unit: ManagerProduct["unit"];
+  isOptional: boolean;
+  wasteFactor: number | null;
+};
+
+export type RecipeVersion = {
+  id: string;
+  recipeId: string;
+  version: number;
+  expectedOutputQuantity: number;
+  outputUnit: ManagerProduct["unit"];
+  notes: string | null;
+  status: "active" | "inactive" | "deleted";
+  ingredients: RecipeIngredient[];
+};
+
+export type Recipe = {
+  id: string;
+  branchId: string | null;
+  name: string;
+  outputProductId: string;
+  outputProduct: RecipeProductRef | null;
+  currentVersionId: string | null;
+  currentVersion: RecipeVersion | null;
+  versionCount: number;
+  status: "active" | "inactive" | "deleted";
+};
+
+export type ProductionRecipeBatchIngredient = {
+  id: string;
+  productId: string;
+  product: RecipeProductRef | null;
+  expectedQuantity: number;
+  actualQuantity: number;
+  unit: ManagerProduct["unit"];
+  inventoryMovementId: string | null;
+};
+
+export type ProductionRecipeBatch = {
+  id: string;
+  branchId: string;
+  productionDate: string;
+  status: "open" | "closed";
+  recipeVersionId: string | null;
+  outputProductId: string | null;
+  outputProduct: RecipeProductRef | null;
+  expectedOutputQuantity: number | null;
+  actualOutputQuantity: number | null;
+  outputUnit: ManagerProduct["unit"] | null;
+  yieldPercentage: number | null;
+  varianceReason: string | null;
+  ingredients: ProductionRecipeBatchIngredient[];
+};
+
+export type InventoryMovement = {
+  id: string;
+  branchId: string;
+  productId: string;
+  movementType: string;
+  quantity: number;
+  unit: ManagerProduct["unit"];
+  reason: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  authorizedByUserId: string | null;
+  createdAt: string;
+  product: RecipeProductRef | null;
+};
+
 export type ManagerProduct = {
   id: string;
   name: string;

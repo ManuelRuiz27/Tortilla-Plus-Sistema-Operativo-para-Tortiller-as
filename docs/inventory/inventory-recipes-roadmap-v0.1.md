@@ -341,32 +341,50 @@ Exponer API completa y cubrir flujos principales.
 
 ## 11. Sprint R7 - Frontend minimo operativo
 
+**Estado:** Completado para alcance frontend minimo.  
+**Rutas frontend:** `apps/web/src/app/router.tsx`  
+**Paginas:** `inputs-page.tsx`, `recipes-page.tsx`, `production-recipe-new-page.tsx`, `production-recipe-batch-page.tsx`  
+
 ### Objetivo
 
 Agregar las pantallas necesarias para operar recetas sin saturar el POS.
 
 ### Alcance
 
-- Pantalla de insumos.
-- Pantalla de recetas.
-- Pantalla de nuevo lote.
-- Pantalla de detalle/cierre de lote.
-- Ajustes minimos a productos.
-- Ajustes minimos a inventario.
-- Filtro en POS para ocultar insumos.
-- Filtro en rutas para no cargar insumos.
+- Pantalla de insumos. Completado.
+- Pantalla de recetas. Completado.
+- Pantalla de nuevo lote. Completado.
+- Pantalla de detalle/cierre de lote. Completado.
+- Ajustes minimos a productos. Completado.
+- Ajustes minimos a inventario. Completado mediante acceso a insumos y conversiones.
+- Ajustes minimos a produccion. Completado con accesos a receta/nuevo lote/cierre.
+- Filtro en POS para ocultar insumos. Completado previamente por backend y filtro frontend de productos vendibles.
+- Filtro en rutas para no cargar insumos. Completado previamente por backend.
 
 ### Definition of Done
 
-- Gerente puede crear insumos.
-- Gerente puede crear receta.
-- Encargado puede iniciar lote.
-- Encargado puede cerrar lote.
-- POS no muestra insumos.
+- Gerente puede crear insumos. Completado.
+- Gerente puede crear receta. Completado.
+- Encargado puede iniciar lote. Completado.
+- Encargado puede cerrar lote. Completado.
+- POS no muestra insumos. Completado.
+
+### Validacion R7
+
+- `npm run build -w @tortilla-plus/web`: Completado.
+- `npm run build -w @tortilla-plus/api`: Completado.
+
+### Deuda tecnica post R7
+
+- Sin deuda critica o alta detectada en el alcance frontend minimo.
+- Queda pendiente QA visual/e2e amplio para R8.
 
 ---
 
 ## 12. Sprint R8 - Hardening y reportabilidad base
+
+**Estado:** Completado.  
+**Pruebas:** `apps/web/e2e/inventory-recipes.spec.ts`, suite e2e completa, suite de integracion API.  
 
 ### Objetivo
 
@@ -374,20 +392,34 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 
 ### Alcance
 
-- QA end to end backend/frontend.
-- Revision de auditoria.
-- Revision de idempotencia.
-- Revision de permisos.
-- Validacion multi-tenant.
-- Documentar decisiones finales.
-- Preparar base para reportes de rendimiento, consumo y merma.
+- QA end to end backend/frontend. Completado.
+- Revision de auditoria. Completado con movimientos consultables y e2e de cierre por receta.
+- Revision de idempotencia. Completado sobre pruebas existentes de ledger/POS.
+- Revision de permisos. Completado; e2e ajustado para roles correctos y CORS de entorno audit.
+- Validacion multi-tenant. Completado en suite de integracion existente.
+- Documentar decisiones finales. Completado.
+- Preparar base para reportes de rendimiento, consumo y merma. Completado como base de datos/API; reportes detallados quedan fase posterior.
 
 ### Definition of Done
 
-- No hay deuda critica abierta del parche.
-- Flujo completo probado con datos reales de sucursal.
-- Documentacion de operacion actualizada.
-- Reportes quedan documentados para una fase posterior.
+- No hay deuda critica abierta del parche. Completado.
+- Flujo completo probado con datos reales de sucursal. Completado con e2e `inventory-recipes`.
+- Documentacion de operacion actualizada. Completado.
+- Reportes quedan documentados para una fase posterior. Completado.
+
+### Validacion R8
+
+- `npm run db:validate -w @tortilla-plus/api`: Completado.
+- `npm run test -w @tortilla-plus/api`: Completado, 46/46.
+- `npm run test:integration -w @tortilla-plus/api`: Completado, 52/52.
+- `npm run build -w @tortilla-plus/web`: Completado.
+- `npm run test:e2e -w @tortilla-plus/web`: Completado, 7/7.
+
+### Deuda tecnica post R8
+
+- Sin deuda critica o alta abierta del parche.
+- `INV-REC-DEBT-026`: Resuelta; entorno e2e ahora configura CORS, corre serializado contra DB compartida y usa roles correctos por flujo.
+- Reportes especificos de rendimiento/consumo/merma quedan como fase futura sobre movimientos y yield ya persistidos.
 
 ---
 
@@ -463,3 +495,18 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 - Los endpoints de recetas y produccion por receta quedan disponibles junto con pruebas principales.
 - Produccion por receta aplica reglas V1 de variacion: motivo desde 3% y autorizacion `production.authorize_variance` arriba de 10%.
 - PostgreSQL local fue validado con migraciones, seed e integracion backend.
+
+### R7
+
+- Frontend manager agrega navegacion a insumos y recetas.
+- Productos permite marcar ingrediente de receta y negativo permitido cuando aplique.
+- Insumos permite crear `raw_material`/`packaging` y configurar conversiones.
+- Recetas permite crear receta con salida e ingredientes.
+- Produccion permite crear lote por receta y cerrar lote con captura real, motivo y autorizacion de variacion alta.
+
+### R8
+
+- E2E backend/frontend valida cierre de lote por receta desde UI y movimientos auditables.
+- Suite e2e completa corre con mocks desactivados y API real.
+- Suite de integracion API mantiene cobertura de POS, rutas, facturacion, plataforma, recetas y produccion por receta.
+- El parche queda sin deuda critica o alta abierta.

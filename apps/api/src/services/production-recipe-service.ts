@@ -111,6 +111,26 @@ export async function updateProductionRecipeBatchActuals(
   });
 }
 
+export async function getProductionRecipeBatch(currentUser: AuthenticatedUser, productionBatchId: string) {
+  await assertFeatureAvailable(currentUser, "production_control");
+  await assertPermission(currentUser.id, "production.manage");
+  const batch = await prisma.productionBatch.findFirst({
+    where: {
+      id: productionBatchId,
+      organizationId: currentUser.organizationId,
+      productionMode: "recipe_based",
+    },
+    include: productionBatchInclude,
+  });
+
+  if (!batch) {
+    throw new DomainError(404, "PRODUCTION_BATCH_NOT_FOUND", "Produccion no encontrada.");
+  }
+
+  await assertBranchAccess(currentUser, batch.branchId);
+  return { data: serializeProductionRecipeBatch(batch) };
+}
+
 export async function closeProductionRecipeBatch(
   currentUser: AuthenticatedUser,
   productionBatchId: string,
