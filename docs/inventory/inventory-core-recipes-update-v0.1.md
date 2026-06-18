@@ -3,6 +3,7 @@
 **Producto:** Tortilla Plus — V1 Operativa Comercial  
 **Área:** Inventario, producción, insumos, recetas, POS, reparto  
 **Tipo:** Actualización funcional del núcleo operativo  
+**Fuente de verdad funcional:** `docs/system-modules-and-flows-source-of-truth-v0.1.md`  
 **Estado:** Propuesta técnica para revisión antes de desarrollo  
 **Prioridad:** Alta  
 
@@ -25,6 +26,12 @@ Este documento sigue siendo la especificacion base del parche. El estado real de
 - Deuda pre R5: `INV-REC-DEBT-002`, `INV-REC-DEBT-019` e `INV-REC-DEBT-020` resueltas; POS bloquea productos no vendibles desde backend, las cantidades de receta se normalizan a unidad base usando `UnitConversion` activa, y `RecipeService` solo acepta ingredientes con `isRecipeIngredient=true`.
 
 El parche R0-R8 queda listo para piloto operativo. La siguiente fase funcional recomendada es reportabilidad avanzada sobre rendimiento, consumo historico y merma detallada, usando los movimientos auditables existentes.
+
+Roadmap de siguiente fase:
+
+```txt
+docs/inventory/inventory-recipes-post-r8-roadmap-v0.1.md
+```
 
 ---
 

@@ -3,6 +3,8 @@
 **Producto:** Tortilla Plus - V1 Operativa Comercial  
 **Area:** Inventario, produccion, insumos, recetas, POS y reparto  
 **Documento base:** `docs/inventory/inventory-core-recipes-update-v0.1.md`  
+**Fuente de verdad funcional:** `docs/system-modules-and-flows-source-of-truth-v0.1.md`  
+**Roadmap siguiente fase:** `docs/inventory/inventory-recipes-post-r8-roadmap-v0.1.md`  
 **Estado:** Roadmap de ejecucion  
 **Fecha:** 2026-06-09  
 
@@ -510,3 +512,27 @@ Cerrar deuda critica, validar integracion y preparar reportes futuros.
 - Suite e2e completa corre con mocks desactivados y API real.
 - Suite de integracion API mantiene cobertura de POS, rutas, facturacion, plataforma, recetas y produccion por receta.
 - El parche queda sin deuda critica o alta abierta.
+
+---
+
+## 16. Siguiente fase post R8
+
+El parche R0-R8 queda cerrado. Las actualizaciones posteriores se gestionan en:
+
+```txt
+docs/inventory/inventory-recipes-post-r8-roadmap-v0.1.md
+```
+
+Ese roadmap debe respetar la fuente de verdad funcional del proyecto:
+
+```txt
+docs/system-modules-and-flows-source-of-truth-v0.1.md
+```
+
+Orden recomendado:
+
+1. Reportes de produccion y rendimiento.
+2. Piloto operativo controlado.
+3. Tolerancias configurables si el piloto lo exige.
+4. Flujo formal `masa -> tortilla` si la operacion real trabaja en dos pasos.
+5. Empaques y agua avanzados solo con evidencia operativa.
