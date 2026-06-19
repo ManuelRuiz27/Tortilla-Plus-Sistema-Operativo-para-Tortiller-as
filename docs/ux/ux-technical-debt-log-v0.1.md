@@ -43,6 +43,7 @@ Baja: mejora deseable sin impacto operativo inmediato.
 | UX-DEBT-020 | Media | Alertas | El centro de alertas usa derivacion frontend desde endpoints existentes; no hay endpoint formal de alertas con estado, responsable o resolucion. | `alerts-page.tsx`, `operational-alerts.ts` | Post piloto / UX-R8 | Abierta |
 | UX-DEBT-021 | Media | Inventario | Los movimientos muestran `createdByUserId` cuando existe, pero no nombre de usuario ni referencia enriquecida con folio/nombre. | `/inventory/movements` entrega IDs y referencia tecnica; `inventory-page.tsx` los hace legibles parcialmente. | UX-R8 / Post piloto | Abierta |
 | UX-DEBT-022 | Media | Header operativo / Alertas | `OperationalHeader` mostraba `Alertas 0` por defecto cuando no recibia `alertCount`, aunque el centro de alertas puede derivar alertas activas desde otras fuentes. | `operational-header.tsx`; riesgo de calma falsa en piloto. | UX-R10 / Post piloto | Cerrada en UX-R10: el contador se oculta cuando no hay fuente real; no se creo endpoint backend |
+| UX-DEBT-023 | Media | QA / Documentacion | El spec de screenshots UX-R11 requiere fixtures controlados de Playwright para pantallas de rutas porque el seed local no expone rutas operables para capturas en todos los roles demo. | `apps/web/e2e/manual-screenshots.spec.ts`; screenshots `17-rutas.png` y `18-detalle-ruta.png`. | Post piloto / Seed staging | Abierta |
 
 ---
 
@@ -69,6 +70,7 @@ UX-DEBT-017 Estados vacios parcial: barrido total queda para piloto.
 UX-DEBT-020 Alertas sin backend formal.
 UX-DEBT-021 Movimientos sin usuario/referencia enriquecida.
 UX-DEBT-022 Header mostraba contador de alertas sin fuente real. Cerrada en UX-R10 ocultando el numero sin `alertCount`.
+UX-DEBT-023 Screenshots de rutas dependen de fixtures Playwright hasta tener seed/staging con rutas operables.
 ```
 
 ---

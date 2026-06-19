@@ -1137,3 +1137,48 @@ Fuera de alcance a no prometer:
 - Alertas backend formales.
 - PAC real si no esta configurado.
 ```
+
+---
+
+## 25. Estado UX-R11
+
+UX-R11 queda preparado como base automatizada para manuales de usuario final y screenshots operativos.
+
+Implementado:
+
+```txt
+- Spec Playwright `apps/web/e2e/manual-screenshots.spec.ts`.
+- Carpeta documental `docs/manuals/`.
+- Runbook `docs/manuals/screenshots-runbook-v0.1.md`.
+- Manuales base para cajero, gerente, produccion, inventario y administrador.
+- Salida automatizada esperada en `docs/manuals/screenshots/`.
+- Capturas cubren login, seleccion de sucursal, panel del dia, alertas, POS, cobro, caja, produccion, inventario, clientes, rutas, facturacion y reportes.
+```
+
+Reglas respetadas:
+
+```txt
+- No se modifico backend.
+- No se agregaron reglas de negocio.
+- No se agregaron `data-testid`.
+- No se incluyo manual de repartidor autenticado.
+- No se incluyo manual de contador.
+- No se promete bascula real.
+- No se promete busqueda global funcional.
+- No se prometen alertas backend formales.
+```
+
+Validaciones objetivo:
+
+```txt
+npm run lint -w @tortilla-plus/web -> passed
+npm run build -w @tortilla-plus/web -> passed con warning conocido de chunk size
+npm run test:e2e -w @tortilla-plus/web -- manual-screenshots.spec.ts -> passed, 20 screenshots generados
+```
+
+Decision:
+
+```txt
+Listo para manuales de piloto como base V0.1.
+Condicion: las capturas de rutas usan fixtures controlados en el spec hasta que el seed local/staging exponga rutas operables para screenshots sin intercepts.
+```
