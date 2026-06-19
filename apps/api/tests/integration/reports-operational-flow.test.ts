@@ -10,12 +10,19 @@ import {
   getCashDifferences,
   getCashWithdrawalsByReason,
   getManagerDashboard,
+  getProductionReport,
   getReportsSummary,
   getSalesByBranch,
   getSalesByCustomer,
   getSalesByDay,
   getSalesByProduct,
 } from "../../src/services/reports-service.js";
+import { createRecipe } from "../../src/services/recipe-service.js";
+import {
+  closeProductionRecipeBatch,
+  createProductionBatchFromRecipe,
+  updateProductionRecipeBatchActuals,
+} from "../../src/services/production-recipe-service.js";
 import { addSaleItem, completeSale, createSale } from "../../src/services/sale-service.js";
 
 type LoginResult = Awaited<ReturnType<typeof login>>;
@@ -43,6 +50,30 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
     openingAmountCounted: "500.00",
     openingNote: "Reports integration smoke test",
   })).data;
+}
+
+async function createRecipeProduct(input: {
+  organizationId: string;
+  name: string;
+  sku: string;
+  productType: "masa" | "raw_material";
+  isRecipeIngredient: boolean;
+}) {
+  return prisma.product.create({
+    data: {
+      organizationId: input.organizationId,
+      name: input.name,
+      sku: input.sku,
+      productType: input.productType,
+      unit: "kg",
+      isSellable: input.productType === "masa",
+      requiresProduction: input.productType === "masa",
+      isStockTracked: true,
+      isRecipeIngredient: input.isRecipeIngredient,
+      allowNegativeStock: false,
+      status: "active",
+    },
+  });
 }
 
 test("F3 reports and dashboard use real tenant, branch and date filtered data", async () => {
@@ -154,4 +185,87 @@ test("F3 reports and dashboard use real tenant, branch and date filtered data", 
   assert.equal(differences.data.some((point) => point.label === "Sobrante" && point.value >= 3), true);
   assert.equal(dashboard.data.salesToday >= 24, true);
   assert.equal(dashboard.data.cashSession?.id, cashSession.id);
+});
+
+test("Post R8-A production reports summarize closed recipe batches and ingredient consumption", async () => {
+  const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
+  const currentUser = asAuthenticatedUser(session);
+  const branchId = firstBranchId(session);
+  const suffix = Date.now();
+  const reportDate = new Date().toISOString().slice(0, 10);
+
+  const output = await createRecipeProduct({
+    organizationId: currentUser.organizationId,
+    name: `Masa reporte ${suffix}`,
+    sku: `REPORT-OUT-${suffix}`,
+    productType: "masa",
+    isRecipeIngredient: false,
+  });
+  const ingredient = await createRecipeProduct({
+    organizationId: currentUser.organizationId,
+    name: `Maiz reporte ${suffix}`,
+    sku: `REPORT-ING-${suffix}`,
+    productType: "raw_material",
+    isRecipeIngredient: true,
+  });
+  await prisma.inventoryStock.createMany({
+    data: [
+      {
+        organizationId: currentUser.organizationId,
+        branchId,
+        productId: ingredient.id,
+        quantity: "40.000",
+        reservedQuantity: "0.000",
+        minimumQuantity: "0.000",
+      },
+      {
+        organizationId: currentUser.organizationId,
+        branchId,
+        productId: output.id,
+        quantity: "0.000",
+        reservedQuantity: "0.000",
+        minimumQuantity: "0.000",
+      },
+    ],
+  });
+
+  const recipe = (await createRecipe(currentUser, {
+    branchId,
+    name: `Receta reporte ${suffix}`,
+    outputProductId: output.id,
+    expectedOutputQuantity: "10.000",
+    outputUnit: "kg",
+    ingredients: [{ productId: ingredient.id, quantity: "4.000", unit: "kg" }],
+  })).data;
+  const batch = (await createProductionBatchFromRecipe(currentUser, {
+    branchId,
+    productionDate: reportDate,
+    recipeVersionId: recipe.currentVersionId,
+    expectedOutputQuantity: "20.000",
+  })).data;
+  await updateProductionRecipeBatchActuals(currentUser, batch.id, {
+    actualOutputQuantity: "19.000",
+    varianceReason: "Merma normal de reporte",
+    ingredients: [{ productId: ingredient.id, actualQuantity: "8.500" }],
+  });
+  await closeProductionRecipeBatch(currentUser, batch.id);
+
+  const filters = { branchId, from: reportDate, to: reportDate };
+  const [production, summary] = await Promise.all([
+    getProductionReport(currentUser, filters),
+    getReportsSummary(currentUser, filters),
+  ]);
+
+  assert.equal(production.data.summary.closedBatches >= 1, true);
+  assert.equal(production.data.summary.actualOutputQuantity >= 19, true);
+  assert.equal(production.data.summary.batchesWithVarianceReason >= 1, true);
+  assert.equal(production.data.byRecipe.some((point) => point.label === recipe.name && point.value === 19), true);
+  assert.equal(production.data.ingredientConsumption.some((point) => point.label === ingredient.name && point.expectedQuantity === 8 && point.actualQuantity === 8.5 && point.varianceQuantity === 0.5), true);
+  assert.equal(production.data.recentBatches.some((item) => item.id === batch.id && item.outputVariancePercentage === 5), true);
+  assert.equal(summary.data.production.summary.closedBatches >= production.data.summary.closedBatches, true);
+
+  const filteredByRecipe = (await getProductionReport(currentUser, { ...filters, recipeId: recipe.id })).data;
+  const filteredByOutput = (await getProductionReport(currentUser, { ...filters, outputProductId: output.id })).data;
+  assert.equal(filteredByRecipe.recentBatches.some((item) => item.id === batch.id), true);
+  assert.equal(filteredByOutput.recentBatches.some((item) => item.id === batch.id), true);
 });

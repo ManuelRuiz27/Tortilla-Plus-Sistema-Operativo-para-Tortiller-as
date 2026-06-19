@@ -20,6 +20,8 @@ import {
   recordDeliveryPaymentRequest
 } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { OperationalAlert } from "../../../shared/components/operational-alert";
+import { OperationalCard } from "../../../shared/components/operational-card";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
@@ -155,6 +157,13 @@ export function RouteDetailPage() {
     ? selectedPaymentCustomer.creditLimit - selectedPaymentCustomer.currentBalance
     : 0;
   const selectedSettlement = settlements.find((settlement) => settlement.id === settlementId) ?? null;
+  const pendingDeliveryOrders = orders.filter((order) => !["delivered", "paid", "cancelled"].includes(order.status));
+  const nextOrder = pendingDeliveryOrders[0] ?? null;
+  const ordersToLoad = orders.filter((order) => order.status === "prepared" || order.status === "loaded").length;
+  const ordersInRoute = orders.filter((order) => order.status === "in_route").length;
+  const cashToSettle = settlements
+    .filter((settlement) => settlement.status === "open" || (settlement.status === "closed" && !settlement.cashSessionId))
+    .reduce((sum, settlement) => sum + (settlement.status === "closed" ? settlement.deliveredCashAmount : settlement.expectedCashAmount), 0);
   const tabs: Array<{ id: RouteTab; label: string }> = [
     { id: "customers", label: "Clientes" },
     { id: "orders", label: "Pedidos" },
@@ -243,6 +252,44 @@ export function RouteDetailPage() {
         </div>
         <StatusBadge tone={route.status === "active" ? "success" : "warning"}>{labelStatus(route.status)}</StatusBadge>
       </div>
+
+      <div className="mb-5 grid gap-4 xl:grid-cols-[1fr_1fr_1fr_1fr]">
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Siguiente cliente</p>
+          <p className="mt-2 text-lg font-semibold">{nextOrder?.customerName ?? "Sin pendientes"}</p>
+          <p className="mt-1 text-sm text-tp-muted">{nextOrder ? labelStatus(nextOrder.status) : "Ruta al corriente"}</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Por cargar</p>
+          <p className="mt-2 text-lg font-semibold">{ordersToLoad}</p>
+          <p className="mt-1 text-sm text-tp-muted">Pedidos preparados o cargados</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">En ruta</p>
+          <p className="mt-2 text-lg font-semibold">{ordersInRoute}</p>
+          <p className="mt-1 text-sm text-tp-muted">Listos para entregar/cobrar</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Por liquidar</p>
+          <p className="mt-2 text-lg font-semibold">{formatManagerMoney(cashToSettle)}</p>
+          <p className="mt-1 text-sm text-tp-muted">Efectivo pendiente de cierre</p>
+        </OperationalCard>
+      </div>
+
+      {nextOrder ? (
+        <OperationalAlert
+          action={
+            <button className="text-sm font-semibold text-tp-primary" onClick={() => setActiveTab(nextOrder.status === "in_route" ? "delivery" : "orders")} type="button">
+              Abrir accion
+            </button>
+          }
+          className="mb-5"
+          title="Siguiente accion de ruta"
+          tone="info"
+        >
+          {nextOrder.customerName ?? nextOrder.customerId}: {nextOrder.status === "pending" ? "preparar pedido" : nextOrder.status === "prepared" ? "cargar pedido" : nextOrder.status === "loaded" ? "salir a ruta" : "entregar y cobrar"}.
+        </OperationalAlert>
+      ) : null}
 
       <div className="mb-5 flex gap-2 overflow-x-auto border-b border-tp-border">
         {tabs.map((tab) => (

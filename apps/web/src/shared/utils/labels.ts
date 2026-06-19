@@ -137,6 +137,16 @@ const movementLabels: Record<string, string> = {
   return_waste: "Devolucion no vendible",
 };
 
+const referenceTypeLabels: Record<string, string> = {
+  manual_adjustment: "Ajuste manual",
+  production_batch: "Lote de produccion",
+  sale_item: "Venta",
+  sale_return_item: "Devolucion de venta",
+  waste_record: "Merma",
+  delivery_order_item: "Pedido de ruta",
+  delivery_return_item: "Devolucion de ruta",
+};
+
 export function labelStatus(value?: string | null): string {
   return labelFrom(statusLabels, value);
 }
@@ -169,10 +179,14 @@ export function labelMovement(value?: string | null): string {
   return labelFrom(movementLabels, value);
 }
 
+export function labelReferenceType(value?: string | null): string {
+  return labelFrom(referenceTypeLabels, value);
+}
+
 function labelFrom(labels: Record<string, string>, value?: string | null): string {
   if (!value) {
     return "-";
   }
 
-  return labels[value] ?? value.replace(/[_\.]/g, " ");
+  return labels[value] ?? "Sin clasificar";
 }

@@ -13,6 +13,8 @@ import {
 } from "../../../api/manager.api";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { OperationalAlert } from "../../../shared/components/operational-alert";
+import { OperationalCard } from "../../../shared/components/operational-card";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
@@ -92,6 +94,7 @@ export function BillingPage() {
   }
 
   const billableTotal = data.billableSales.reduce((sum, sale) => sum + sale.total, 0);
+  const activeReceipts = receiptsQuery.data?.filter((receipt) => receipt.status === "active").length ?? 0;
 
   return (
     <section>
@@ -116,19 +119,37 @@ export function BillingPage() {
 
       {isFetching ? <p className="mb-4 text-sm text-tp-muted">Actualizando datos...</p> : null}
 
+      <div className="mb-5 grid gap-3">
+        {data.stampErrors > 0 ? (
+          <OperationalAlert title="Errores de timbrado" tone="danger">
+            {data.stampErrors} factura(s) requieren revision antes de cerrar el dia fiscal.
+          </OperationalAlert>
+        ) : null}
+        {billableTotal > 0 ? (
+          <OperationalAlert title="Ventas pendientes de facturar" tone="warning">
+            Hay {formatManagerMoney(billableTotal)} pendiente. Emite factura individual o global segun corresponda.
+          </OperationalAlert>
+        ) : null}
+        {activeReceipts > 0 ? (
+          <OperationalAlert title="Tickets QR activos" tone="info">
+            {activeReceipts} ticket(s) siguen disponibles para autofactura del cliente.
+          </OperationalAlert>
+        ) : null}
+      </div>
+
       <div className="mb-5 grid gap-4 md:grid-cols-3">
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        <OperationalCard>
           <p className="text-sm text-tp-muted">Pendiente de facturar</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(billableTotal)}</p>
-        </article>
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        </OperationalCard>
+        <OperationalCard>
           <p className="text-sm text-tp-muted">Factura global</p>
           <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(data.globalDaily.total)}</p>
-        </article>
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        </OperationalCard>
+        <OperationalCard>
           <p className="text-sm text-tp-muted">Facturas con error</p>
-          <p className="mt-2 text-2xl font-semibold">{data.stampErrors}</p>
-        </article>
+          <p className={`mt-2 text-2xl font-semibold ${data.stampErrors > 0 ? "text-tp-danger" : ""}`}>{data.stampErrors}</p>
+        </OperationalCard>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">

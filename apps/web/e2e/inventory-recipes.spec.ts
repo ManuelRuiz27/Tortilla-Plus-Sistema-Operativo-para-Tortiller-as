@@ -20,7 +20,7 @@ async function loginPage(page: Page) {
   await page.getByLabel("Correo").fill("owner.demo@tortillaplus.mx");
   await page.getByLabel("Contrasena").fill("Demo1234!");
   await page.getByRole("button", { name: "Entrar a mi sucursal" }).click();
-  await page.waitForURL(/\/app\//);
+  await page.waitForURL(/\/app(\/|$)/);
 }
 
 test("manager closes recipe batch from frontend and generated movements are auditable", async ({ page, request }) => {
@@ -126,4 +126,71 @@ test("manager closes recipe batch from frontend and generated movements are audi
   const movements = (await movementsResponse.json()).data as Array<{ movementType: string }>;
   expect(movements.some((movement) => movement.movementType === "production_input_out")).toBeTruthy();
   expect(movements.some((movement) => movement.movementType === "production_in")).toBeTruthy();
+
+  await page.goto("/app/manager/reports");
+  await expect(page.getByRole("heading", { name: "Como va el negocio" })).toBeVisible();
+  await expect(page.getByText("Produccion real")).toBeVisible();
+  await expect(page.getByText("Lotes recientes por receta")).toBeVisible();
+  await expect(page.getByRole("cell", { name: `${recipe.name} v1` })).toBeVisible();
+  await expect(page.locator("article", { hasText: "Consumo de insumos" }).getByText(ingredient.name)).toBeVisible();
+});
+
+test("manager records inventory adjustment and waste with traceable movements", async ({ page, request }) => {
+  const { token, branchId } = await loginApi(request);
+  const auth = { Authorization: `Bearer ${token}` };
+  const suffix = Date.now();
+  const adjustmentReason = `Ajuste UX-R6 ${suffix}`;
+
+  const productResponse = await request.post(`${apiBaseUrl}/products`, {
+    data: {
+      name: `Salsa UX-R6 ${suffix}`,
+      sku: `SALSA-UXR6-${suffix}`,
+      productType: "retail",
+      unit: "piece",
+      isSellable: true,
+      isStockTracked: true,
+      requiresProduction: false
+    },
+    headers: auth
+  });
+  expect(productResponse.ok(), await productResponse.text()).toBeTruthy();
+  const product = (await productResponse.json()).data;
+
+  const stockResponse = await request.post(`${apiBaseUrl}/inventory/adjustments`, {
+    data: {
+      branchId,
+      productId: product.id,
+      direction: "in",
+      quantity: "12.000",
+      reason: "Stock inicial UX-R6"
+    },
+    headers: auth
+  });
+  expect(stockResponse.ok(), await stockResponse.text()).toBeTruthy();
+
+  await loginPage(page);
+  await page.goto("/app/inventory");
+
+  await expect(page.getByRole("heading", { name: "Inventario, movimientos y trazabilidad" })).toBeVisible();
+  await expect(page.getByRole("button", { name: product.name })).toBeVisible();
+
+  const adjustmentPanel = page.locator("article", { hasText: "Ajustes y merma" });
+  await adjustmentPanel.locator("select").first().selectOption(product.id);
+  await adjustmentPanel.getByLabel("Cantidad").fill("2.000");
+  await adjustmentPanel.getByLabel("Motivo de ajuste").fill(adjustmentReason);
+  await page.getByRole("button", { name: "Salida" }).click();
+
+  const adjustmentRow = page.locator("tr", { hasText: adjustmentReason });
+  await expect(adjustmentRow).toBeVisible();
+  await expect(adjustmentRow.getByText("Ajuste salida")).toBeVisible();
+
+  await adjustmentPanel.getByLabel("Cantidad").fill("1.000");
+  await adjustmentPanel.getByLabel("Motivo de merma").selectOption("producto_vencido");
+  await page.getByRole("button", { name: "Merma" }).click();
+
+  await page.locator("article", { hasText: "Movimientos trazables" }).getByRole("combobox").first().selectOption(product.id);
+  const wasteRow = page.locator("tr", { hasText: "Merma" }).filter({ hasText: product.name });
+  await expect(wasteRow).toBeVisible();
+  await expect(adjustmentRow.getByText("Ajuste manual")).toBeVisible();
+  await expect(adjustmentRow.getByText(product.name)).toBeVisible();
 });

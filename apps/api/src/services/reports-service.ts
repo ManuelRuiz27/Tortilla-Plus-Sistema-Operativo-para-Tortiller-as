@@ -14,6 +14,8 @@ type ReportFilters = {
   branchId?: string | null;
   from?: string | null;
   to?: string | null;
+  recipeId?: string | null;
+  outputProductId?: string | null;
 };
 
 type DateRange = {
@@ -116,6 +118,151 @@ export async function getReportsSummary(currentUser: AuthenticatedUser, input: u
       salesByCustomer: (await getSalesByCustomer(currentUser, input)).data,
       withdrawalsByReason: (await getCashWithdrawalsByReason(currentUser, input)).data,
       cashDifferences: (await getCashDifferences(currentUser, input)).data,
+      production: (await getProductionReport(currentUser, input)).data,
+    },
+  };
+}
+
+export async function getProductionReport(currentUser: AuthenticatedUser, input: unknown) {
+  await assertPermission(currentUser.id, "reports.basic.view");
+  const { branchIds, range } = await resolveReportScope(currentUser, input);
+  const query = asLooseRecord(input);
+  const recipeId = optionalString(query.recipeId);
+  const outputProductId = optionalString(query.outputProductId);
+  const batches = await prisma.productionBatch.findMany({
+    where: {
+      organizationId: currentUser.organizationId,
+      branchId: { in: branchIds },
+      productionMode: "recipe_based",
+      status: "closed",
+      productionDate: { gte: range.from, lte: range.to },
+      ...(recipeId ? { recipeVersion: { recipeId } } : {}),
+      ...(outputProductId ? { outputProductId } : {}),
+    },
+    include: {
+      branch: { select: { name: true } },
+      outputProduct: { select: { id: true, name: true, unit: true } },
+      recipeVersion: {
+        select: {
+          version: true,
+          recipe: { select: { id: true, name: true } },
+        },
+      },
+      productionBatchIngredientProductionBatch: {
+        include: {
+          product: { select: { id: true, name: true, unit: true } },
+        },
+      },
+    },
+    orderBy: [{ productionDate: "desc" }, { createdAt: "desc" }],
+  });
+
+  const authorizedBatchIds = new Set(
+    (await prisma.inventoryMovement.findMany({
+      where: {
+        organizationId: currentUser.organizationId,
+        branchId: { in: branchIds },
+        referenceType: "production_batch",
+        referenceId: { in: batches.map((batch) => batch.id) },
+        authorizedByUserId: { not: null },
+      },
+      select: { referenceId: true },
+    })).flatMap((movement) => movement.referenceId ? [movement.referenceId] : []),
+  );
+
+  const byRecipe = new Map<string, { label: string; value: number }>();
+  const byOutputProduct = new Map<string, { label: string; value: number }>();
+  const ingredientConsumption = new Map<string, { label: string; value: number; expectedQuantity: number; actualQuantity: number; varianceQuantity: number; unit: string }>();
+  const recentBatches = [];
+  let totalExpectedOutput = 0;
+  let totalActualOutput = 0;
+  let totalYield = 0;
+  let yieldedBatches = 0;
+  let batchesWithVarianceReason = 0;
+  let batchesWithHighVarianceAuthorization = 0;
+
+  for (const batch of batches) {
+    const expectedOutput = Number(batch.expectedOutputQuantity ?? 0);
+    const actualOutput = Number(batch.actualOutputQuantity ?? 0);
+    const outputVariancePercentage = expectedOutput > 0 ? Math.abs(actualOutput - expectedOutput) / expectedOutput * 100 : 0;
+    const yieldPercentage = Number(batch.yieldPercentage ?? 0);
+    const recipeName = batch.recipeVersion?.recipe.name ?? "Produccion por receta";
+    const outputName = batch.outputProduct?.name ?? "Producto producido";
+
+    totalExpectedOutput += expectedOutput;
+    totalActualOutput += actualOutput;
+    if (yieldPercentage > 0) {
+      totalYield += yieldPercentage;
+      yieldedBatches += 1;
+    }
+    if (batch.varianceReason) batchesWithVarianceReason += 1;
+    if (authorizedBatchIds.has(batch.id)) batchesWithHighVarianceAuthorization += 1;
+
+    addReportPoint(byRecipe, recipeName, actualOutput);
+    addReportPoint(byOutputProduct, outputName, actualOutput);
+
+    const ingredientSummaries = [];
+    for (const ingredient of batch.productionBatchIngredientProductionBatch) {
+      const expected = Number(ingredient.expectedQuantity);
+      const actual = Number(ingredient.actualQuantity);
+      const ingredientName = ingredient.product.name;
+      const consumption = ingredientConsumption.get(ingredient.productId) ?? {
+        label: ingredientName,
+        value: 0,
+        expectedQuantity: 0,
+        actualQuantity: 0,
+        varianceQuantity: 0,
+        unit: ingredient.unit,
+      };
+      consumption.expectedQuantity = roundQuantity(consumption.expectedQuantity + expected);
+      consumption.actualQuantity = roundQuantity(consumption.actualQuantity + actual);
+      consumption.varianceQuantity = roundQuantity(consumption.actualQuantity - consumption.expectedQuantity);
+      consumption.value = consumption.actualQuantity;
+      ingredientConsumption.set(ingredient.productId, consumption);
+      ingredientSummaries.push({
+        productId: ingredient.productId,
+        productName: ingredientName,
+        expectedQuantity: roundQuantity(expected),
+        actualQuantity: roundQuantity(actual),
+        varianceQuantity: roundQuantity(actual - expected),
+        unit: ingredient.unit,
+      });
+    }
+
+    if (recentBatches.length < 10) {
+      recentBatches.push({
+        id: batch.id,
+        productionDate: batch.productionDate.toISOString().slice(0, 10),
+        branchName: batch.branch.name,
+        recipeName,
+        recipeVersion: batch.recipeVersion?.version ?? null,
+        outputProductName: outputName,
+        expectedOutputQuantity: roundQuantity(expectedOutput),
+        actualOutputQuantity: roundQuantity(actualOutput),
+        outputUnit: batch.outputUnit ?? batch.outputProduct?.unit ?? null,
+        yieldPercentage: roundMoney(yieldPercentage),
+        outputVariancePercentage: roundMoney(outputVariancePercentage),
+        varianceReason: batch.varianceReason,
+        ingredients: ingredientSummaries,
+      });
+    }
+  }
+
+  return {
+    data: {
+      summary: {
+        closedBatches: batches.length,
+        expectedOutputQuantity: roundQuantity(totalExpectedOutput),
+        actualOutputQuantity: roundQuantity(totalActualOutput),
+        outputVarianceQuantity: roundQuantity(totalActualOutput - totalExpectedOutput),
+        averageYieldPercentage: yieldedBatches > 0 ? roundMoney(totalYield / yieldedBatches) : 0,
+        batchesWithVarianceReason,
+        batchesWithHighVarianceAuthorization,
+      },
+      byRecipe: sortPoints(Array.from(byRecipe.values())),
+      byOutputProduct: sortPoints(Array.from(byOutputProduct.values())),
+      ingredientConsumption: Array.from(ingredientConsumption.values()).sort((a, b) => b.value - a.value),
+      recentBatches,
     },
   };
 }
@@ -281,6 +428,10 @@ function groupByLabel(points: ReportPoint[]) {
   return sortPoints(Array.from(grouped, ([label, value]) => ({ label, value })));
 }
 
+function addReportPoint(grouped: Map<string, ReportPoint>, label: string, value: number) {
+  grouped.set(label, { label, value: roundQuantity((grouped.get(label)?.value ?? 0) + value) });
+}
+
 function sortPoints(points: ReportPoint[]) {
   return points.sort((a, b) => b.value - a.value);
 }
@@ -302,4 +453,8 @@ function moneyNumber(value: Prisma.Decimal | string | number) {
 
 function roundMoney(value: number) {
   return Number(value.toFixed(2));
+}
+
+function roundQuantity(value: number) {
+  return Number(value.toFixed(3));
 }

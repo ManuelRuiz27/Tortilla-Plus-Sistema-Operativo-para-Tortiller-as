@@ -4,9 +4,47 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProductionRecipeBatchRequest, recipesRequest } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { OperationalCard } from "../../../shared/components/operational-card";
+import { OperationalTable, OperationalTableHead, OperationalTableRow } from "../../../shared/components/operational-table";
 import { PermissionButton } from "../../../shared/components/permission-button";
+import { WorkspacePageHeader } from "../../../shared/components/workspace-page-header";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { labelUnit } from "../../../shared/utils/labels";
+
+const wizardSteps = [
+  "Elegir receta",
+  "Confirmar insumos esperados",
+  "Capturar reales",
+  "Revisar rendimiento",
+  "Cerrar lote"
+];
+
+function WizardSteps({ currentStep }: { currentStep: number }) {
+  return (
+    <ol className="mb-5 grid gap-2 md:grid-cols-5">
+      {wizardSteps.map((step, index) => {
+        const stepNumber = index + 1;
+        const isActive = stepNumber === currentStep;
+        const isDone = stepNumber < currentStep;
+        return (
+          <li
+            className={`rounded-md border px-3 py-2 text-sm ${
+              isActive
+                ? "border-tp-primary bg-tp-brandSoft text-tp-text"
+                : isDone
+                  ? "border-green-100 bg-green-50 text-tp-success"
+                  : "border-tp-border bg-white text-tp-muted"
+            }`}
+            key={step}
+          >
+            <span className="block text-xs font-semibold">Paso {stepNumber}</span>
+            <span className="font-semibold">{step}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export function ProductionRecipeNewPage() {
   const navigate = useNavigate();
@@ -21,7 +59,7 @@ export function ProductionRecipeNewPage() {
 
   const createMutation = useMutation({
     mutationFn: createProductionRecipeBatchRequest,
-    onSuccess: (batch) => navigate(`/app/manager/production/batches/${batch.id}`)
+    onSuccess: (batch) => navigate(`/app/production/batches/${batch.id}`)
   });
 
   function submitBatch() {
@@ -39,50 +77,62 @@ export function ProductionRecipeNewPage() {
 
   return (
     <section className="max-w-5xl">
-      <div className="mb-6">
-        <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Produccion</p>
-        <h1 className="mt-3 text-2xl font-semibold">Nuevo lote por receta</h1>
-        <p className="mt-2 text-sm text-tp-muted">Selecciona una receta activa y confirma la salida esperada.</p>
-      </div>
+      <WorkspacePageHeader
+        description="Elige una receta activa, revisa los insumos esperados y crea el lote para capturar produccion real."
+        eyebrow="Produccion"
+        title="Nuevo lote por receta"
+      />
 
-      <div className="rounded-md border border-tp-border bg-white p-4">
+      <WizardSteps currentStep={selectedVersion ? 2 : 1} />
+
+      <OperationalCard>
         <div className="mb-4 flex items-center gap-2">
-          <Factory className="h-4 w-4 text-tp-secondary" aria-hidden="true" />
-          <h2 className="text-sm font-semibold">Datos del lote</h2>
+          <Factory className="h-4 w-4 text-tp-primary" aria-hidden="true" />
+          <h2 className="text-sm font-semibold">1. Elegir receta y salida esperada</h2>
         </div>
         <div className="grid gap-3 lg:grid-cols-[1.4fr_160px_170px]">
-          <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setRecipeId(event.target.value)} value={selectedRecipe?.id ?? ""}>
+          <label className="grid gap-2 text-sm font-semibold">
+            Receta activa
+          <select className="h-11 rounded-md border border-tp-border px-3 text-sm font-normal" onChange={(event) => setRecipeId(event.target.value)} value={selectedRecipe?.id ?? ""}>
             {activeRecipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name} - {recipe.outputProduct?.name ?? "Salida"}</option>)}
           </select>
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setProductionDate(event.target.value)} type="date" value={productionDate} />
-          <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setExpectedOutputQuantity(event.target.value)} placeholder={selectedVersion?.expectedOutputQuantity.toFixed(3) ?? "0.000"} value={expectedOutputQuantity} />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold">
+            Fecha
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm font-normal" onChange={(event) => setProductionDate(event.target.value)} type="date" value={productionDate} />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold">
+            Salida esperada
+          <input className="h-11 rounded-md border border-tp-border px-3 text-sm font-normal" inputMode="decimal" onChange={(event) => setExpectedOutputQuantity(event.target.value)} placeholder={selectedVersion?.expectedOutputQuantity.toFixed(3) ?? "0.000"} value={expectedOutputQuantity} />
+          </label>
         </div>
 
         {selectedVersion ? (
-          <div className="mt-5 overflow-x-auto rounded-md border border-tp-border">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-tp-soft text-xs uppercase text-tp-muted">
+          <div className="mt-5">
+            <h2 className="mb-3 text-sm font-semibold">2. Confirmar insumos esperados</h2>
+          <OperationalTable>
+              <OperationalTableHead>
                 <tr>
                   <th className="px-4 py-3">Insumo esperado</th>
                   <th className="px-4 py-3">Cantidad base</th>
                 </tr>
-              </thead>
+              </OperationalTableHead>
               <tbody>
                 {selectedVersion.ingredients.map((ingredient) => (
-                  <tr className="border-t border-tp-border" key={ingredient.id}>
+                  <OperationalTableRow key={ingredient.id}>
                     <td className="px-4 py-3 font-semibold">{ingredient.product?.name ?? "Ingrediente"}</td>
                     <td className="px-4 py-3">{ingredient.quantity.toFixed(3)} {labelUnit(ingredient.unit)}</td>
-                  </tr>
+                  </OperationalTableRow>
                 ))}
               </tbody>
-            </table>
+          </OperationalTable>
           </div>
         ) : <p className="mt-4 text-sm text-tp-muted">No hay recetas activas.</p>}
 
         <div className="mt-4 flex justify-end">
-          <PermissionButton disabled={!branchId || !selectedVersion || createMutation.isPending} onClick={submitBatch} permission="production.manage">Crear lote</PermissionButton>
+          <PermissionButton disabled={!branchId || !selectedVersion || createMutation.isPending} onClick={submitBatch} permission="production.manage">Crear lote y capturar reales</PermissionButton>
         </div>
-      </div>
+      </OperationalCard>
     </section>
   );
 }

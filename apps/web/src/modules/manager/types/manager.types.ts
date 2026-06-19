@@ -132,6 +132,7 @@ export type InventoryMovement = {
   reason: string | null;
   referenceType: string | null;
   referenceId: string | null;
+  createdByUserId?: string | null;
   authorizedByUserId: string | null;
   createdAt: string;
   product: RecipeProductRef | null;
@@ -339,6 +340,54 @@ export type ReportPoint = {
   value: number;
 };
 
+export type ProductionIngredientConsumptionPoint = ReportPoint & {
+  expectedQuantity: number;
+  actualQuantity: number;
+  varianceQuantity: number;
+  unit: ManagerProduct["unit"] | string;
+};
+
+export type ProductionReportBatchIngredient = {
+  productId: string;
+  productName: string;
+  expectedQuantity: number;
+  actualQuantity: number;
+  varianceQuantity: number;
+  unit: ManagerProduct["unit"] | string;
+};
+
+export type ProductionReportBatch = {
+  id: string;
+  productionDate: string;
+  branchName: string;
+  recipeName: string;
+  recipeVersion: number | null;
+  outputProductName: string;
+  expectedOutputQuantity: number;
+  actualOutputQuantity: number;
+  outputUnit: ManagerProduct["unit"] | string | null;
+  yieldPercentage: number;
+  outputVariancePercentage: number;
+  varianceReason: string | null;
+  ingredients: ProductionReportBatchIngredient[];
+};
+
+export type ProductionReportSummary = {
+  summary: {
+    closedBatches: number;
+    expectedOutputQuantity: number;
+    actualOutputQuantity: number;
+    outputVarianceQuantity: number;
+    averageYieldPercentage: number;
+    batchesWithVarianceReason: number;
+    batchesWithHighVarianceAuthorization: number;
+  };
+  byRecipe: ReportPoint[];
+  byOutputProduct: ReportPoint[];
+  ingredientConsumption: ProductionIngredientConsumptionPoint[];
+  recentBatches: ProductionReportBatch[];
+};
+
 export type ReportsSummary = {
   salesByDay: ReportPoint[];
   salesByProduct: ReportPoint[];
@@ -346,6 +395,7 @@ export type ReportsSummary = {
   salesByCustomer: ReportPoint[];
   withdrawalsByReason: ReportPoint[];
   cashDifferences: ReportPoint[];
+  production: ProductionReportSummary;
 };
 
 export type SettingsSummary = {

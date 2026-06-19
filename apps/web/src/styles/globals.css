@@ -3,29 +3,30 @@
 @tailwind utilities;
 
 :root {
-  --tp-bg: #f7f3ea;
-  --tp-surface: #ffffff;
-  --tp-surface-soft: #fff8e8;
-  --tp-surface-muted: #f3eadb;
+  --tp-bg: #f6f1e7;
+  --tp-surface: #fffdf7;
+  --tp-surface-soft: #fad7a0;
+  --tp-surface-muted: #efe5d4;
 
-  --tp-primary: #2f6b3f;
-  --tp-primary-hover: #245632;
-  --tp-secondary: #d97706;
+  --tp-primary: #d97706;
+  --tp-primary-hover: #b45309;
+  --tp-secondary: #2f7d32;
 
   --tp-brand: #d97706;
-  --tp-brand-dark: #92400e;
-  --tp-brand-soft: #fbbf24;
-  --tp-accent: #f5c76b;
+  --tp-brand-dark: #2b2118;
+  --tp-brand-soft: #fad7a0;
+  --tp-accent: #f59e0b;
+  --tp-panel-dark: #2b2118;
 
-  --tp-text: #1f2933;
-  --tp-text-muted: #6b7280;
-  --tp-border: #e5d8c5;
+  --tp-text: #1f1a14;
+  --tp-text-muted: #6b5e4a;
+  --tp-border: #ddd0bd;
 
-  --tp-success: #16a34a;
+  --tp-success: #2f7d32;
   --tp-success-bg: #ecfdf5;
   --tp-warning: #f59e0b;
   --tp-warning-bg: #fffbeb;
-  --tp-danger: #dc2626;
+  --tp-danger: #b91c1c;
   --tp-danger-hover: #991b1b;
   --tp-danger-bg: #fef2f2;
   --tp-info: #2563eb;

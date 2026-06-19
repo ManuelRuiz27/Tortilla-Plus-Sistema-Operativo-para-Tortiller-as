@@ -490,13 +490,24 @@ export function SalePage() {
       const isTyping =
         target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
 
-      if (event.ctrlKey && event.key.toLowerCase() === "f") {
+      if (event.key === "F6" || event.ctrlKey && event.key.toLowerCase() === "f") {
         event.preventDefault();
         focusInput("product-search");
         return;
       }
 
-      if (isTyping) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (quickSaleProduct) {
+          setQuickSaleProduct(null);
+          return;
+        }
+        if (isPaymentOpen) {
+          setCheckoutDraft(null);
+          setIsPaymentOpen(false);
+          return;
+        }
+        handleCancelTicket();
         return;
       }
 
@@ -506,20 +517,24 @@ export function SalePage() {
         F3: () => openQuickSale(masaProduct, masaKgPrice, "by_kg"),
         F4: () => openQuickSale(masaProduct, masaKgPrice, "by_amount"),
         F5: () => document.getElementById("package-800-button")?.click(),
-        F8: () => void handleCheckout(),
-        F9: handleCancelTicket
+        F9: () => void handleCheckout()
       };
 
       const action = shortcutMap[event.key];
       if (action) {
         event.preventDefault();
         action();
+        return;
+      }
+
+      if (isTyping) {
+        return;
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [checkoutMutation.isPending, items.length, masaKgPrice, masaProduct, saleDraftId, tortillaKgPrice, tortillaProduct, total]);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [checkoutMutation.isPending, isPaymentOpen, items.length, masaKgPrice, masaProduct, quickSaleProduct, saleDraftId, tortillaKgPrice, tortillaProduct, total]);
 
   if (isLoading) {
     return <LoadingState message="Cargando productos..." />;
@@ -563,6 +578,11 @@ export function SalePage() {
           ) : (
             <p className="mt-3 text-xs text-tp-danger">Selecciona una caja para habilitar cobros Mercado Pago.</p>
           )}
+          <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-tp-muted">
+            {["F1 Tortilla kg", "F2 Tortilla $", "F3 Masa kg", "F4 Masa $", "F5 Paquete", "F6 Buscar", "F9 Cobrar", "Esc Cancelar"].map((shortcut) => (
+              <span className="rounded-md border border-tp-border bg-tp-surface px-2 py-1" key={shortcut}>{shortcut}</span>
+            ))}
+          </div>
         </div>
 
         <div className="mt-5">
@@ -613,11 +633,7 @@ export function SalePage() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Button className="min-h-14 justify-start px-5 text-left" disabled variant="secondary">
-            <Scale className="h-5 w-5" aria-hidden="true" />
-            Bascula futura
-          </Button>
+        <div className="mt-3 grid gap-3">
           <Button className="min-h-14 justify-start px-5 text-left" disabled={Boolean(mercadoPagoDisabledReason)} variant="secondary">
             <CreditCard className="h-5 w-5" aria-hidden="true" />
             {mercadoPagoDisabledReason ? "Cobro Mercado Pago no listo" : "Terminal Mercado Pago lista"}

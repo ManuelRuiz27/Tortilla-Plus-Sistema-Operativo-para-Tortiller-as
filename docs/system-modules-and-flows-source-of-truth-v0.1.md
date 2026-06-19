@@ -84,7 +84,8 @@ Estado actualizado del parche de inventario con recetas:
 ```txt
 R7 - Frontend minimo operativo completado.
 R8 - Hardening, QA E2E y documentacion operativa completado.
-Post R8 - Siguiente fase: reportes de produccion/rendimiento y piloto operativo controlado.
+Post R8-A - Reportes de produccion/rendimiento completado como reporte operativo base.
+Post R8-B - Piloto operativo controlado preparado con seed, checklist y validacion automatica; ejecucion manual en LAN/staging pendiente.
 ```
 
 ---
@@ -788,22 +789,22 @@ Venta completada
 ## 7.1 Reportes de produccion y rendimiento
 
 ```txt
-- Rendimiento por lote.
-- Consumo diario de maiz, harina, cal y otros insumos.
-- Produccion esperada vs real.
-- Merma por receta.
-- Lotes con variacion y autorizacion.
-- Stock bajo de insumos.
+- Rendimiento por lote. Completado como base.
+- Consumo diario de maiz, harina, cal y otros insumos. Completado como consumo por periodo.
+- Produccion esperada vs real. Completado.
+- Merma por receta. Completado como variacion esperada vs real.
+- Lotes con variacion y autorizacion. Completado como datos de reporte.
+- Stock bajo de insumos. Pendiente como mejora de inventario/reportes.
 ```
 
 ## 7.2 Piloto operativo controlado
 
 ```txt
-- Validar flujo completo desde dispositivos reales.
-- Validar roles reales: duenio, gerente, produccion, cajero y repartidor.
-- Validar POS, caja, rutas, credito, facturacion y produccion por receta.
-- Registrar hallazgos de UX y operacion.
-- Convertir hallazgos bloqueantes en deuda tecnica o funcional.
+- Validar flujo completo desde dispositivos reales. Pendiente manual.
+- Validar roles reales: duenio, gerente, produccion, cajero y repartidor. Preparado; repartidor sigue como entidad operativa, no UserRole.
+- Validar POS, caja, rutas, credito, facturacion y produccion por receta. Cubierto por automatizacion; pendiente confirmacion manual.
+- Registrar hallazgos de UX y operacion. Checklist creado.
+- Convertir hallazgos bloqueantes en deuda tecnica o funcional. Preparado.
 ```
 
 ## 7.3 Deudas funcionales aceptadas temporalmente

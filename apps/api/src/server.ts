@@ -140,6 +140,7 @@ import {
   getCashDifferences,
   getCashWithdrawalsByReason,
   getManagerDashboard,
+  getProductionReport,
   getReportsSummary,
   getSalesByBranch,
   getSalesByCustomer,
@@ -1273,6 +1274,12 @@ async function route(request: IncomingMessage, response: ServerResponse) {
     return;
   }
 
+  if (method === "GET" && path === "/api/v1/reports/production") {
+    const currentUser = await authenticate(request);
+    sendJson(response, 200, await getProductionReport(currentUser, reportQuery(url)));
+    return;
+  }
+
   if (method === "GET" && path === "/api/v1/exports/billing/invoices") {
     const currentUser = await authenticate(request);
     sendDocument(response, 200, await exportIssuedInvoices(currentUser, exportQuery(url)));
@@ -1534,6 +1541,8 @@ function reportQuery(url: URL) {
     branchId: url.searchParams.get("branchId"),
     from: url.searchParams.get("from"),
     to: url.searchParams.get("to"),
+    recipeId: url.searchParams.get("recipeId"),
+    outputProductId: url.searchParams.get("outputProductId"),
   };
 }
 

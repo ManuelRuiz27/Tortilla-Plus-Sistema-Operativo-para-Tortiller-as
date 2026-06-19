@@ -69,7 +69,7 @@ export function CartPanel({
         <p className="text-xs font-semibold uppercase text-tp-muted">Total</p>
         <p className="mt-1 text-5xl font-semibold">{formatMoney(total)}</p>
         <Button className="mt-4 w-full" disabled={!canCheckout} onClick={onCheckout}>
-          Cobrar
+          Cobrar (F9)
         </Button>
         <Button
           className="mt-2 w-full"
@@ -77,7 +77,7 @@ export function CartPanel({
           onClick={onCancelTicket}
           variant="danger"
         >
-          Cancelar venta
+          Cancelar venta (Esc)
         </Button>
       </div>
     </aside>

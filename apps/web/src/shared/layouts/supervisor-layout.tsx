@@ -1,6 +1,6 @@
-import { ClipboardCheck, LogOut, ShoppingCart, Store } from "lucide-react";
+import { ClipboardCheck, ShoppingCart } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Button } from "../components/button";
+import { OperationalHeader } from "../components/operational-header";
 import { useAuthStore } from "../stores/auth.store";
 import { useBranchStore } from "../stores/branch.store";
 import { useCashStore } from "../stores/cash.store";
@@ -17,6 +17,7 @@ export function SupervisorLayout() {
   const logout = useAuthStore((state) => state.logout);
   const branchName = useBranchStore((state) => state.activeBranchName);
   const clearBranch = useBranchStore((state) => state.clearActiveBranch);
+  const cashStatus = useCashStore((state) => state.status);
   const clearCash = useCashStore((state) => state.clearCashSession);
 
   function handleLogout() {
@@ -53,19 +54,15 @@ export function SupervisorLayout() {
         </nav>
       </aside>
       <section className="min-w-0">
-        <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-tp-border bg-white px-4 py-3 lg:px-6">
-          <div className="flex min-w-0 items-center gap-4">
-            <Store className="h-5 w-5 text-tp-secondary" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{branchName ?? "Sucursal sin seleccionar"}</p>
-              <p className="text-xs text-tp-muted">{user?.fullName ?? "Supervisor"}</p>
-            </div>
-          </div>
-          <Button variant="ghost" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            Salir
-          </Button>
-        </header>
+        <OperationalHeader
+          branchName={branchName}
+          cashStatus={cashStatus}
+          contextLabel="Autorizaciones"
+          onLogout={handleLogout}
+          showAlerts={false}
+          showSearch={false}
+          user={user}
+        />
         <div className="p-4 lg:p-6">
           <Outlet />
         </div>

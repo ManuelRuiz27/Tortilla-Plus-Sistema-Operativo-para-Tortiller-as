@@ -15,6 +15,8 @@ import {
   updateCustomerRequest
 } from "../../../api/manager.api";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { OperationalAlert } from "../../../shared/components/operational-alert";
+import { OperationalCard } from "../../../shared/components/operational-card";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
 import { useBranchStore } from "../../../shared/stores/branch.store";
@@ -24,6 +26,15 @@ import { formatManagerMoney } from "../utils/money";
 
 const customerTypes: Array<ManagerCustomer["customerType"]> = ["tienda", "puesto", "comedor", "repartidor", "cliente_frecuente", "empresa", "otro"];
 const saleModes: Array<ManagerPrice["saleMode"]> = ["by_kg", "by_amount", "by_package", "by_unit"];
+const customerTypeLabels: Record<ManagerCustomer["customerType"], string> = {
+  tienda: "Tienda",
+  puesto: "Puesto",
+  comedor: "Comedor",
+  repartidor: "Repartidor",
+  cliente_frecuente: "Frecuente",
+  empresa: "Empresa",
+  otro: "Otro"
+};
 
 export function CustomerDetailPage() {
   const { customerId = "" } = useParams();
@@ -160,13 +171,18 @@ export function CustomerDetailPage() {
     return <LoadingState message="Cargando cliente..." />;
   }
 
-  if (customersQuery.isError || balanceQuery.isError || productsQuery.isError || pricesQuery.isError || routesQuery.isError || !customer) {
+  if (customersQuery.isError || balanceQuery.isError || productsQuery.isError || pricesQuery.isError || !customer) {
     return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudo cargar el cliente.</p>;
   }
 
   const balance = balanceQuery.data;
   const products = (productsQuery.data ?? []).filter((product) => product.isSellable && product.status === "active");
-  const routes = routesQuery.data ?? [];
+  const routes = routesQuery.isError ? [] : routesQuery.data ?? [];
+  const currentBalance = balance?.currentBalance ?? customer.currentBalance;
+  const configuredCreditLimit = Number(creditLimit || 0);
+  const availableCredit = configuredCreditLimit - currentBalance;
+  const assignedRoutes = routes.filter((route) => route.customers.some((assignment) => assignment.customerId === customer.id));
+  const specialPrices = pricesQuery.data ?? [];
 
   return (
     <section>
@@ -187,13 +203,46 @@ export function CustomerDetailPage() {
         </div>
       </div>
 
+      <div className="mb-5 grid gap-4 lg:grid-cols-4">
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Saldo</p>
+          <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(currentBalance)}</p>
+          <p className="mt-1 text-sm text-tp-muted">{currentBalance > 0 ? "Pendiente de cobro" : "Al corriente"}</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Limite</p>
+          <p className="mt-2 text-2xl font-semibold">{formatManagerMoney(configuredCreditLimit)}</p>
+          <p className="mt-1 text-sm text-tp-muted">{creditEnabled ? "Credito activo" : "Sin credito"}</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Disponible</p>
+          <p className={`mt-2 text-2xl font-semibold ${availableCredit < 0 ? "text-tp-danger" : "text-tp-success"}`}>{formatManagerMoney(availableCredit)}</p>
+          <p className="mt-1 text-sm text-tp-muted">Despues del saldo actual</p>
+        </OperationalCard>
+        <OperationalCard className="p-4">
+          <p className="text-xs font-semibold uppercase text-tp-muted">Ruta</p>
+          <p className="mt-2 text-lg font-semibold">{routesQuery.isError ? "No disponible" : assignedRoutes[0]?.name ?? "Sin ruta"}</p>
+          <p className="mt-1 text-sm text-tp-muted">{specialPrices.length} precio(s) especial(es)</p>
+        </OperationalCard>
+      </div>
+
+      {availableCredit < 0 ? (
+        <OperationalAlert className="mb-5" title="Credito excedido" tone="danger">
+          El cliente supera su limite. Revisa cobro, ajuste de limite o autorizacion antes de vender a credito.
+        </OperationalAlert>
+      ) : currentBalance > 0 ? (
+        <OperationalAlert className="mb-5" title="Saldo pendiente" tone="warning">
+          Hay saldo abierto. Puedes cobrarlo aqui o vender en POS si la operacion lo permite.
+        </OperationalAlert>
+      ) : null}
+
       <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <article className="rounded-md border border-tp-border bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold">Datos del cliente</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setName(event.target.value)} value={name} />
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setCustomerType(event.target.value as ManagerCustomer["customerType"])} value={customerType}>
-              {customerTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              {customerTypes.map((type) => <option key={type} value={type}>{customerTypeLabels[type]}</option>)}
             </select>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setPhone(event.target.value)} placeholder="Telefono" value={phone} />
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setEmail(event.target.value)} placeholder="Email" value={email} />
@@ -231,13 +280,14 @@ export function CustomerDetailPage() {
 
         <article className="rounded-md border border-tp-border bg-white p-5">
           <h2 className="mb-4 text-sm font-semibold">Asignar a ruta</h2>
+          {routesQuery.isError ? <p className="mb-3 text-sm text-tp-muted">Reparto no disponible para esta organizacion o plan.</p> : null}
           <div className="grid gap-3 md:grid-cols-[1fr_120px_auto]">
             <select className="h-11 rounded-md border border-tp-border px-3 text-sm" onChange={(event) => setRouteId(event.target.value)} value={routeId}>
               <option value="">Ruta</option>
               {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
             </select>
             <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="numeric" onChange={(event) => setRouteSortOrder(event.target.value)} value={routeSortOrder} />
-            <PermissionButton disabled={!routeId || routeMutation.isPending} onClick={assignRoute} permission="routes.manage">
+            <PermissionButton disabled={routesQuery.isError || !routeId || routeMutation.isPending} onClick={assignRoute} permission="routes.manage">
               Asignar
             </PermissionButton>
           </div>
@@ -248,7 +298,7 @@ export function CustomerDetailPage() {
           <div className="mb-5 grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs uppercase text-tp-muted">Saldo actual</p>
-              <p className="mt-1 text-2xl font-semibold">{formatManagerMoney(balance?.currentBalance ?? customer.currentBalance)}</p>
+              <p className="mt-1 text-2xl font-semibold">{formatManagerMoney(currentBalance)}</p>
             </div>
             <div>
               <p className="text-xs uppercase text-tp-muted">Limite</p>
@@ -282,7 +332,7 @@ export function CustomerDetailPage() {
             </PermissionButton>
           </div>
           <div className="mt-4 space-y-2">
-            {(pricesQuery.data ?? []).map((item) => (
+            {specialPrices.map((item) => (
               <div className="flex items-center justify-between border-t border-tp-border pt-2 text-sm first:border-t-0 first:pt-0" key={item.id}>
                 <span>{item.productName} - {labelSaleMode(item.saleMode)} - {item.branchName}</span>
                 <span className="font-semibold">{formatManagerMoney(item.price)}</span>

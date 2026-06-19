@@ -208,6 +208,28 @@ Antes de iniciar R5 se cerraron los bloqueantes detectados en la auditoria R1-R4
 
 **Estado post R8:** sin deuda critica o alta abierta. El parche de inventario con recetas queda listo para piloto operativo. La reportabilidad avanzada de rendimiento, consumo historico y merma detallada queda como fase futura sobre los movimientos auditables existentes, no como bloqueante del parche R0-R8.
 
+### Post R8-A - Reportes de produccion y rendimiento
+
+**Objetivo del avance:** convertir lotes, insumos y rendimiento en reporte operativo para gerencia.  
+**Estado:** Completado para reporte operativo base.  
+
+| ID | Severidad | Estado | Deuda | Resolucion esperada |
+|---|---|---|---|---|
+| N/A | N/A | N/A | Sin deuda critica o alta nueva detectada. | Avanzar a Post R8-B con piloto operativo controlado. |
+
+**Estado post R8-A:** sin deuda critica o alta abierta. Quedan como mejoras futuras no bloqueantes la exportacion especifica del reporte de produccion, el pulido visual de estados de variacion y el reporte de stock bajo de insumos.
+
+### Post R8-B - Piloto operativo controlado
+
+**Objetivo del avance:** preparar ejecucion de piloto con datos demo, roles reales, checklist manual y validacion automatica.  
+**Estado:** Preparado para ejecucion manual local/staging.  
+
+| ID | Severidad | Estado | Deuda | Resolucion esperada |
+|---|---|---|---|---|
+| N/A | N/A | N/A | Sin deuda critica o alta nueva detectada en preparacion automatica. | Ejecutar checklist manual y registrar hallazgos antes de Post R8-C. |
+
+**Estado post R8-B preparacion:** sin deuda critica o alta abierta. Queda pendiente la ejecucion manual en LAN/staging con dispositivos reales; cualquier hallazgo critico o alto se registrara antes de tolerancias configurables.
+
 ---
 
 ## 6. Formato para nuevas entradas

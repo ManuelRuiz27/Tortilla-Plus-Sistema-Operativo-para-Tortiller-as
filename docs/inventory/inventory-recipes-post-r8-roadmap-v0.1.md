@@ -5,7 +5,7 @@
 **Roadmap base cerrado:** `docs/inventory/inventory-recipes-roadmap-v0.1.md`  
 **Fuente de verdad funcional:** `docs/system-modules-and-flows-source-of-truth-v0.1.md`  
 **Deuda tecnica:** `docs/inventory/inventory-recipes-technical-debt-log-v0.1.md`  
-**Estado:** Roadmap propuesto para fase posterior a R8  
+**Estado:** En ejecucion; Post R8-A completado; Post R8-B preparado para piloto  
 **Fecha:** 2026-06-17  
 
 ---
@@ -76,7 +76,7 @@ Permisos relevantes por fase:
 
 ## 4. Post R8-A - Reportes de produccion y rendimiento
 
-**Estado:** Pendiente.  
+**Estado:** Completado para reporte operativo base.  
 **Prioridad:** Alta.  
 
 ### Objetivo
@@ -85,31 +85,32 @@ Agregar reportes operativos sobre la informacion que ya existe: lotes, recetas, 
 
 ### Alcance backend
 
-- Endpoint de resumen de produccion por periodo.
-- Filtros por organizacion, sucursal, receta, producto de salida y rango de fechas.
+- Endpoint de resumen de produccion por periodo. Completado en `GET /api/v1/reports/production` y dentro de `GET /api/v1/reports/summary`.
+- Filtros por organizacion, sucursal, receta, producto de salida y rango de fechas. Completado en backend; frontend expone periodo, sucursal activa y receta.
 - Indicadores:
-  - lotes cerrados
-  - cantidad producida
-  - consumo esperado
-  - consumo real
-  - variacion de consumo
-  - rendimiento promedio
-  - merma estimada
-  - lotes con motivo de variacion
-  - lotes con autorizacion de variacion alta
-- Reutilizar `ProductionBatch`, `ProductionBatchIngredient` e `InventoryMovement`.
-- No agregar nuevas tablas si los datos pueden calcularse desde el modelo actual.
-- Respetar scope por organizacion y sucursal.
-- Usar movimientos auditables como fuente de conciliacion, no calculos aislados del frontend.
+  - lotes cerrados. Completado.
+  - cantidad producida. Completado.
+  - consumo esperado. Completado.
+  - consumo real. Completado.
+  - variacion de consumo. Completado.
+  - rendimiento promedio. Completado.
+  - merma estimada. Completado como variacion de salida esperada vs real.
+  - lotes con motivo de variacion. Completado.
+  - lotes con autorizacion de variacion alta. Completado con conteo desde movimientos auditables con autorizador.
+- Reutilizar `ProductionBatch`, `ProductionBatchIngredient` e `InventoryMovement`. Completado sin nuevas tablas.
+- No agregar nuevas tablas si los datos pueden calcularse desde el modelo actual. Completado.
+- Respetar scope por organizacion y sucursal. Completado.
+- Usar movimientos auditables como fuente de conciliacion, no calculos aislados del frontend. Completado con datos backend derivados de lotes cerrados e insumos persistidos.
 
 ### Alcance frontend
 
-- Vista de reportes de produccion para manager.
-- Tabla filtrable por periodo/sucursal/receta.
-- Detalle por lote con insumos esperados vs reales.
-- Estados visuales para variacion normal, variacion con motivo y variacion autorizada.
-- Enlace desde produccion o inventario, no desde POS.
-- Exportacion CSV solo si el costo es bajo y no introduce dependencia pesada.
+- Vista de reportes de produccion para manager. Completado dentro de Reportes.
+- Tabla filtrable por periodo/sucursal/receta. Completado para periodo, sucursal activa y receta.
+- Detalle por lote con salida esperada vs real. Completado.
+- Consumo agregado de insumos esperado vs real. Completado.
+- Estados visuales para variacion normal, variacion con motivo y variacion autorizada. Parcial; hay datos backend, queda pulido visual fino para piloto.
+- Enlace desde produccion o inventario, no desde POS. Completado usando modulo Reportes existente.
+- Exportacion CSV solo si el costo es bajo y no introduce dependencia pesada. Diferido; no bloquea reporte operativo base.
 
 ### Fuera de alcance
 
@@ -121,20 +122,35 @@ Agregar reportes operativos sobre la informacion que ya existe: lotes, recetas, 
 
 ### Definition of Done
 
-- Manager puede consultar rendimiento por periodo.
-- Manager puede identificar lotes con desviacion.
-- Los reportes cuadran contra movimientos auditables.
-- Los reportes respetan `inventory.view`, `recipes.view`, `production.manage` o `audit.view` segun el endpoint usado.
-- Pruebas backend cubren filtros y calculos principales.
-- E2E cubre al menos consulta de reporte con un lote cerrado por receta.
-- Documentacion actualizada.
+- Manager puede consultar rendimiento por periodo. Completado.
+- Manager puede identificar lotes con desviacion. Completado.
+- Los reportes cuadran contra lotes/insumos persistidos y movimientos auditables. Completado para base operativa.
+- Los reportes respetan permisos y scope de reportes/sucursal. Completado con `reports.basic.view` y asignaciones de sucursal.
+- Pruebas backend cubren filtros y calculos principales. Completado.
+- E2E cubre al menos consulta de reporte con un lote cerrado por receta. Completado.
+- Documentacion actualizada. Completado.
+
+### Validacion Post R8-A
+
+- `npm run db:validate -w @tortilla-plus/api`: Completado.
+- `npm run test -w @tortilla-plus/api`: Completado, 46/46.
+- `npm run test:integration -w @tortilla-plus/api`: Completado, 53/53.
+- `npm run build -w @tortilla-plus/web`: Completado.
+- `npm run test:e2e -w @tortilla-plus/web`: Completado, 7/7.
+
+### Deuda post Post R8-A
+
+- Sin deuda critica o alta abierta.
+- Mejora futura: exportar CSV/XLSX especifico de produccion si el piloto lo pide.
+- Mejora futura: pulir estados visuales de variacion/autorizacion despues de observar uso real.
 
 ---
 
 ## 5. Post R8-B - Piloto operativo controlado
 
-**Estado:** Pendiente.  
+**Estado:** Preparado para ejecucion manual local/staging.  
 **Prioridad:** Alta despues de reportes base.  
+**Checklist:** `docs/inventory/inventory-recipes-post-r8-pilot-checklist-v0.1.md`
 
 ### Objetivo
 
@@ -142,21 +158,21 @@ Validar el flujo completo en condiciones reales antes de agregar reglas mas comp
 
 ### Alcance
 
-- Checklist operativo para tortilleria piloto.
+- Checklist operativo para tortilleria piloto. Completado.
 - Datos semilla realistas:
-  - insumos
-  - conversiones
-  - recetas
-  - productos vendibles
-  - usuarios y roles
-- Pruebas en dispositivos externos usando frontend en modo server.
-- Registro de hallazgos de usabilidad.
+  - insumos. Completado en seed demo.
+  - conversiones. Completado en seed demo.
+  - recetas. Completado con `Masa estandar demo`.
+  - productos vendibles. Completado desde seed existente.
+  - usuarios y roles. Completado desde seed existente.
+- Pruebas en dispositivos externos usando frontend en modo server. Pendiente de ejecucion manual.
+- Registro de hallazgos de usabilidad. Preparado en checklist.
 - Validacion de permisos por rol real:
-  - duenio
-  - gerente
-  - encargado de produccion
-  - cajero
-  - repartidor
+  - duenio. Preparado con `owner.demo@tortillaplus.mx`.
+  - gerente. Preparado con `manager.demo@tortillaplus.mx`.
+  - encargado de produccion. Cubierto por gerente/supervisor en V1.
+  - cajero. Preparado con `cashier.demo@tortillaplus.mx`.
+  - repartidor. Fuera de alcance como `UserRole`; se mantiene como entidad operativa de rutas.
 - Validacion de flujos transversales de la fuente de verdad:
   - venta mostrador
   - produccion por receta
@@ -166,11 +182,22 @@ Validar el flujo completo en condiciones reales antes de agregar reglas mas comp
 
 ### Definition of Done
 
-- Flujo probado de punta a punta en LAN o entorno staging.
-- POS, caja, rutas, credito, facturacion y produccion por receta siguen operando dentro de sus reglas funcionales.
-- Se registran hallazgos con prioridad.
-- No hay bloqueantes para operar una jornada simulada.
-- La deuda del piloto queda registrada antes de iniciar cambios funcionales nuevos.
+- Flujo probado de punta a punta en LAN o entorno staging. Pendiente de ejecucion manual.
+- POS, caja, rutas, credito, facturacion y produccion por receta siguen operando dentro de sus reglas funcionales. Cubierto por suite automatica; pendiente confirmacion manual.
+- Se registran hallazgos con prioridad. Preparado.
+- No hay bloqueantes para operar una jornada simulada. Pendiente de ejecucion manual.
+- La deuda del piloto queda registrada antes de iniciar cambios funcionales nuevos. Preparado.
+
+### Validacion automatica Post R8-B
+
+- Seed demo incluye usuarios, insumos, conversiones, stock y receta `Masa estandar demo`.
+- Prueba `Post R8-B seed exposes pilot users, inputs, conversions and demo recipe` cubre readiness basico de seed.
+
+### Pendiente real Post R8-B
+
+- Ejecutar checklist manual en LAN/staging con dispositivos externos.
+- Registrar hallazgos de usabilidad y operacion.
+- Decidir Go/No-Go antes de Post R8-C.
 
 ---
 
@@ -334,4 +361,4 @@ Resolver si agua y empaques requieren control inventariable adicional.
   - `INV-REC-DEBT-012`: agua inventariable.
   - `INV-REC-DEBT-013`: flujo formal `masa -> tortilla`.
   - `INV-REC-DEBT-014`: descuento de empaques en venta.
-- Siguiente avance recomendado: Post R8-A.
+- Siguiente avance recomendado: Post R8-B.

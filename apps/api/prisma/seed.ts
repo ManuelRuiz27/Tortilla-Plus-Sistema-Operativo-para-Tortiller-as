@@ -150,6 +150,23 @@ async function main() {
     },
   });
 
+  const inputsCategory = await prisma.productCategory.upsert({
+    where: {
+      organizationId_name: {
+        organizationId: organization.id,
+        name: "Insumos",
+      },
+    },
+    update: {
+      status: "active",
+    },
+    create: {
+      organizationId: organization.id,
+      name: "Insumos",
+      status: "active",
+    },
+  });
+
   const tortillaProduct = await prisma.product.upsert({
     where: {
       organizationId_sku: {
@@ -289,6 +306,36 @@ async function main() {
     },
   });
 
+  const cornProduct = await upsertInputProduct({
+    organizationId: organization.id,
+    categoryId: inputsCategory.id,
+    name: "Maiz blanco",
+    sku: "MAIZ-BLANCO-KG",
+    productType: "raw_material",
+    unit: "kg",
+  });
+  const cornFlourProduct = await upsertInputProduct({
+    organizationId: organization.id,
+    categoryId: inputsCategory.id,
+    name: "Harina de maiz",
+    sku: "HARINA-MAIZ-KG",
+    productType: "raw_material",
+    unit: "kg",
+  });
+  const limeProduct = await upsertInputProduct({
+    organizationId: organization.id,
+    categoryId: inputsCategory.id,
+    name: "Cal",
+    sku: "CAL-KG",
+    productType: "raw_material",
+    unit: "kg",
+  });
+
+  await upsertUnitConversion(organization.id, cornProduct.id, "costal", "kg", "50.000000", "Costal 50 kg");
+  await upsertUnitConversion(organization.id, cornProduct.id, "cubeta", "kg", "25.000000", "Cubeta 25 kg");
+  await upsertUnitConversion(organization.id, cornFlourProduct.id, "costal", "kg", "20.000000", "Costal 20 kg");
+  await upsertUnitConversion(organization.id, limeProduct.id, "bulto", "kg", "25.000000", "Bulto 25 kg");
+
   await upsertBranchPrice({
     organizationId: organization.id,
     branchId: branch.id,
@@ -321,6 +368,23 @@ async function main() {
   await ensureInventoryStock(organization.id, branch.id, tortillaProduct.id, "25.000");
   await ensureInventoryStock(organization.id, branch.id, masaProduct.id, "10.000");
   await ensureInventoryStock(organization.id, branch.id, retailProduct.id, "12.000");
+  await ensureInventoryStock(organization.id, branch.id, cornProduct.id, "250.000");
+  await ensureInventoryStock(organization.id, branch.id, cornFlourProduct.id, "80.000");
+  await ensureInventoryStock(organization.id, branch.id, limeProduct.id, "10.000");
+
+  await ensureDemoRecipe({
+    organizationId: organization.id,
+    branchId: branch.id,
+    name: "Masa estandar demo",
+    outputProductId: masaProduct.id,
+    expectedOutputQuantity: "33.000",
+    outputUnit: "kg",
+    ingredients: [
+      { productId: cornProduct.id, quantity: "25.000", unit: "kg" },
+      { productId: cornFlourProduct.id, quantity: "8.000", unit: "kg" },
+      { productId: limeProduct.id, quantity: "0.100", unit: "kg" },
+    ],
+  });
 
   const demoCustomer = await prisma.customer.upsert({
     where: {
@@ -578,6 +642,170 @@ async function upsertCustomerPrice(input: {
       price: input.price,
       activeFrom: new Date(),
       status: "active",
+    },
+  });
+}
+
+async function upsertInputProduct(input: {
+  organizationId: string;
+  categoryId: string;
+  name: string;
+  sku: string;
+  productType: "raw_material" | "packaging";
+  unit: "kg" | "piece" | "package" | "liter" | "service";
+}) {
+  return prisma.product.upsert({
+    where: {
+      organizationId_sku: {
+        organizationId: input.organizationId,
+        sku: input.sku,
+      },
+    },
+    update: {
+      categoryId: input.categoryId,
+      name: input.name,
+      productType: input.productType,
+      unit: input.unit,
+      isSellable: false,
+      requiresProduction: false,
+      isStockTracked: true,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+      status: "active",
+    },
+    create: {
+      organizationId: input.organizationId,
+      categoryId: input.categoryId,
+      name: input.name,
+      sku: input.sku,
+      productType: input.productType,
+      unit: input.unit,
+      isSellable: false,
+      requiresProduction: false,
+      isStockTracked: true,
+      isRecipeIngredient: true,
+      allowNegativeStock: false,
+      status: "active",
+    },
+  });
+}
+
+async function upsertUnitConversion(
+  organizationId: string,
+  productId: string,
+  fromUnit: string,
+  toUnit: "kg" | "piece" | "package" | "liter" | "service",
+  factor: string,
+  name: string,
+) {
+  await prisma.unitConversion.upsert({
+    where: {
+      organizationId_productId_fromUnit_name: {
+        organizationId,
+        productId,
+        fromUnit,
+        name,
+      },
+    },
+    update: {
+      toUnit,
+      factor,
+      status: "active",
+      updatedAt: new Date(),
+    },
+    create: {
+      organizationId,
+      productId,
+      fromUnit,
+      toUnit,
+      factor,
+      name,
+      status: "active",
+    },
+  });
+}
+
+async function ensureDemoRecipe(input: {
+  organizationId: string;
+  branchId: string;
+  name: string;
+  outputProductId: string;
+  expectedOutputQuantity: string;
+  outputUnit: "kg" | "piece" | "package" | "liter" | "service";
+  ingredients: Array<{ productId: string; quantity: string; unit: "kg" | "piece" | "package" | "liter" | "service" }>;
+}) {
+  const recipe = await prisma.recipe.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      name: input.name,
+    },
+  }) ?? await prisma.recipe.create({
+    data: {
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      name: input.name,
+      outputProductId: input.outputProductId,
+      status: "active",
+    },
+  });
+
+  const version = await prisma.recipeVersion.upsert({
+    where: {
+      recipeId_version: {
+        recipeId: recipe.id,
+        version: 1,
+      },
+    },
+    update: {
+      expectedOutputQuantity: input.expectedOutputQuantity,
+      outputUnit: input.outputUnit,
+      notes: "Receta demo para piloto operativo.",
+      status: "active",
+      updatedAt: new Date(),
+    },
+    create: {
+      recipeId: recipe.id,
+      version: 1,
+      expectedOutputQuantity: input.expectedOutputQuantity,
+      outputUnit: input.outputUnit,
+      notes: "Receta demo para piloto operativo.",
+      status: "active",
+    },
+  });
+
+  for (const ingredient of input.ingredients) {
+    await prisma.recipeIngredient.upsert({
+      where: {
+        recipeVersionId_productId: {
+          recipeVersionId: version.id,
+          productId: ingredient.productId,
+        },
+      },
+      update: {
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        isOptional: false,
+        wasteFactor: null,
+        updatedAt: new Date(),
+      },
+      create: {
+        recipeVersionId: version.id,
+        productId: ingredient.productId,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        isOptional: false,
+      },
+    });
+  }
+
+  await prisma.recipe.update({
+    where: { id: recipe.id },
+    data: {
+      outputProductId: input.outputProductId,
+      currentVersionId: version.id,
+      status: "active",
+      updatedAt: new Date(),
     },
   });
 }

@@ -10,8 +10,11 @@ import {
 } from "../../../api/cash.api";
 import { Button } from "../../../shared/components/button";
 import { LoadingState } from "../../../shared/components/loading-state";
+import { OperationalAlert } from "../../../shared/components/operational-alert";
+import { OperationalCard } from "../../../shared/components/operational-card";
 import { PermissionButton } from "../../../shared/components/permission-button";
 import { StatusBadge } from "../../../shared/components/status-badge";
+import { WorkspacePageHeader } from "../../../shared/components/workspace-page-header";
 import { useBranchStore } from "../../../shared/stores/branch.store";
 import { useCashStore } from "../../../shared/stores/cash.store";
 import { labelMovement, labelStatus } from "../../../shared/utils/labels";
@@ -100,32 +103,36 @@ export function CashPage() {
   const expected = summary?.expectedCashAmount ?? 0;
   const counted = Number(countedCashAmount || 0);
   const difference = countedCashAmount ? counted - expected : 0;
+  const absoluteDifference = Math.abs(difference);
+  const closingStep = !countedCashAmount.trim() ? 1 : absoluteDifference > 0 && !closingComment.trim() ? 2 : 3;
+  const differenceTone = !countedCashAmount.trim() || absoluteDifference === 0 ? "success" : "warning";
   const isMutating = incomeMutation.isPending || withdrawalMutation.isPending || closeMutation.isPending;
 
   return (
     <section>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-tp-primary">Caja</p>
-          <h1 className="mt-3 text-2xl font-semibold">Caja actual</h1>
-          <p className="mt-2 text-sm text-tp-muted">Revisa entradas, salidas y cierre de efectivo.</p>
-        </div>
+        <WorkspacePageHeader
+          className="mb-0"
+          description="Revisa efectivo esperado, registra movimientos y cierra caja con diferencia visible antes de confirmar."
+          eyebrow="Caja"
+          title="Caja actual"
+        />
         <Button variant="secondary">
-          <Link to="/app/manager/withdrawals">Ver retiros pendientes</Link>
+          <Link to="/app/withdrawals">Ver retiros pendientes</Link>
         </Button>
       </div>
 
       {!session ? (
-        <article className="rounded-md border border-tp-border bg-white p-5">
+        <OperationalCard>
           <StatusBadge tone="warning">Sin caja</StatusBadge>
           <p className="mt-3 text-sm text-tp-muted">No hay caja abierta en esta sucursal.</p>
           <Button className="mt-5" variant="secondary">
             <Link to="/app/pos/cash/open">Abrir caja</Link>
           </Button>
-        </article>
+        </OperationalCard>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-          <article className="rounded-md border border-tp-border bg-white p-5">
+          <OperationalCard>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Caja abierta</h2>
@@ -144,23 +151,54 @@ export function CashPage() {
               <p className="mt-1 text-3xl font-semibold">{formatManagerMoney(expected)}</p>
               <p className="mt-2 text-sm text-tp-muted">Tarjeta: {formatManagerMoney(summary?.sales.card ?? 0)} - Transferencia: {formatManagerMoney(summary?.sales.transfer ?? 0)} - Credito: {formatManagerMoney(summary?.sales.credit ?? 0)}</p>
             </div>
-          </article>
+          </OperationalCard>
 
-          <article className="rounded-md border border-tp-border bg-white p-5">
-            <h2 className="mb-4 text-sm font-semibold">Cerrar caja</h2>
-            <input className="h-11 w-full rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setCountedCashAmount(event.target.value)} placeholder="Efectivo contado" value={countedCashAmount} />
-            <textarea className="mt-3 min-h-20 w-full rounded-md border border-tp-border px-3 py-2 text-sm" onChange={(event) => setClosingComment(event.target.value)} placeholder="Comentario de cierre" value={closingComment} />
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-sm text-tp-muted">Diferencia</span>
-              <span className="text-lg font-semibold">{formatManagerMoney(difference)}</span>
+          <OperationalCard>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Cierre guiado</h2>
+                <p className="mt-1 text-sm text-tp-muted">Paso {closingStep} de 3: contado, diferencia y confirmacion.</p>
+              </div>
+              <StatusBadge tone={differenceTone}>{absoluteDifference === 0 ? "Sin diferencia" : "Con diferencia"}</StatusBadge>
             </div>
+            <div className="mb-4 grid grid-cols-3 gap-2 text-xs font-semibold">
+              {["Contar", "Revisar", "Cerrar"].map((step, index) => (
+                <span className={`rounded-md px-2 py-2 text-center ${closingStep >= index + 1 ? "bg-tp-primary text-white" : "bg-tp-soft text-tp-muted"}`} key={step}>
+                  {step}
+                </span>
+              ))}
+            </div>
+            <label className="grid gap-1 text-sm font-semibold">
+              Efectivo contado
+              <input className="h-11 w-full rounded-md border border-tp-border px-3 text-sm font-normal" inputMode="decimal" onChange={(event) => setCountedCashAmount(event.target.value)} placeholder="0.00" value={countedCashAmount} />
+            </label>
+            <div className="mt-3 rounded-md bg-tp-soft p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-tp-muted">Esperado</span>
+                <span className="font-semibold">{formatManagerMoney(expected)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="text-tp-muted">Contado</span>
+                <span className="font-semibold">{formatManagerMoney(counted)}</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-tp-border pt-3">
+                <span className="text-sm text-tp-muted">Diferencia</span>
+                <span className={`text-lg font-semibold ${absoluteDifference > 0 ? "text-tp-warning" : "text-tp-success"}`}>{formatManagerMoney(difference)}</span>
+              </div>
+            </div>
+            {absoluteDifference > 0 ? (
+              <OperationalAlert className="mt-3" title="Diferencia antes de cerrar" tone="warning">
+                Registra un comentario operativo antes de confirmar el cierre.
+              </OperationalAlert>
+            ) : null}
+            <textarea className="mt-3 min-h-20 w-full rounded-md border border-tp-border px-3 py-2 text-sm" onChange={(event) => setClosingComment(event.target.value)} placeholder="Comentario de cierre" value={closingComment} />
             <PermissionButton className="mt-4 w-full" disabled={!countedCashAmount.trim() || isMutating} onClick={submitClose} permission="cash.close" variant="danger">
               <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-              Cerrar caja
+              Confirmar cierre
             </PermissionButton>
-          </article>
+          </OperationalCard>
 
-          <article className="rounded-md border border-tp-border bg-white p-5">
+          <OperationalCard>
             <h2 className="mb-4 text-sm font-semibold">Movimiento manual</h2>
             <div className="grid gap-3 md:grid-cols-[140px_1fr_1fr]">
               <input className="h-11 rounded-md border border-tp-border px-3 text-sm" inputMode="decimal" onChange={(event) => setAmount(event.target.value)} placeholder="Monto" value={amount} />
@@ -177,9 +215,9 @@ export function CashPage() {
                 Solicitar retiro
               </PermissionButton>
             </div>
-          </article>
+          </OperationalCard>
 
-          <article className="rounded-md border border-tp-border bg-white p-5">
+          <OperationalCard>
             <h2 className="mb-4 text-sm font-semibold">Movimientos de esta caja</h2>
             <div className="space-y-3">
               {(summary?.movements ?? []).length === 0 ? (
@@ -199,7 +237,7 @@ export function CashPage() {
                 ))
               )}
             </div>
-          </article>
+          </OperationalCard>
         </div>
       )}
     </section>

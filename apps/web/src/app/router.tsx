@@ -3,6 +3,7 @@ import { LoginPage } from "../modules/auth/pages/login-page";
 import { SelectBranchPage } from "../modules/branch/pages/select-branch-page";
 import { BillingPage } from "../modules/manager/pages/billing-page";
 import { CashPage } from "../modules/manager/pages/cash-page";
+import { AlertsPage } from "../modules/manager/pages/alerts-page";
 import { CustomerDetailPage } from "../modules/manager/pages/customer-detail-page";
 import { CustomersPage } from "../modules/manager/pages/customers-page";
 import { DashboardPage } from "../modules/manager/pages/dashboard-page";
@@ -53,7 +54,7 @@ export function AppRouter() {
       <Route element={<AuthLayout />}>
         <Route element={<LoginPage />} path="/login" />
       </Route>
-      <Route element={<Navigate replace to="/app/manager/dashboard" />} path="/" />
+      <Route element={<Navigate replace to="/app" />} path="/" />
       <Route element={<PublicAutofacturaPage />} path="/r/:token" />
       <Route
         element={
@@ -118,6 +119,68 @@ export function AppRouter() {
         path="/app/supervisor"
       >
         <Route index element={<SupervisorAuthorizationsPage />} />
+      </Route>
+      <Route
+        element={
+          <AuthGuard>
+            <BranchGuard>
+              <RoleGuard allowedRoles={["manager", "organization_owner"]}>
+                <ManagerLayout />
+              </RoleGuard>
+            </BranchGuard>
+          </AuthGuard>
+        }
+        path="/app"
+      >
+        <Route index element={<DashboardPage />} />
+        <Route element={<AlertsPage />} path="alerts" />
+        <Route element={<CashPage />} path="cash" />
+        <Route element={<WithdrawalsPage />} path="withdrawals" />
+        <Route element={<InventoryPage />} path="inventory" />
+        <Route element={<InputsPage />} path="inventory/inputs" />
+        <Route element={<ProductionPage />} path="production" />
+        <Route element={<RecipesPage />} path="production/recipes" />
+        <Route element={<InputsPage />} path="production/inputs" />
+        <Route element={<ProductionRecipeNewPage />} path="production/batches/new" />
+        <Route element={<ProductionRecipeBatchPage />} path="production/batches/:batchId" />
+        <Route element={<ProductsPage />} path="admin/products" />
+        <Route element={<PricesPage />} path="admin/prices" />
+        <Route element={<CustomersPage />} path="customers" />
+        <Route element={<CustomerDetailPage />} path="customers/:customerId" />
+        <Route
+          element={
+            <FeatureGuard feature="delivery_routes" label="Rutas de reparto">
+              <RoutesPage />
+            </FeatureGuard>
+          }
+          path="routes"
+        />
+        <Route
+          element={
+            <FeatureGuard feature="delivery_routes" label="Rutas de reparto">
+              <RouteDetailPage />
+            </FeatureGuard>
+          }
+          path="routes/:routeId"
+        />
+        <Route
+          element={
+            <FeatureGuard feature="billing_cfdi" label="Facturación CFDI">
+              <BillingPage />
+            </FeatureGuard>
+          }
+          path="fiscal/invoices"
+        />
+        <Route element={<ReportsPage />} path="reports" />
+        <Route
+          element={
+            <FeatureGuard feature="advanced_reports" label="Conciliacion bancaria">
+              <ReconciliationPage />
+            </FeatureGuard>
+          }
+          path="reconciliation"
+        />
+        <Route element={<SettingsPage />} path="settings" />
       </Route>
       <Route
         element={

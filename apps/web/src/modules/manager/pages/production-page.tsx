@@ -71,10 +71,10 @@ export function ProductionPage() {
         <h1 className="mt-3 text-2xl font-semibold">Produccion de hoy</h1>
         <p className="mt-2 text-sm text-tp-muted">Registra lo que se preparo y mandalo a inventario al cerrar.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link className="inline-flex min-h-10 items-center rounded-md bg-tp-primary px-4 py-2 text-sm font-semibold text-white hover:bg-tp-primaryHover" to="/app/manager/production/new">
+          <Link className="inline-flex min-h-10 items-center rounded-md bg-tp-primary px-4 py-2 text-sm font-semibold text-white hover:bg-tp-primaryHover" to="/app/production/batches/new">
             Nuevo lote por receta
           </Link>
-          <Link className="inline-flex min-h-10 items-center rounded-md border border-tp-border bg-white px-4 py-2 text-sm font-semibold text-tp-text hover:bg-tp-soft" to="/app/manager/production/recipes">
+          <Link className="inline-flex min-h-10 items-center rounded-md border border-tp-border bg-white px-4 py-2 text-sm font-semibold text-tp-text hover:bg-tp-soft" to="/app/production/recipes">
             Recetas
           </Link>
         </div>

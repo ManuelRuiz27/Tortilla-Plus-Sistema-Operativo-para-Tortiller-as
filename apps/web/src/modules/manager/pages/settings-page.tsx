@@ -428,10 +428,10 @@ export function SettingsPage() {
               <div className="grid gap-2 border-t border-tp-border pt-3 text-sm first:border-t-0 first:pt-0 md:grid-cols-[1fr_150px_180px]" key={log.id}>
                 <div>
                   <p className="font-semibold">{log.action}</p>
-                  <p className="text-xs text-tp-muted">{log.entityType} · {log.entityId}</p>
+                  <p className="text-xs text-tp-muted">{log.entityType} - {log.entityId}</p>
                 </div>
                 <p className="text-tp-muted">{log.branchName ?? "Sin sucursal"}</p>
-                <p className="text-right text-tp-muted">{new Date(log.createdAt).toLocaleString()}</p>
+                <p className="text-right text-tp-muted">{new Date(log.createdAt).toLocaleString("es-MX")}</p>
               </div>
             ))}
           </div>

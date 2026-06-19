@@ -9,6 +9,7 @@ import type {
   DeliveryRoute,
   DeliverySettlement,
   InventoryItem,
+  InventoryMovement,
   ManagerDashboardSummary,
   ManagerCustomer,
   ManagerPrice,
@@ -256,6 +257,88 @@ export function buildDemoInventory(): InventoryItem[] {
       updatedAt: "09:30"
     }
   ];
+}
+
+export function buildDemoInventoryMovements(filters: {
+  branchId?: string | null;
+  productId?: string | null;
+  movementType?: string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  limit?: number;
+} = {}): InventoryMovement[] {
+  const products = buildDemoManagerProducts();
+  const movementProduct = (productId: string) => products.find((product) => product.id === productId) ?? null;
+  const movements: InventoryMovement[] = [
+    {
+      id: "inventory-movement-production-in",
+      branchId: "branch-principal",
+      productId: "prod-masa",
+      movementType: "production_in",
+      quantity: 33,
+      unit: "kg",
+      reason: "Cierre de lote por receta",
+      referenceType: "production_batch",
+      referenceId: "production-today",
+      createdByUserId: "demo-manager",
+      authorizedByUserId: null,
+      createdAt: "2026-05-23T11:45:00.000Z",
+      product: movementProduct("prod-masa")
+    },
+    {
+      id: "inventory-movement-input-out",
+      branchId: "branch-principal",
+      productId: "prod-maiz",
+      movementType: "production_input_out",
+      quantity: 25,
+      unit: "kg",
+      reason: "Consumo esperado de receta",
+      referenceType: "production_batch",
+      referenceId: "production-today",
+      createdByUserId: "demo-manager",
+      authorizedByUserId: null,
+      createdAt: "2026-05-23T11:45:00.000Z",
+      product: movementProduct("prod-maiz")
+    },
+    {
+      id: "inventory-movement-adjustment-out",
+      branchId: "branch-principal",
+      productId: "prod-tortilla",
+      movementType: "manual_adjustment_out",
+      quantity: 4.5,
+      unit: "kg",
+      reason: "Ajuste de conteo",
+      referenceType: "manual_adjustment",
+      referenceId: "manual-adjustment-demo",
+      createdByUserId: "demo-manager",
+      authorizedByUserId: null,
+      createdAt: "2026-05-23T12:05:00.000Z",
+      product: movementProduct("prod-tortilla")
+    },
+    {
+      id: "inventory-movement-waste",
+      branchId: "branch-principal",
+      productId: "prod-tortilla",
+      movementType: "waste_out",
+      quantity: 1.25,
+      unit: "kg",
+      reason: "Tortilla rota",
+      referenceType: "waste_record",
+      referenceId: "waste-demo",
+      createdByUserId: "demo-manager",
+      authorizedByUserId: null,
+      createdAt: "2026-05-23T12:20:00.000Z",
+      product: movementProduct("prod-tortilla")
+    }
+  ];
+
+  return movements
+    .filter((movement) => !filters.branchId || movement.branchId === filters.branchId)
+    .filter((movement) => !filters.productId || movement.productId === filters.productId)
+    .filter((movement) => !filters.movementType || movement.movementType === filters.movementType)
+    .filter((movement) => !filters.referenceType || movement.referenceType === filters.referenceType)
+    .filter((movement) => !filters.referenceId || movement.referenceId === filters.referenceId)
+    .slice(0, filters.limit ?? 100);
 }
 
 export function buildDemoProduction(): ProductionBatch[] {
@@ -523,7 +606,51 @@ export function buildDemoReportsSummary(): ReportsSummary {
     cashDifferences: [
       { label: "Faltante", value: 85 },
       { label: "Sobrante", value: 32 }
-    ]
+    ],
+    production: {
+      summary: {
+        closedBatches: 4,
+        expectedOutputQuantity: 132,
+        actualOutputQuantity: 128.6,
+        outputVarianceQuantity: -3.4,
+        averageYieldPercentage: 97.42,
+        batchesWithVarianceReason: 1,
+        batchesWithHighVarianceAuthorization: 0
+      },
+      byRecipe: [
+        { label: "Masa estandar", value: 96.4 },
+        { label: "Tortilla diaria", value: 32.2 }
+      ],
+      byOutputProduct: [
+        { label: "Masa", value: 96.4 },
+        { label: "Tortilla", value: 32.2 }
+      ],
+      ingredientConsumption: [
+        { label: "Maiz", value: 100, expectedQuantity: 98, actualQuantity: 100, varianceQuantity: 2, unit: "kg" },
+        { label: "Harina", value: 18.5, expectedQuantity: 18, actualQuantity: 18.5, varianceQuantity: 0.5, unit: "kg" },
+        { label: "Cal", value: 0.42, expectedQuantity: 0.4, actualQuantity: 0.42, varianceQuantity: 0.02, unit: "kg" }
+      ],
+      recentBatches: [
+        {
+          id: "demo-production-batch-1",
+          productionDate: "2026-06-17",
+          branchName: "Principal",
+          recipeName: "Masa estandar",
+          recipeVersion: 2,
+          outputProductName: "Masa",
+          expectedOutputQuantity: 33,
+          actualOutputQuantity: 32.2,
+          outputUnit: "kg",
+          yieldPercentage: 97.58,
+          outputVariancePercentage: 2.42,
+          varianceReason: null,
+          ingredients: [
+            { productId: "maiz", productName: "Maiz", expectedQuantity: 25, actualQuantity: 25.2, varianceQuantity: 0.2, unit: "kg" },
+            { productId: "cal", productName: "Cal", expectedQuantity: 0.1, actualQuantity: 0.1, varianceQuantity: 0, unit: "kg" }
+          ]
+        }
+      ]
+    }
   };
 }
 

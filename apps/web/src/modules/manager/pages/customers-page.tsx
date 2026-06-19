@@ -91,10 +91,10 @@ export function CustomersPage() {
   }
 
   if (isLoading || routesQuery.isLoading) return <LoadingState message="Cargando clientes..." />;
-  if (isError || routesQuery.isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar clientes.</p>;
+  if (isError) return <p className="rounded-md border border-tp-border bg-white p-5 text-sm text-tp-danger">No se pudieron cargar clientes.</p>;
 
   const creditTotal = data.reduce((sum, customer) => sum + customer.currentBalance, 0);
-  const routes = routesQuery.data ?? [];
+  const routes = routesQuery.isError ? [] : routesQuery.data ?? [];
 
   function assignToRoute(customerId: string) {
     const routeId = routeByCustomer[customerId];
@@ -218,11 +218,11 @@ export function CustomersPage() {
                 <td className="px-4 py-3">
                   <div className="grid min-w-72 grid-cols-[1fr_70px_auto] gap-2">
                     <select className="h-10 rounded-md border border-tp-border px-2 text-sm" onChange={(event) => setRouteByCustomer((values) => ({ ...values, [customer.id]: event.target.value }))} value={routeByCustomer[customer.id] ?? ""}>
-                      <option value="">Ruta</option>
+                      <option value="">{routesQuery.isError ? "Sin reparto" : "Ruta"}</option>
                       {routes.map((route) => <option key={route.id} value={route.id}>{route.name}</option>)}
                     </select>
                     <input className="h-10 rounded-md border border-tp-border px-2 text-sm" inputMode="numeric" onChange={(event) => setSortByCustomer((values) => ({ ...values, [customer.id]: event.target.value }))} placeholder="#" value={sortByCustomer[customer.id] ?? ""} />
-                    <PermissionButton disabled={!routeByCustomer[customer.id] || assignRouteMutation.isPending} onClick={() => assignToRoute(customer.id)} permission="routes.manage" variant="secondary">
+                    <PermissionButton disabled={routesQuery.isError || !routeByCustomer[customer.id] || assignRouteMutation.isPending} onClick={() => assignToRoute(customer.id)} permission="routes.manage" variant="secondary">
                       Asignar
                     </PermissionButton>
                   </div>

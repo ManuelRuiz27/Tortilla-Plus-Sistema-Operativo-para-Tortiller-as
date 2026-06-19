@@ -69,6 +69,7 @@ export function ProductQuickGrid({ products, searchTerm, onSearchChange, onAddIt
     <div className="mt-6">
       <label className="text-sm font-semibold" htmlFor="product-search">
         Productos frecuentes
+        <span className="ml-2 text-xs font-medium text-tp-muted">F6 buscar</span>
       </label>
       <div className="relative mt-2">
         <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-tp-muted" aria-hidden="true" />

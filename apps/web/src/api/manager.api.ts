@@ -6,6 +6,7 @@ import {
   buildDemoDeliveryOrders,
   buildDemoDeliverySettlement,
   buildDemoInventory,
+  buildDemoInventoryMovements,
   buildDemoManagerProducts,
   buildDemoManagerSummary,
   buildDemoPrices,
@@ -291,6 +292,7 @@ type ApiInventoryMovement = {
   reason?: string | null;
   referenceType?: string | null;
   referenceId?: string | null;
+  createdByUserId?: string | null;
   authorizedByUserId?: string | null;
   createdAt: string;
   product?: ApiRecipeProductRef | null;
@@ -614,6 +616,7 @@ function mapInventoryMovement(movement: ApiInventoryMovement): InventoryMovement
     reason: movement.reason ?? null,
     referenceType: movement.referenceType ?? null,
     referenceId: movement.referenceId ?? null,
+    createdByUserId: movement.createdByUserId ?? null,
     authorizedByUserId: movement.authorizedByUserId ?? null,
     createdAt: movement.createdAt,
     product: mapRecipeProductRef(movement.product)
@@ -994,18 +997,26 @@ export function deleteUnitConversionRequest(conversionId: string): Promise<UnitC
 
 export function inventoryMovementsRequest(filters: {
   branchId?: string | null;
+  productId?: string | null;
+  movementType?: string | null;
   referenceType?: string;
   referenceId?: string;
+  createdFrom?: string | null;
+  createdTo?: string | null;
   limit?: number;
 }): Promise<InventoryMovement[]> {
   if (useMocks) {
-    return Promise.resolve([]);
+    return Promise.resolve(buildDemoInventoryMovements(filters));
   }
 
   const params = new URLSearchParams();
   if (filters.branchId) params.set("branchId", filters.branchId);
+  if (filters.productId) params.set("productId", filters.productId);
+  if (filters.movementType) params.set("movementType", filters.movementType);
   if (filters.referenceType) params.set("referenceType", filters.referenceType);
   if (filters.referenceId) params.set("referenceId", filters.referenceId);
+  if (filters.createdFrom) params.set("createdFrom", filters.createdFrom);
+  if (filters.createdTo) params.set("createdTo", filters.createdTo);
   if (filters.limit) params.set("limit", String(filters.limit));
   return httpClient<ApiInventoryMovement[]>(`/inventory/movements?${params.toString()}`).then((items) => items.map(mapInventoryMovement));
 }
@@ -1687,12 +1698,14 @@ export function reviewReconciliationBatchRequest(payload: { batchId: string; not
   });
 }
 
-export function reportsSummaryRequest(filters: { branchId?: string | null; from: string; to: string }): Promise<ReportsSummary> {
+export function reportsSummaryRequest(filters: { branchId?: string | null; from: string; to: string; recipeId?: string | null; outputProductId?: string | null }): Promise<ReportsSummary> {
   if (!useMocks) {
     const params = new URLSearchParams();
     params.set("from", filters.from);
     params.set("to", filters.to);
     if (filters.branchId) params.set("branchId", filters.branchId);
+    if (filters.recipeId) params.set("recipeId", filters.recipeId);
+    if (filters.outputProductId) params.set("outputProductId", filters.outputProductId);
     return httpClient<ReportsSummary>(`/reports/summary?${params.toString()}`);
   }
 
