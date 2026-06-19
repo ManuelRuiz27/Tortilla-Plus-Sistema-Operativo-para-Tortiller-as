@@ -1182,3 +1182,56 @@ Decision:
 Listo para manuales de piloto como base V0.1.
 Condicion: las capturas de rutas usan fixtures controlados en el spec hasta que el seed local/staging exponga rutas operables para screenshots sin intercepts.
 ```
+
+---
+
+## 26. Estado UX-R12
+
+UX-R12 queda implementado como base de screenshots y manual de arranque para dueno nuevo.
+
+Implementado:
+
+```txt
+- Spec Playwright `apps/web/e2e/manual-owner-onboarding-screenshots.spec.ts`.
+- Screenshots 21 a 32 en `docs/manuals/screenshots/`.
+- `docs/manuals/manual-arranque-dueno-v0.1.md` actualizado como primer manual de onboarding.
+- Runbook actualizado con comando, usuario demo, variables, estado requerido y limitaciones.
+```
+
+Screenshots generados:
+
+```txt
+21-settings.png
+22-productos-listado.png
+23-producto-nuevo.png
+24-precios.png
+25-insumos-listado.png
+26-insumo-nuevo.png
+27-recetas-listado.png
+28-receta-nueva.png
+29-inventario-ajuste-inicial.png
+30-cliente-nuevo.png
+31-apertura-caja.png
+32-venta-prueba-pos.png
+```
+
+Deudas detectadas:
+
+```txt
+UX-DEBT-024 Onboarding de dueno nuevo incompleto visualmente.
+```
+
+Validaciones objetivo:
+
+```txt
+npm run lint -w @tortilla-plus/web -> passed
+npm run build -w @tortilla-plus/web -> passed con warning conocido de chunk size
+npm run test:e2e -w @tortilla-plus/web -- manual-owner-onboarding-screenshots.spec.ts -> passed, 12 screenshots generados
+```
+
+Decision:
+
+```txt
+Listo para manual de arranque V0.1 con deuda UX-DEBT-024 abierta.
+Condicion: el arranque se documenta sobre pantallas operativas existentes, no sobre un wizard dedicado de cuenta nueva.
+```

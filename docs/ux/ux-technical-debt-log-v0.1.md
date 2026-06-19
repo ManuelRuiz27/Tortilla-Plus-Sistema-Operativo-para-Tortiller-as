@@ -44,6 +44,7 @@ Baja: mejora deseable sin impacto operativo inmediato.
 | UX-DEBT-021 | Media | Inventario | Los movimientos muestran `createdByUserId` cuando existe, pero no nombre de usuario ni referencia enriquecida con folio/nombre. | `/inventory/movements` entrega IDs y referencia tecnica; `inventory-page.tsx` los hace legibles parcialmente. | UX-R8 / Post piloto | Abierta |
 | UX-DEBT-022 | Media | Header operativo / Alertas | `OperationalHeader` mostraba `Alertas 0` por defecto cuando no recibia `alertCount`, aunque el centro de alertas puede derivar alertas activas desde otras fuentes. | `operational-header.tsx`; riesgo de calma falsa en piloto. | UX-R10 / Post piloto | Cerrada en UX-R10: el contador se oculta cuando no hay fuente real; no se creo endpoint backend |
 | UX-DEBT-023 | Media | QA / Documentacion | El spec de screenshots UX-R11 requiere fixtures controlados de Playwright para pantallas de rutas porque el seed local no expone rutas operables para capturas en todos los roles demo. | `apps/web/e2e/manual-screenshots.spec.ts`; screenshots `17-rutas.png` y `18-detalle-ruta.png`. | Post piloto / Seed staging | Abierta |
+| UX-DEBT-024 | Media | Onboarding | Onboarding de dueno nuevo incompleto visualmente: no hay wizard de arranque, alta clara de primera sucursal, pantalla operativa de usuarios/permisos, configuracion fiscal separada ni conversiones como paso guiado. | `manual-arranque-dueno-v0.1.md`; rutas disponibles en `router.tsx` muestran pantallas operativas dispersas. | Post piloto / UX onboarding | Abierta |
 
 ---
 
@@ -71,6 +72,7 @@ UX-DEBT-020 Alertas sin backend formal.
 UX-DEBT-021 Movimientos sin usuario/referencia enriquecida.
 UX-DEBT-022 Header mostraba contador de alertas sin fuente real. Cerrada en UX-R10 ocultando el numero sin `alertCount`.
 UX-DEBT-023 Screenshots de rutas dependen de fixtures Playwright hasta tener seed/staging con rutas operables.
+UX-DEBT-024 Onboarding de dueno nuevo incompleto visualmente.
 ```
 
 ---

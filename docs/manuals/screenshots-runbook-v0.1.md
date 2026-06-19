@@ -151,3 +151,87 @@ Las pantallas de rutas usan fixtures controlados con Playwright dentro del spec 
 - Alertas backend formales.
 - PAC real si no esta configurado.
 ```
+
+---
+
+## 9. UX-R12 - Screenshots de arranque para dueno nuevo
+
+Objetivo:
+
+```txt
+Generar screenshots para explicar el arranque inicial de una cuenta o sucursal sin datos operativos completos.
+```
+
+Spec:
+
+```txt
+apps/web/e2e/manual-owner-onboarding-screenshots.spec.ts
+```
+
+Comando:
+
+```powershell
+npm run test:e2e -w @tortilla-plus/web -- manual-owner-onboarding-screenshots.spec.ts
+```
+
+Variables requeridas:
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:3199/api/v1
+VITE_APP_ENV=audit
+VITE_USE_MOCKS=false
+E2E_API_BASE_URL=http://127.0.0.1:3199/api/v1
+```
+
+Usuario demo usado:
+
+```txt
+owner.demo@tortillaplus.mx / Demo1234!
+```
+
+Estado de datos requerido:
+
+```txt
+- Seed E2E/demo aplicado.
+- Usuario owner con sucursal activa.
+- API local disponible.
+- El spec crea productos/insumos/precios e inventario inicial solo para preparar pantallas visuales.
+- Para mostrar apertura de caja, el spec intercepta la consulta de caja abierta si el seed ya tiene caja activa; no modifica backend ni cambia reglas.
+```
+
+Lista esperada:
+
+```txt
+21-settings.png
+22-productos-listado.png
+23-producto-nuevo.png
+24-precios.png
+25-insumos-listado.png
+26-insumo-nuevo.png
+27-recetas-listado.png
+28-receta-nueva.png
+29-inventario-ajuste-inicial.png
+30-cliente-nuevo.png
+31-apertura-caja.png
+32-venta-prueba-pos.png
+```
+
+Limitaciones conocidas:
+
+```txt
+- No existe wizard de arranque inicial para dueno nuevo.
+- No existe pantalla clara de alta de primera sucursal desde el flujo operativo.
+- Usuarios/permisos no estan separados como paso visual de onboarding.
+- Configuracion fiscal no esta separada como asistente de arranque.
+- Conversiones existen dentro de insumos, no como paso guiado.
+```
+
+Resultado actual:
+
+```txt
+2026-06-19:
+npm run test:e2e -w @tortilla-plus/web -- manual-owner-onboarding-screenshots.spec.ts -> passed, 12 screenshots generados.
+
+Nota:
+La apertura real de caja por API se prepara con `manager.demo@tortillaplus.mx` porque `owner.demo@tortillaplus.mx` no tiene permiso operativo para abrir caja en el seed local. La pantalla de apertura queda capturada para onboarding sin modificar permisos.
+```

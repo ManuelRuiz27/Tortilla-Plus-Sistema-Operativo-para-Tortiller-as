@@ -1,26 +1,27 @@
-# Tortilla Plus - Manual de arranque para dueño V0.1
+# Tortilla Plus - Manual de arranque para dueno V0.1
 
-**Rol:** Dueño / Administrador de organización  
+**Rol:** Dueno / administrador de organizacion  
 **Estado:** Base para piloto / cuenta nueva  
-**Caso cubierto:** Usuario recién registrado, organización o sucursal sin datos operativos  
-**Objetivo:** Dejar la sucursal lista para vender, producir, controlar inventario y cerrar caja  
+**Caso cubierto:** usuario recien registrado, organizacion o sucursal sin datos operativos  
+**Objetivo:** dejar la sucursal lista para vender, producir, controlar inventario y cerrar caja  
+**Screenshots UX-R12:** `docs/manuals/screenshots/21-settings.png` a `32-venta-prueba-pos.png`
 
 ---
 
 ## 1. Antes de empezar
 
-Este manual es el primer manual que debe leer un dueño nuevo.
+Este manual es el primer manual que debe leer un dueno nuevo.
 
-Los manuales de cajero, gerente, producción e inventario sirven cuando la sucursal ya tiene datos cargados. Si la cuenta está en blanco, primero se debe completar este flujo de arranque.
+Los manuales de cajero, gerente, produccion e inventario sirven cuando la sucursal ya tiene datos cargados. Si la cuenta esta en blanco, primero se debe completar este flujo de arranque.
 
 ---
 
 ## 2. Resultado esperado al terminar
 
-Al finalizar este manual, la sucursal debe tener configurado lo mínimo para operar:
+Al finalizar este manual, la sucursal debe tener configurado lo minimo para operar:
 
 ```txt
-- organización confirmada
+- organizacion confirmada
 - primera sucursal activa
 - usuarios principales creados
 - productos base creados
@@ -36,181 +37,151 @@ Al finalizar este manual, la sucursal debe tener configurado lo mínimo para ope
 
 ---
 
-## 3. Orden correcto de configuración
-
-No configurar el sistema en cualquier orden. El orden recomendado es:
+## 3. Orden correcto de configuracion
 
 ```txt
-1. Organización
+1. Organizacion
 2. Sucursal
 3. Usuarios
 4. Productos vendibles
 5. Precios
 6. Insumos y empaques
-7. Inventario inicial
-8. Recetas
-9. Caja / POS
-10. Clientes
-11. Rutas, si aplica
-12. Facturación, si aplica
-13. Prueba operativa completa
+7. Conversiones si aplica
+8. Inventario inicial
+9. Recetas
+10. Caja / POS
+11. Clientes
+12. Rutas, si aplica
+13. Facturacion, si aplica
+14. Prueba operativa completa
+15. Cierre de caja
+16. Reporte
 ```
 
-Si se brinca productos, precios o caja, el POS no podrá operar correctamente.
+Si se brinca productos, precios o caja, el POS no podra operar correctamente.
 
 ---
 
-# 4. Paso 1 - Confirmar organización
+## 4. Confirmar organizacion
 
-## Objetivo
+**Objetivo:** verificar que la cuenta del dueno este asociada a la organizacion correcta.
 
-Verificar que la cuenta del dueño esté asociada a la organización correcta.
-
-## Datos mínimos
+Datos minimos:
 
 ```txt
 - nombre comercial
-- razón social, si aplica
-- teléfono
+- razon social, si aplica
+- telefono
 - correo de contacto
 - domicilio fiscal u operativo
 - plan activo
 ```
 
-## Validación
+Screenshot:
 
-Antes de crear datos operativos, confirmar que se está dentro de la organización correcta.
+```txt
+screenshots/21-settings.png
+```
 
-## Error común
+Estado visual V0.1:
 
-Crear sucursal, productos o usuarios en una organización equivocada.
+```txt
+La configuracion general existe dentro de Sucursal, cajas y plan.
+Pendiente UX / no disponible visualmente para onboarding V0.1: no hay wizard separado de organizacion para cuenta nueva.
+```
 
 ---
 
-# 5. Paso 2 - Crear o confirmar sucursal
+## 5. Crear o confirmar sucursal
 
-## Objetivo
+**Objetivo:** confirmar la primera sucursal donde se registraran ventas, caja, inventario y produccion.
 
-Crear la primera sucursal donde se registrarán ventas, caja, inventario y producción.
-
-## Datos mínimos
+Datos minimos:
 
 ```txt
 - nombre de sucursal
-- dirección
+- direccion
 - responsable
-- teléfono
+- telefono
 - estatus activa
 ```
 
-## Regla operativa
+Screenshot:
 
-Sin sucursal activa no debe configurarse POS, caja, inventario ni producción.
+```txt
+screenshots/21-settings.png
+```
 
-## Validación
+Estado visual V0.1:
 
-Entrar al sistema y confirmar que se puede seleccionar la sucursal.
+```txt
+Pendiente UX / no disponible visualmente para onboarding V0.1: no existe una pantalla clara de alta de primera sucursal dentro del flujo operativo del dueno.
+```
 
 ---
 
-# 6. Paso 3 - Crear usuarios principales
+## 6. Crear usuarios principales
 
-## Objetivo
+**Objetivo:** separar responsabilidades desde el inicio.
 
-Separar responsabilidades desde el inicio.
-
-## Usuarios mínimos sugeridos
+Usuarios minimos sugeridos:
 
 ```txt
-- Dueño / administrador
+- Dueno / administrador
 - Gerente
 - Cajero
-- Producción, si aplica
+- Produccion, si aplica
 - Inventario, si aplica
 ```
 
-## No crear todavía
+No crear todavia:
 
 ```txt
 - repartidor autenticado
 - contador como rol final
 ```
 
-Estos roles no forman parte del alcance estable del piloto actual.
+Estado visual V0.1:
 
-## Validación
-
-Cada usuario debe poder entrar solamente a las áreas que correspondan a su rol.
+```txt
+Pendiente UX / no disponible visualmente para onboarding V0.1: la pantalla de usuarios/permisos no esta separada como paso claro del arranque inicial.
+```
 
 ---
 
-# 7. Paso 4 - Crear productos vendibles
+## 7. Crear productos base
 
-## Objetivo
+**Objetivo:** cargar los productos que si se pueden vender en POS.
 
-Cargar los productos que sí se pueden vender en POS.
-
-## Productos base para tortillería
+Productos base:
 
 ```txt
 - Tortilla kg
 - Tortilla por paquete 800 g
 - Masa kg
-- Salsa
-- Guisos
-- Otros productos de mostrador
+- Salsa u otro producto de mostrador
 ```
 
-## Campos mínimos por producto
+Screenshots:
 
 ```txt
-- nombre
-- SKU
-- tipo de producto
-- unidad
-- vendible: sí
-- controla inventario: sí/no
-- requiere producción: sí/no
-- estatus activo
+screenshots/22-productos-listado.png
+screenshots/23-producto-nuevo.png
 ```
 
-## Reglas recomendadas
+Recomendacion:
 
 ```txt
-Tortilla kg:
-- tipo: tortilla
-- unidad: kg
-- vendible: sí
-- controla inventario: sí
-- requiere producción: sí
-
-Masa kg:
-- tipo: masa
-- unidad: kg
-- vendible: sí
-- controla inventario: sí
-- requiere producción: sí
-
-Paquete 800 g:
-- tipo: package
-- unidad: package
-- vendible: sí
-- controla inventario: sí
+Maiz, cal, harina y empaques no deben crearse como vendibles para POS.
 ```
-
-## Error común
-
-Crear insumos como productos vendibles. Maíz, cal, harina y empaques no deben aparecer en POS como productos de venta.
 
 ---
 
-# 8. Paso 5 - Configurar precios
+## 8. Configurar precios
 
-## Objetivo
+**Objetivo:** permitir que el POS calcule importes correctamente.
 
-Permitir que el POS calcule importes correctamente.
-
-## Precios mínimos
+Precios minimos:
 
 ```txt
 - tortilla por kg
@@ -221,137 +192,116 @@ Permitir que el POS calcule importes correctamente.
 - productos retail por unidad
 ```
 
-## Validación
+Screenshot:
 
-Entrar a POS y confirmar que los productos base muestran precio.
+```txt
+screenshots/24-precios.png
+```
 
-## Error común
+Error comun:
 
-Crear productos sin precio. Un producto activo sin precio genera fricción en POS y puede bloquear la venta.
+```txt
+Crear productos sin precio. Un producto activo sin precio genera friccion en POS y puede bloquear la venta.
+```
 
 ---
 
-# 9. Paso 6 - Crear insumos y empaques
+## 9. Crear insumos, empaques y conversiones
 
-## Objetivo
+**Objetivo:** preparar productos no vendibles que se consumen en produccion.
 
-Preparar los productos que se consumen en producción, pero que no se venden directamente en POS.
-
-## Insumos comunes
+Insumos comunes:
 
 ```txt
-- maíz
-- harina de maíz
+- maiz
+- harina de maiz
 - cal
 - harina de trigo, si aplica
-- gas, si después se controla como gasto o insumo
 ```
 
-## Empaques comunes
+Empaques comunes:
 
 ```txt
 - papel
 - bolsa
 - etiqueta
-- caja, si aplica
 ```
 
-## Configuración recomendada
+Screenshots:
 
 ```txt
-- vendible: no
-- controla inventario: sí
-- ingrediente de receta: sí, cuando aplique
-- permite stock negativo: no
+screenshots/25-insumos-listado.png
+screenshots/26-insumo-nuevo.png
+```
+
+Estado visual V0.1:
+
+```txt
+Las conversiones existen en la pantalla de insumos.
+Pendiente UX: no hay wizard dedicado para conversiones durante arranque.
 ```
 
 ---
 
-# 10. Paso 7 - Configurar conversiones
+## 10. Cargar inventario inicial
 
-## Objetivo
+**Objetivo:** registrar existencias iniciales antes de vender o producir.
 
-Permitir que el sistema entienda unidades de compra y unidades de consumo.
-
-## Ejemplos
-
-```txt
-1 costal de maíz = 50 kg
-1 cubeta de maíz = 25 kg
-1 bulto de cal = 25 kg
-1 costal de harina = 20 kg
-```
-
-## Validación
-
-Confirmar que los insumos se pueden capturar en unidad operativa y convertirse a kg.
-
----
-
-# 11. Paso 8 - Cargar inventario inicial
-
-## Objetivo
-
-Registrar existencias iniciales antes de vender o producir.
-
-## Inventario mínimo
-
-```txt
-- tortilla disponible
-- masa disponible
-- productos retail
-- maíz
-- harina
-- cal
-- empaques
-```
-
-## Motivo recomendado para ajuste inicial
+Motivo recomendado:
 
 ```txt
 Carga inicial de inventario
 ```
 
-## Regla operativa
+Screenshot:
 
+```txt
+screenshots/29-inventario-ajuste-inicial.png
+```
+
+Regla operativa:
+
+```txt
 Todo inventario inicial debe entrar como movimiento de inventario, no como cambio manual directo en base de datos.
+```
 
 ---
 
-# 12. Paso 9 - Crear receta base
+## 11. Crear receta base
 
-## Objetivo
+**Objetivo:** permitir produccion por receta y control de insumos.
 
-Permitir producción por receta y control de insumos.
-
-## Receta mínima sugerida
+Receta minima sugerida:
 
 ```txt
-Nombre: Masa estándar
+Nombre: Masa estandar
 Salida esperada: 33 kg de masa
 Insumos:
-- maíz: 25 kg
-- harina de maíz: 8 kg
+- maiz: 25 kg
+- harina de maiz: 8 kg
 - cal: 0.100 kg
 ```
 
-## Validación
+Screenshots:
 
-Crear un lote por receta y confirmar que el sistema muestre insumos esperados.
+```txt
+screenshots/27-recetas-listado.png
+screenshots/28-receta-nueva.png
+```
 
-## Error común
+Error comun:
 
+```txt
 Intentar producir por receta sin inventario suficiente de insumos.
+```
 
 ---
 
-# 13. Paso 10 - Configurar caja / POS
+## 12. Configurar caja / POS
 
-## Objetivo
+**Objetivo:** dejar listo el punto de venta.
 
-Dejar listo el punto de venta.
-
-## Configuración mínima
+Configuracion minima:
 
 ```txt
 - sucursal activa
@@ -361,51 +311,46 @@ Dejar listo el punto de venta.
 - monto inicial
 ```
 
-## Validación
+Screenshot:
 
-El cajero debe poder entrar a POS y ver productos vendibles con precio.
+```txt
+screenshots/31-apertura-caja.png
+```
 
-## Error común
+Error comun:
 
+```txt
 Intentar vender sin caja abierta. El sistema debe bloquear o solicitar apertura de caja.
+```
 
 ---
 
-# 14. Paso 11 - Crear cliente de prueba
+## 13. Crear cliente de prueba
 
-## Objetivo
+**Objetivo:** validar clientes frecuentes y credito sin afectar operacion real.
 
-Validar clientes frecuentes y crédito sin afectar operación real.
-
-## Cliente mínimo
+Cliente minimo:
 
 ```txt
 Nombre: Cliente prueba
 Tipo: mostrador o tienda
-Teléfono: opcional
-Crédito: desactivado al inicio
+Telefono: opcional
+Credito: desactivado al inicio
 ```
 
-## Si se usará crédito
-
-Configurar:
+Screenshot:
 
 ```txt
-- crédito habilitado
-- límite de crédito
-- saldo inicial, si aplica
-- precios especiales, si aplica
+screenshots/30-cliente-nuevo.png
 ```
 
 ---
 
-# 15. Paso 12 - Configurar rutas, si aplica
+## 14. Configurar rutas, si aplica
 
-## Objetivo
+**Objetivo:** preparar reparto a tiendas, puestos o clientes recurrentes cuando el plan lo permita.
 
-Preparar reparto a tiendas, puestos o clientes recurrentes.
-
-## Configuración mínima
+Configuracion minima:
 
 ```txt
 - ruta
@@ -414,83 +359,97 @@ Preparar reparto a tiendas, puestos o clientes recurrentes.
 - productos por entregar
 ```
 
-## Nota importante
+Estado visual V0.1:
 
-El piloto actual no incluye repartidor autenticado como usuario final. La ruta se opera desde la experiencia de gerente.
+```txt
+La configuracion de rutas existe en pantallas operativas de reparto, no como paso dedicado del arranque.
+No prometer repartidor autenticado.
+```
 
 ---
 
-# 16. Paso 13 - Configurar facturación, si aplica
+## 15. Configurar facturacion, si aplica
 
-## Objetivo
+**Objetivo:** preparar emision fiscal cuando el negocio vaya a facturar.
 
-Preparar emisión fiscal cuando el negocio vaya a facturar.
-
-## Datos mínimos
+Datos minimos:
 
 ```txt
-- razón social
+- razon social
 - RFC
-- régimen fiscal
-- código postal fiscal
+- regimen fiscal
+- codigo postal fiscal
 - certificados, si aplica
 - PAC o sandbox
 - serie y folio
 ```
 
-## Advertencia
+Estado visual V0.1:
 
-No prometer facturación real si PAC, certificados, CORS o ambiente productivo no están configurados.
+```txt
+Pendiente UX / no disponible visualmente para onboarding V0.1: la configuracion fiscal no esta separada como asistente de arranque.
+No prometer PAC real si no esta configurado.
+```
 
 ---
 
-# 17. Paso 14 - Prueba operativa completa
+## 16. Ejecutar venta de prueba
 
-Antes de operar con usuarios reales, ejecutar una prueba de extremo a extremo.
+**Objetivo:** comprobar que productos, precios y caja funcionan antes de operar con clientes reales.
 
-## Flujo mínimo de prueba
+Flujo minimo:
 
 ```txt
 1. Abrir caja.
-2. Vender 1 kg de tortilla.
-3. Vender 1 producto retail.
-4. Crear lote por receta.
-5. Cerrar lote por receta.
-6. Revisar movimientos de inventario.
-7. Crear cliente de prueba.
-8. Hacer venta a cliente, si aplica.
-9. Cerrar caja.
-10. Revisar reporte del día.
+2. Entrar al POS.
+3. Buscar producto.
+4. Agregar producto al ticket.
+5. Cobrar.
+6. Confirmar que la venta queda registrada.
 ```
 
-## Resultado esperado
+Screenshot:
 
 ```txt
-- venta registrada
-- caja actualizada
-- inventario descontado
-- producción ingresada
-- insumos consumidos
-- movimientos visibles
-- reporte actualizado
+screenshots/32-venta-prueba-pos.png
 ```
 
 ---
 
-# 18. Checklist de arranque
+## 17. Cerrar caja y revisar reporte
 
-Antes de capacitar a cajeros o gerentes, confirmar:
+Despues de la venta de prueba:
 
 ```txt
-[ ] Organización correcta
+1. Entrar a caja.
+2. Capturar efectivo contado.
+3. Revisar diferencia.
+4. Confirmar cierre.
+5. Entrar a reportes.
+6. Revisar ventas y caja del dia.
+```
+
+Screenshots de referencia UX-R11:
+
+```txt
+screenshots/09-cierre-caja.png
+screenshots/20-reportes.png
+```
+
+---
+
+## 18. Checklist de arranque
+
+```txt
+[ ] Organizacion correcta
 [ ] Sucursal activa
-[ ] Usuario dueño activo
+[ ] Usuario dueno activo
 [ ] Usuario gerente creado
 [ ] Usuario cajero creado
 [ ] Productos base creados
 [ ] Precios configurados
 [ ] Insumos creados
-[ ] Conversiones configuradas
+[ ] Conversiones configuradas, si aplica
 [ ] Inventario inicial cargado
 [ ] Receta base activa
 [ ] Caja/POS configurado
@@ -502,51 +461,32 @@ Antes de capacitar a cajeros o gerentes, confirmar:
 
 ---
 
-# 19. Errores comunes de cuenta nueva
-
-| Caso | Causa probable | Solución |
-|---|---|---|
-| POS sin productos | No hay productos vendibles activos | Crear productos base y precios |
-| Producto sin precio | Falta precio por sucursal | Configurar precio antes de vender |
-| No se puede vender | Caja cerrada | Abrir caja |
-| No aparece receta | No hay receta activa | Crear receta y versión activa |
-| No se puede cerrar lote | Falta stock o motivo de variación | Revisar inventario y capturar motivo |
-| Inventario no cuadra | No se cargó inventario inicial | Registrar ajuste inicial con motivo |
-| Ruta no aparece | Feature no habilitada o sin datos | Revisar plan y crear ruta |
-| Factura no se emite | PAC o datos fiscales incompletos | Validar configuración fiscal |
-
----
-
-# 20. Qué no se debe prometer todavía
+## 19. Que no se debe prometer todavia
 
 Durante piloto o demo inicial, no prometer:
 
 ```txt
 - repartidor autenticado
 - contador como rol final
-- búsqueda global funcional
-- báscula real
+- busqueda global funcional
+- bascula real
 - alertas backend formales
-- PAC real si no está configurado
-- tolerancias configurables por organización
+- PAC real si no esta configurado
+- tolerancias configurables por organizacion
 - agua inventariable
 - flujo obligatorio masa -> tortilla
-- descuento automático de empaques en venta
+- descuento automatico de empaques en venta
 ```
 
 ---
 
-# 21. Orden correcto de lectura de manuales
-
-Para un usuario nuevo, el orden debe ser:
+## 20. Orden correcto de lectura de manuales
 
 ```txt
-1. Manual de arranque para dueño
+1. Manual de arranque para dueno
 2. Manual del administrador
 3. Manual del gerente
 4. Manual del cajero
-5. Manual de producción
+5. Manual de produccion
 6. Manual de inventario
 ```
-
-No usar el manual del gerente como primer manual de onboarding. El gerente supervisa operación; el dueño primero debe configurar la operación.
