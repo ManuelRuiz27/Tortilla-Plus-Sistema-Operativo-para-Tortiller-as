@@ -1095,3 +1095,45 @@ Condiciones restantes antes de usuarios reales:
 - Confirmar que busqueda global, repartidor autenticado, contador y bascula real no se prometen como alcance del piloto.
 - Registrar cualquier hallazgo manual critico/alto antes de expandir el piloto.
 ```
+
+---
+
+## 24. Estado UX-R10
+
+UX-R10 queda preparado para piloto staging, sin cambios de backend ni reglas de negocio nuevas.
+
+Corregido:
+
+```txt
+- Se aclaro en el reporte UX-R9 que UX-R9 no agrego reglas backend nuevas.
+- Se dejo explicito que el ciclo UX-R0 a UX-R9 si incluyo soporte backend previo para reportes de produccion y seed demo en el commit afb709f7ed4e99ca39b209e78c4d94a96952400e.
+- Se agrego `docs/ux/ux-r10-staging-pilot-checklist-v0.1.md`.
+- Se registro UX-DEBT-022 por riesgo de `Alertas 0` falso en header operativo.
+- Se cerro UX-DEBT-022 ocultando el numero de alertas cuando `OperationalHeader` no recibe una fuente real de conteo.
+```
+
+Validaciones ejecutadas:
+
+```txt
+npm run lint -w @tortilla-plus/web -> passed
+npm run build -w @tortilla-plus/web -> passed con warning conocido de chunk size
+npm run test:e2e -w @tortilla-plus/web -> 9 passed
+```
+
+Decision:
+
+```txt
+GO condicionado para piloto staging.
+Condiciones: confirmar frontend publico, API publica, VITE_USE_MOCKS=false, CORS cerrado, migraciones/seed o bootstrap de piloto, y smoke manual completo.
+```
+
+Fuera de alcance a no prometer:
+
+```txt
+- Repartidor autenticado.
+- Contador final role.
+- Busqueda global funcional.
+- Bascula real.
+- Alertas backend formales.
+- PAC real si no esta configurado.
+```

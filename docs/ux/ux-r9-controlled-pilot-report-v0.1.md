@@ -146,8 +146,9 @@ No-Go si aparece cualquiera de estos puntos en staging:
 ## 7. Ajustes aplicados durante ciclo UX-R9
 
 ```txt
-- No se modifico backend.
-- No se agregaron reglas de negocio.
+- Durante UX-R9 no se agregaron nuevas reglas de negocio backend.
+- El ciclo UX-R0 a UX-R9 si incluyo soporte backend ya integrado para reportes de produccion y seed demo, visible en el commit afb709f7ed4e99ca39b209e78c4d94a96952400e.
+- UX-R9 se concentro en evidencia, documentacion y preparacion de piloto controlado.
 - Se consolido evidencia E2E transversal con VITE_USE_MOCKS=false.
 - Se documento decision Go condicionado para piloto controlado.
 - Se reclasifico deuda de roles como aceptada post piloto bajo alcance actual.

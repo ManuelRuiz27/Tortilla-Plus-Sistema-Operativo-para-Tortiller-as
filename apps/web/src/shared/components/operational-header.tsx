@@ -27,7 +27,7 @@ function cashLabel(cashStatus?: string | null) {
 }
 
 export function OperationalHeader({
-  alertCount = 0,
+  alertCount,
   branchName,
   cashStatus,
   compact = false,
@@ -39,6 +39,7 @@ export function OperationalHeader({
   user
 }: OperationalHeaderProps) {
   const isCashOpen = cashStatus === "open";
+  const hasAlertCount = typeof alertCount === "number";
 
   return (
     <header className="border-b border-tp-border bg-white px-4 py-3 lg:px-6">
@@ -86,7 +87,7 @@ export function OperationalHeader({
               to="/app/alerts"
             >
               <AlertTriangle className="h-4 w-4 text-tp-warning" aria-hidden="true" />
-              Alertas {alertCount}
+              Alertas{hasAlertCount ? ` ${alertCount}` : ""}
             </Link>
           ) : null}
 

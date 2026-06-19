@@ -42,6 +42,7 @@ Baja: mejora deseable sin impacto operativo inmediato.
 | UX-DEBT-019 | Baja | Encoding / copy | Varios documentos y textos fuente muestran caracteres sin acento o mojibake historico. No bloquea UX, pero afecta consistencia documental y de UI. | `docs/*`, textos UI sin acentos | UX-R8 | Parcial; mojibake visible en ajustes corregido, normalizacion total queda pendiente |
 | UX-DEBT-020 | Media | Alertas | El centro de alertas usa derivacion frontend desde endpoints existentes; no hay endpoint formal de alertas con estado, responsable o resolucion. | `alerts-page.tsx`, `operational-alerts.ts` | Post piloto / UX-R8 | Abierta |
 | UX-DEBT-021 | Media | Inventario | Los movimientos muestran `createdByUserId` cuando existe, pero no nombre de usuario ni referencia enriquecida con folio/nombre. | `/inventory/movements` entrega IDs y referencia tecnica; `inventory-page.tsx` los hace legibles parcialmente. | UX-R8 / Post piloto | Abierta |
+| UX-DEBT-022 | Media | Header operativo / Alertas | `OperationalHeader` mostraba `Alertas 0` por defecto cuando no recibia `alertCount`, aunque el centro de alertas puede derivar alertas activas desde otras fuentes. | `operational-header.tsx`; riesgo de calma falsa en piloto. | UX-R10 / Post piloto | Cerrada en UX-R10: el contador se oculta cuando no hay fuente real; no se creo endpoint backend |
 
 ---
 
@@ -67,6 +68,7 @@ UX-DEBT-016 Accesibilidad/teclado parcial: busqueda global sigue pendiente.
 UX-DEBT-017 Estados vacios parcial: barrido total queda para piloto.
 UX-DEBT-020 Alertas sin backend formal.
 UX-DEBT-021 Movimientos sin usuario/referencia enriquecida.
+UX-DEBT-022 Header mostraba contador de alertas sin fuente real. Cerrada en UX-R10 ocultando el numero sin `alertCount`.
 ```
 
 ---
