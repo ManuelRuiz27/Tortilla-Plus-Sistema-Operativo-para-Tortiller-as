@@ -45,6 +45,16 @@ async function loginPage(page: Page, email = "manager.demo@tortillaplus.mx") {
   await page.waitForURL(/\/app(\/|$)/);
 }
 
+async function selectPrimaryPosDevice(page: Page) {
+  await page.getByLabel("Caja/POS").selectOption({ label: "Caja principal" });
+}
+
+async function expectedCashAmount(page: Page) {
+  const amount = await page.getByText("Efectivo esperado", { exact: true }).locator("xpath=following-sibling::p[1]").innerText();
+  expect(amount, "cash summary must show expected cash amount").toMatch(/^\$[\d,]+\.\d{2}$/);
+  return amount.replace(/[$,]/g, "");
+}
+
 async function setSession(page: Page, session: Session, branchId: string | null) {
   const branches = session.user.branches;
   const activeBranch = branches.find((branch) => branch.branchId === branchId) ?? branches[0] ?? null;
@@ -405,6 +415,7 @@ test("captures end-user manual screenshots", async ({ page, request }) => {
   await page.goto("/app/pos/sale");
   await page.waitForURL(/\/app\/pos\/sale/);
   await expect(page.getByText("F9 Cobrar")).toBeVisible();
+  await selectPrimaryPosDevice(page);
   await screenshot(page, "05-pos-nueva-venta");
 
   await page.getByRole("button", { name: /Tortilla/ }).first().click();
@@ -421,7 +432,7 @@ test("captures end-user manual screenshots", async ({ page, request }) => {
   await page.goto("/app/cash");
   await expect(page.getByRole("heading", { name: "Caja actual" })).toBeVisible();
   await screenshot(page, "08-caja");
-  await page.getByLabel("Efectivo contado").fill("500.00");
+  await page.getByLabel("Efectivo contado").fill(await expectedCashAmount(page));
   await expect(page.getByText("Paso 3 de 3")).toBeVisible();
   await screenshot(page, "09-cierre-caja");
 

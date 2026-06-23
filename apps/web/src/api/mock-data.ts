@@ -20,7 +20,13 @@ import type {
   SettingsSummary
 } from "../modules/manager/types/manager.types";
 
-export const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
+const useMocksFlag = import.meta.env.VITE_USE_MOCKS;
+
+if (import.meta.env.PROD && useMocksFlag !== "false") {
+  throw new Error('Production build requires VITE_USE_MOCKS="false".');
+}
+
+export const useMocks = !import.meta.env.PROD && useMocksFlag !== "false";
 
 export const demoBranches: UserBranch[] = [
   {

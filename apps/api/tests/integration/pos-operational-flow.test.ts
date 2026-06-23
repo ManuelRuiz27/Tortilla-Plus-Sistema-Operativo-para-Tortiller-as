@@ -55,6 +55,31 @@ function moneyDelta(after: string | number, before: string | number) {
   return Number((Number(after) - Number(before)).toFixed(2));
 }
 
+async function activePosDeviceId(organizationId: string, branchId: string) {
+  const device = await prisma.posDevice.upsert({
+    where: { deviceCode: `INTEGRATION-POS-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "POS Integracion",
+      deviceCode: `INTEGRATION-POS-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return device.id;
+}
+
 function quantityDelta(after: unknown, before: unknown) {
   return Number((Number(after) - Number(before)).toFixed(3));
 }
@@ -270,6 +295,7 @@ test("POS checkout endpoint is atomic and idempotent", async () => {
   const key = `integration-checkout-${Date.now()}`;
   const payload = {
     branchId,
+    deviceId: await activePosDeviceId(cashier.organizationId, branchId),
     clientGeneratedId: key,
     items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
     payments: [{ paymentMethod: "cash", amount: "24.00" }],
@@ -289,6 +315,35 @@ test("POS checkout endpoint is atomic and idempotent", async () => {
     },
   });
   assert.equal(saleCount, 1);
+});
+
+test("POS checkout rejects sale without selected POS device", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Missing POS checkout block test",
+    })).data;
+  }
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+  const clientGeneratedId = `integration-checkout-no-pos-${Date.now()}`;
+
+  await assert.rejects(
+    () => checkoutSale(cashier, {
+      branchId,
+      clientGeneratedId,
+      items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
+      payments: [{ paymentMethod: "cash", amount: "24.00" }],
+    }, clientGeneratedId),
+    (error) => error instanceof DomainError && error.code === "POS_DEVICE_REQUIRED",
+  );
 });
 
 test("POS checkout blocks raw materials even when active and priced", async () => {
@@ -332,10 +387,12 @@ test("POS checkout blocks raw materials even when active and priced", async () =
       status: "active",
     },
   });
+  const deviceId = await activePosDeviceId(cashier.organizationId, branchId);
 
   await assert.rejects(
     () => checkoutSale(cashier, {
       branchId,
+      deviceId,
       clientGeneratedId: `integration-non-sellable-checkout-${suffix}`,
       items: [{ productId: rawMaterial.id, saleMode: "by_kg", quantity: "1.000" }],
       payments: [{ paymentMethod: "cash", amount: "10.00" }],
@@ -365,10 +422,12 @@ test("POS checkout rolls back completely when payment total does not match", asy
     where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
   });
   const clientGeneratedId = `integration-checkout-rollback-${Date.now()}`;
+  const deviceId = await activePosDeviceId(cashier.organizationId, branchId);
 
   await assert.rejects(
     () => checkoutSale(cashier, {
       branchId,
+      deviceId,
       clientGeneratedId,
       items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
       payments: [{ paymentMethod: "cash", amount: "1.00" }],

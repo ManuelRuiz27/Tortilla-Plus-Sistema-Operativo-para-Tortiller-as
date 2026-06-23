@@ -323,6 +323,7 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
   await assertPermission(currentUser.id, "payments.create");
   const body = asRecord(input);
   const branchId = asString(body.branchId, "branchId");
+  const deviceId = optionalString(body.deviceId);
   const customerId = optionalString(body.customerId);
   const clientGeneratedId = optionalString(body.clientGeneratedId);
   const itemInputs = asSaleItemInputs(body.items);
@@ -330,7 +331,10 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
   const customerRequestedInvoice = optionalBoolean(body.customerRequestedInvoice ?? body.requestInvoice) ?? false;
 
   await assertBranchAccess(currentUser, branchId);
-  await assertSaleOperationAllowed(currentUser.organizationId, branchId, optionalString(body.deviceId));
+  if (!deviceId) {
+    throw new DomainError(400, "POS_DEVICE_REQUIRED", "Selecciona una caja/POS para completar la venta.");
+  }
+  await assertSaleOperationAllowed(currentUser.organizationId, branchId, deviceId);
 
   return prisma.$transaction(async (tx) => {
     const cashSession = await tx.cashSession.findFirst({
@@ -357,6 +361,7 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
         organizationId: currentUser.organizationId,
         branchId,
         cashSessionId: cashSession.id,
+        deviceId,
         customerId,
         saleNumber: await nextSaleNumber(tx, branchId),
         createdByUserId: currentUser.id,

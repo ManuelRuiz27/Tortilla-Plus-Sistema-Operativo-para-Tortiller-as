@@ -83,6 +83,10 @@ async function loginPage(page: Page, email = "manager.demo@tortillaplus.mx") {
   await page.waitForURL(/\/app(\/|$)/);
 }
 
+async function selectPrimaryPosDevice(page: Page) {
+  await page.getByLabel("Caja/POS").selectOption({ label: "Caja principal" });
+}
+
 test("manager can enter operational routes with mocks disabled", async ({ page, request }) => {
   await loginPage(page, "owner.demo@tortillaplus.mx");
   const login = await request.post(`${apiBaseUrl}/auth/login`, {
@@ -162,7 +166,7 @@ test("manager can enter operational routes with mocks disabled", async ({ page, 
   await expect(page.getByRole("heading", { name: "Facturas del dia" })).toBeVisible();
   await expect(page.getByText("Pendiente de facturar")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Facturas emitidas" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Tickets QR" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tickets QR", exact: true })).toBeVisible();
 
   await page.goto("/app/manager/settings");
   await expect(page.getByRole("heading", { name: "Sucursal, cajas y plan" })).toBeVisible();
@@ -282,6 +286,7 @@ test("manager creates customer special price and POS completes sale with that pr
   await loginPage(page);
   await page.goto(`/app/pos/sale?customerId=${customerId}`);
   await expect(page.getByText(customerName)).toBeVisible();
+  await selectPrimaryPosDevice(page);
 
   await page.getByRole("button", { name: /Tortilla/ }).click();
   await page.getByLabel("Cantidad").fill("1");
@@ -344,6 +349,7 @@ test("new retail product can receive initial stock and be sold in POS", async ({
 
   await loginPage(page);
   await page.goto("/app/pos/sale");
+  await selectPrimaryPosDevice(page);
   await page.getByPlaceholder("Buscar producto").fill(productName);
 
   const productButton = page.getByRole("button", { name: new RegExp(productName) });

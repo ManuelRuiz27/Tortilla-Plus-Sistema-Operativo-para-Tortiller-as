@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: tortilla-plus-api
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm install && npm run db:generate -w @tortilla-plus/api && npm run build -w @tortilla-plus/api
+    startCommand: npm run start -w @tortilla-plus/api
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+
+  - type: web
+    name: tortilla-plus-web
+    runtime: static
+    rootDir: .
+    buildCommand: npm install && npm run build -w @tortilla-plus/web
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_USE_MOCKS
+        value: "false"

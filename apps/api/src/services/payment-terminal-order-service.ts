@@ -206,6 +206,7 @@ export async function confirmTerminalOrderAndCheckout(currentUser: Authenticated
   const otherPayments = storedPayments.filter((payment) => !(payment.paymentMethod === "card" && payment.provider === "mercadopago"));
   const checkout = await checkoutSale(currentUser, {
     branchId: order.branchId,
+    deviceId: order.posDeviceId,
     customerId: saleDraft.customerId ?? undefined,
     items: saleDraft.items,
     payments: [

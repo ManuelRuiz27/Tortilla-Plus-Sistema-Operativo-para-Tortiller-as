@@ -164,6 +164,7 @@ export function SalePage() {
       const checkoutItems = checkoutDraft?.items ?? items;
       return checkoutSaleRequest({
         branchId,
+        deviceId: activePosDeviceId ?? undefined,
         customerId: selectedCustomer?.id,
         items: checkoutItems,
         payments: payload.payments,

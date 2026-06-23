@@ -6,6 +6,7 @@ import type { CompletedSale, PosPayment, TerminalOrder } from "../modules/pos/ty
 
 type CreateSalePayload = {
   branchId: string;
+  deviceId?: string;
   customerId?: string;
 };
 
@@ -25,6 +26,7 @@ type CompleteSalePayload = {
 
 type CheckoutSalePayload = {
   branchId: string;
+  deviceId?: string;
   customerId?: string;
   items: PosCartItem[];
   payments: PosPayment[];
@@ -152,6 +154,7 @@ function calculateCheckoutTotal(items: PosCartItem[]): number {
 async function legacyCheckoutWithRollback(payload: CheckoutSalePayload, idempotencyKey: string): Promise<CompletedSale> {
   const draft = await createSaleRequest({
     branchId: payload.branchId,
+    deviceId: payload.deviceId,
     customerId: payload.customerId
   });
 
@@ -193,6 +196,7 @@ export async function checkoutSaleRequest(payload: CheckoutSalePayload, idempote
       },
       body: {
         branchId: payload.branchId,
+        deviceId: payload.deviceId,
         customerId: payload.customerId,
         clientGeneratedId: payload.clientGeneratedId,
         requestInvoice: payload.requestInvoice,
