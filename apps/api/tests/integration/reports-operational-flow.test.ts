@@ -52,6 +52,31 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
   })).data;
 }
 
+async function activePosDeviceId(organizationId: string, branchId: string) {
+  const device = await prisma.posDevice.upsert({
+    where: { deviceCode: `INTEGRATION-REPORTS-POS-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "POS Integracion Reportes",
+      deviceCode: `INTEGRATION-REPORTS-POS-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return device.id;
+}
+
 async function createRecipeProduct(input: {
   organizationId: string;
   name: string;
@@ -97,6 +122,7 @@ test("F3 reports and dashboard use real tenant, branch and date filtered data", 
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     customerId: customer.id,
     clientGeneratedId: `reports-sale-${Date.now()}`,
   })).data;

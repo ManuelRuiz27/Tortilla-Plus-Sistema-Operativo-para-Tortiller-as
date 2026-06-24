@@ -24,9 +24,14 @@ async function createAutofacturaReceiptToken(api: APIRequestContext) {
   const productPayload = await products.json();
   const tortilla = productPayload.data.find((product: { sku: string }) => product.sku === "TORTILLA-KG");
   expect(tortilla).toBeTruthy();
+  const posDevices = await api.get(`${apiBaseUrl}/pos-devices?branchId=${branchId}`, { headers: auth });
+  expect(posDevices.ok(), await posDevices.text()).toBeTruthy();
+  const posDevicePayload = await posDevices.json();
+  const posDevice = posDevicePayload.data[0];
+  expect(posDevice).toBeTruthy();
 
   const sale = await api.post(`${apiBaseUrl}/sales`, {
-    data: { branchId, clientGeneratedId: `autofactura-e2e-${Date.now()}` },
+    data: { branchId, deviceId: posDevice.id, clientGeneratedId: `autofactura-e2e-${Date.now()}` },
     headers: auth
   });
   expect(sale.ok()).toBeTruthy();

@@ -40,6 +40,31 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
   })).data;
 }
 
+async function activePosDeviceId(organizationId: string, branchId: string) {
+  const device = await prisma.posDevice.upsert({
+    where: { deviceCode: `INTEGRATION-REC-POS-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "POS Integracion Conciliacion",
+      deviceCode: `INTEGRATION-REC-POS-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return device.id;
+}
+
 test("QA-REC reconciles POS payments against provider import and audits manual review", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
@@ -51,6 +76,7 @@ test("QA-REC reconciles POS payments against provider import and audits manual r
   });
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `qa-rec-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {

@@ -12,10 +12,18 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
-      - key: JWT_ACCESS_SECRET
+      - key: DIRECT_URL
         sync: false
-      - key: JWT_REFRESH_SECRET
+      - key: JWT_SECRET
         sync: false
+      - key: PAYMENT_SECRET_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: BILLING_PROVIDER
+        value: mock
+      - key: PHYSICAL_INTEGRATIONS_MODE
+        value: mock
 
   - type: web
     name: tortilla-plus-web

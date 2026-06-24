@@ -90,6 +90,7 @@ test("POS completes customer sale with special price, mixed cash/credit, cash su
   const manager = asAuthenticatedUser(managerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
+  const deviceId = await activePosDeviceId(cashier.organizationId, branchId);
 
   let cashSession = (await getOpenCashSession(cashier, branchId)).data;
   if (!cashSession) {
@@ -142,6 +143,7 @@ test("POS completes customer sale with special price, mixed cash/credit, cash su
 
   const sale = (await createSale(cashier, {
     branchId,
+    deviceId,
     customerId: customer.id,
     clientGeneratedId: `integration-pos-${Date.now()}`,
   })).data;
@@ -192,6 +194,7 @@ test("POS inventory rules allow tortilla and masa negative stock but block retai
   const manager = asAuthenticatedUser(managerSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
+  const deviceId = await activePosDeviceId(cashier.organizationId, branchId);
   let cashSession = (await getOpenCashSession(cashier, branchId)).data;
   if (!cashSession) {
     cashSession = (await openCashSession(cashier, {
@@ -228,13 +231,13 @@ test("POS inventory rules allow tortilla and masa negative stock but block retai
   }
 
   try {
-    const tortillaSale = (await createSale(cashier, { branchId, clientGeneratedId: `integration-neg-tortilla-${Date.now()}` })).data;
+    const tortillaSale = (await createSale(cashier, { branchId, deviceId, clientGeneratedId: `integration-neg-tortilla-${Date.now()}` })).data;
     await addSaleItem(cashier, tortillaSale.id, { productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" });
     await completeSale(cashier, tortillaSale.id, {
       payments: [{ paymentMethod: "cash", amount: "24.00" }],
     }, `integration-neg-tortilla-complete-${tortillaSale.id}`);
 
-    const masaSale = (await createSale(cashier, { branchId, clientGeneratedId: `integration-neg-masa-${Date.now()}` })).data;
+    const masaSale = (await createSale(cashier, { branchId, deviceId, clientGeneratedId: `integration-neg-masa-${Date.now()}` })).data;
     await addSaleItem(cashier, masaSale.id, { productId: masa.id, saleMode: "by_kg", quantity: "1.000" });
     await completeSale(cashier, masaSale.id, {
       payments: [{ paymentMethod: "cash", amount: "18.00" }],
@@ -258,7 +261,7 @@ test("POS inventory rules allow tortilla and masa negative stock but block retai
     });
     assert.equal(negativeAudits >= 2, true);
 
-    const retailSale = (await createSale(cashier, { branchId, clientGeneratedId: `integration-neg-retail-${Date.now()}` })).data;
+    const retailSale = (await createSale(cashier, { branchId, deviceId, clientGeneratedId: `integration-neg-retail-${Date.now()}` })).data;
     await addSaleItem(cashier, retailSale.id, { productId: retail.id, saleMode: "by_unit", quantity: "1.000" });
     await assert.rejects(
       () => completeSale(cashier, retailSale.id, {
@@ -342,6 +345,115 @@ test("POS checkout rejects sale without selected POS device", async () => {
       items: [{ productId: tortilla.id, saleMode: "by_kg", quantity: "1.000" }],
       payments: [{ paymentMethod: "cash", amount: "24.00" }],
     }, clientGeneratedId),
+    (error) => error instanceof DomainError && error.code === "POS_DEVICE_REQUIRED",
+  );
+});
+
+test("cash session prevents double opening for same organization branch", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const businessUnit = await prisma.businessUnit.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, status: "active" },
+  });
+  const branch = await prisma.branch.create({
+    data: {
+      organizationId: cashier.organizationId,
+      businessUnitId: businessUnit.id,
+      name: `Sucursal Caja Unica ${Date.now()}`,
+      timezone: "America/Mexico_City",
+      status: "active",
+    },
+  });
+  await prisma.userBranchAssignment.create({
+    data: {
+      userId: cashier.id,
+      branchId: branch.id,
+      isDefault: false,
+    },
+  });
+
+  const attempts = await Promise.allSettled([
+    openCashSession(cashier, {
+      branchId: branch.id,
+      openingAmountCounted: "500.00",
+      openingNote: "Double open cash session guard A",
+    }),
+    openCashSession(cashier, {
+      branchId: branch.id,
+      openingAmountCounted: "500.00",
+      openingNote: "Double open cash session guard B",
+    }),
+  ]);
+
+  assert.equal(attempts.filter((attempt) => attempt.status === "fulfilled").length, 1);
+  const rejected = attempts.find((attempt): attempt is PromiseRejectedResult => attempt.status === "rejected");
+  assert.ok(rejected?.reason instanceof DomainError);
+  assert.equal(rejected.reason.code, "CASH_SESSION_ALREADY_OPEN");
+});
+
+test("POS sale creation rejects missing POS device", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+
+  await assert.rejects(
+    () => createSale(cashier, {
+      branchId,
+      clientGeneratedId: `integration-create-no-pos-${Date.now()}`,
+    }),
+    (error) => error instanceof DomainError && error.code === "POS_DEVICE_REQUIRED",
+  );
+});
+
+test("POS completeSale rejects legacy draft without POS device", async () => {
+  const cashierSession = await login({ email: "cashier.demo@tortillaplus.mx", password: "Demo1234!" });
+  const cashier = asAuthenticatedUser(cashierSession);
+  const branchId = firstBranchId(cashierSession);
+  let cashSession = (await getOpenCashSession(cashier, branchId)).data;
+  if (!cashSession) {
+    cashSession = (await openCashSession(cashier, {
+      branchId,
+      openingAmountCounted: "500.00",
+      openingNote: "Legacy missing POS completion block test",
+    })).data;
+  }
+
+  const tortilla = await prisma.product.findFirstOrThrow({
+    where: { organizationId: cashier.organizationId, sku: "TORTILLA-KG" },
+  });
+  const legacySale = await prisma.sale.create({
+    data: {
+      organizationId: cashier.organizationId,
+      branchId,
+      cashSessionId: cashSession.id,
+      saleNumber: `LEGACY-${Date.now()}`,
+      createdByUserId: cashier.id,
+      status: "draft",
+      saleType: "counter",
+    },
+  });
+  await prisma.saleItem.create({
+    data: {
+      saleId: legacySale.id,
+      productId: tortilla.id,
+      productNameSnapshot: tortilla.name,
+      productTypeSnapshot: tortilla.productType,
+      quantity: "1.000",
+      unit: tortilla.unit,
+      unitPrice: "24.00",
+      total: "24.00",
+      saleMode: "by_kg",
+    },
+  });
+  await prisma.sale.update({
+    where: { id: legacySale.id },
+    data: { subtotal: "24.00", total: "24.00" },
+  });
+
+  await assert.rejects(
+    () => completeSale(cashier, legacySale.id, {
+      payments: [{ paymentMethod: "cash", amount: "24.00" }],
+    }, `integration-legacy-no-pos-complete-${legacySale.id}`),
     (error) => error instanceof DomainError && error.code === "POS_DEVICE_REQUIRED",
   );
 });
@@ -502,6 +614,7 @@ test("POS sale creation is blocked when platform cancels the organization", asyn
   const platformUser = asPlatformUser(platformSession);
   const cashier = asAuthenticatedUser(cashierSession);
   const branchId = firstBranchId(cashierSession);
+  const deviceId = await activePosDeviceId(cashier.organizationId, branchId);
   const originalOrganization = await prisma.organization.findUniqueOrThrow({
     where: { id: cashier.organizationId },
     select: { status: true },
@@ -524,6 +637,7 @@ test("POS sale creation is blocked when platform cancels the organization", asyn
     await assert.rejects(
       () => createSale(cashier, {
         branchId,
+        deviceId,
         clientGeneratedId: `integration-cancelled-org-${Date.now()}`,
       }),
       (error) => error instanceof DomainError && error.code === "ORGANIZATION_NOT_OPERATIONAL",

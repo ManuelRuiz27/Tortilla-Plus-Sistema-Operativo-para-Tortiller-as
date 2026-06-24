@@ -399,7 +399,9 @@ async function checkoutSaleOnce(currentUser: AuthenticatedUser, input: unknown) 
 async function assertSaleOperationAllowed(organizationId: string, branchId: string, deviceId: string | null) {
   await assertOrganizationOperational(organizationId, "La organizacion no puede operar ventas.");
 
-  if (!deviceId) return;
+  if (!deviceId) {
+    throw new DomainError(400, "POS_DEVICE_REQUIRED", "Selecciona una caja/POS para completar la venta.");
+  }
 
   await assertLicensedPosDevice({
     organizationId,
@@ -429,6 +431,12 @@ async function completeDraftSaleInTransaction(
   if (!cashSession) {
     throw new DomainError(409, "NO_OPEN_CASH_SESSION", "No hay caja abierta para la venta.");
   }
+
+  if (!sale.deviceId) {
+    throw new DomainError(400, "POS_DEVICE_REQUIRED", "Selecciona una caja/POS para completar la venta.");
+  }
+
+  await assertSaleOperationAllowed(currentUser.organizationId, sale.branchId, sale.deviceId);
 
   const draft = await tx.sale.findFirstOrThrow({
     where: {

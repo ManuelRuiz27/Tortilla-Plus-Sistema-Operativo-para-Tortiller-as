@@ -46,6 +46,31 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
   })).data;
 }
 
+async function activePosDeviceId(organizationId: string, branchId: string) {
+  const device = await prisma.posDevice.upsert({
+    where: { deviceCode: `INTEGRATION-EXPORT-POS-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "POS Integracion Export",
+      deviceCode: `INTEGRATION-EXPORT-POS-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return device.id;
+}
+
 test("F4 exports issued invoices, global invoices and operational reports as CSV/XLSX downloads", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
@@ -67,6 +92,7 @@ test("F4 exports issued invoices, global invoices and operational reports as CSV
 
   const individualSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     customerId: customer.id,
     clientGeneratedId: `export-individual-${Date.now()}`,
   })).data;
@@ -83,6 +109,7 @@ test("F4 exports issued invoices, global invoices and operational reports as CSV
 
   const globalSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `export-global-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, globalSale.id, {

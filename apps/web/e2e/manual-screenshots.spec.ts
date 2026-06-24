@@ -386,6 +386,7 @@ async function prepareManualData(api: APIRequestContext, session: Session): Prom
 }
 
 test("captures end-user manual screenshots", async ({ page, request }) => {
+  test.setTimeout(60_000);
   fs.mkdirSync(screenshotsDir, { recursive: true });
 
   await page.goto("/login");

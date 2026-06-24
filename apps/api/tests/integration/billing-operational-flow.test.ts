@@ -59,6 +59,31 @@ async function ensureCashSession(currentUser: AuthenticatedUser, branchId: strin
   })).data;
 }
 
+async function activePosDeviceId(organizationId: string, branchId: string) {
+  const device = await prisma.posDevice.upsert({
+    where: { deviceCode: `INTEGRATION-BILLING-POS-${branchId}` },
+    update: {
+      organizationId,
+      branchId,
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      organizationId,
+      branchId,
+      deviceName: "POS Integracion Facturacion",
+      deviceCode: `INTEGRATION-BILLING-POS-${branchId}`,
+      deviceType: "desktop",
+      status: "active",
+      licensed: true,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return device.id;
+}
+
 test("billing summary creates individual and global internal invoices from real sales", async () => {
   const session = await login({ email: "manager.demo@tortillaplus.mx", password: "Demo1234!" });
   const currentUser = asAuthenticatedUser(session);
@@ -80,6 +105,7 @@ test("billing summary creates individual and global internal invoices from real 
 
   const customerSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     customerId: customer.id,
     clientGeneratedId: `billing-individual-${Date.now()}`,
   })).data;
@@ -96,6 +122,7 @@ test("billing summary creates individual and global internal invoices from real 
 
   const publicSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `billing-global-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, publicSale.id, {
@@ -178,6 +205,7 @@ test("global daily invoice uses branch fiscal timezone near midnight", async () 
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `billing-timezone-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {
@@ -229,6 +257,7 @@ test("public autofactura creates stamped invoice from card sale receipt token", 
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `autofactura-card-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {
@@ -319,6 +348,7 @@ test("public autofactura receipt follows Facturapi V1 payment intent rules", asy
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `autofactura-cash-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {
@@ -335,6 +365,7 @@ test("public autofactura receipt follows Facturapi V1 payment intent rules", asy
 
   const requestedCashSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `autofactura-cash-request-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, requestedCashSale.id, {
@@ -355,6 +386,7 @@ test("public autofactura receipt follows Facturapi V1 payment intent rules", asy
 
   const transferSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `autofactura-transfer-request-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, transferSale.id, {
@@ -378,6 +410,7 @@ test("public autofactura receipt follows Facturapi V1 payment intent rules", asy
   })).data;
   const creditSale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     customerId: creditCustomer.id,
     clientGeneratedId: `autofactura-credit-no-request-${Date.now()}`,
   })).data;
@@ -409,6 +442,7 @@ test("public autofactura rejects fiscal catalog codes outside allowed values", a
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `invalid-catalog-autofactura-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {
@@ -459,6 +493,7 @@ test("billing receipt expiration job expires active receipts and blocks autofact
 
   const sale = (await createSale(currentUser, {
     branchId,
+    deviceId: await activePosDeviceId(currentUser.organizationId, branchId),
     clientGeneratedId: `expired-autofactura-${Date.now()}`,
   })).data;
   await addSaleItem(currentUser, sale.id, {
